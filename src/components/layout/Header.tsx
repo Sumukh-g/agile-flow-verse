@@ -25,7 +25,12 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
-  const { toggle: toggleSidebar } = useSidebar();
+  const { setOpen } = useSidebar();
+  
+  // Use setOpen to toggle the sidebar state
+  const toggleSidebar = () => {
+    setOpen(prev => !prev);
+  };
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 flex h-16 items-center px-4 md:px-6">

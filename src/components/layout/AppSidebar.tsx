@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/sidebar";
 
 export const AppSidebar = () => {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   
   // Main navigation items
   const mainNavItems = [
@@ -56,10 +57,10 @@ export const AppSidebar = () => {
   return (
     <Sidebar
       className={collapsed ? "w-14" : "w-60"}
-      collapsible
+      collapsible="icon"
     >
       <SidebarContent>
-        <SidebarGroup defaultOpen>
+        <SidebarGroup>
           <SidebarGroupLabel className={collapsed ? "sr-only" : ""}>
             Main
           </SidebarGroupLabel>
