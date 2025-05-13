@@ -25,11 +25,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
-  const { setOpen } = useSidebar();
+  const { setOpen, open } = useSidebar();
   
   // Use setOpen to toggle the sidebar state
   const toggleSidebar = () => {
-    setOpen(prev => !prev);
+    setOpen(!open);
   };
 
   return (
