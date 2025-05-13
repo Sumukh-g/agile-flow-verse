@@ -78,6 +78,22 @@ const PROJECTS = [
   }
 ];
 
+// Helper function for getting status color
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'In Progress':
+      return 'bg-blue-100 text-blue-800';
+    case 'Planning':
+      return 'bg-amber-100 text-amber-800';
+    case 'On Hold':
+      return 'bg-gray-100 text-gray-800';
+    case 'Completed':
+      return 'bg-green-100 text-green-800';
+    default:
+      return 'bg-slate-100 text-slate-800';
+  }
+};
+
 const Projects = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,21 +103,6 @@ const Projects = () => {
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     project.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'Planning':
-        return 'bg-amber-100 text-amber-800';
-      case 'On Hold':
-        return 'bg-gray-100 text-gray-800';
-      case 'Completed':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
-    }
-  };
 
   return (
     <div className="space-y-6">

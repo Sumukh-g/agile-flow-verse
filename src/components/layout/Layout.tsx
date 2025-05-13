@@ -13,7 +13,7 @@ const Layout = () => {
   };
 
   return (
-    <SidebarProvider collapsedWidth={56}>
+    <SidebarProvider>
       <div className="flex min-h-screen w-full flex-col">
         <Header toggleMobileSidebar={toggleMobileSidebar} />
         <div className="flex flex-1 overflow-hidden">
