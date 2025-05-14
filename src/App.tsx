@@ -9,6 +9,9 @@ import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/Dashboard";
 import Projects from "@/pages/Projects";
 import Tasks from "@/pages/Tasks";
+import BoardsPage from "@/pages/Boards";
+import CalendarPage from "@/pages/CalendarPage";
+import PagesDirectory from "@/pages/PagesDirectory";
 import NotFound from "@/pages/NotFound";
 
 // Placeholder pages for routes not yet implemented
@@ -34,9 +37,9 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/tasks" element={<Tasks />} />
-            <Route path="/boards" element={<PlaceholderPage title="Boards" />} />
-            <Route path="/calendar" element={<PlaceholderPage title="Calendar" />} />
-            <Route path="/pages" element={<PlaceholderPage title="Pages" />} />
+            <Route path="/boards" element={<BoardsPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/pages" element={<PagesDirectory />} />
             <Route path="/automations" element={<PlaceholderPage title="Automations" />} />
             <Route path="/integrations" element={<PlaceholderPage title="Integrations" />} />
             <Route path="/developer" element={<PlaceholderPage title="Developer" />} />
