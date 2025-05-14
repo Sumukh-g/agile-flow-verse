@@ -10,6 +10,7 @@ import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/Dashboard";
 import Projects from "@/pages/Projects";
 import ProjectDetails from "@/pages/ProjectDetails";
+import ProjectDashboard from "@/pages/ProjectDashboard";
 import Tasks from "@/pages/Tasks";
 import BoardsPage from "@/pages/Boards";
 import CalendarPage from "@/pages/CalendarPage";
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectDetails />} />
+            <Route path="/projects/:projectId/dashboard" element={<ProjectDashboard />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/boards" element={<BoardsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
