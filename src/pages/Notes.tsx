@@ -6,714 +6,710 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import {
-  Plus,
-  Search,
-  StickyNote,
-  FolderPlus,
-  FileEdit,
-  Trash2,
-  Star,
-  CalendarClock,
-  Tag,
-  Save,
-  Clock,
-  ChevronRight,
-  MoreHorizontal,
-  Settings
-} from 'lucide-react';
-import {
+import { 
+  Bold, Italic, Underline, List, ListOrdered, 
+  Heading2, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon,
+  Share, Star, Clock, Tag, Trash2, Plus, Search, MoreHorizontal,
+  FileText, Settings
+} from "lucide-react";
+import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from 'sonner';
+import { toast } from "sonner";
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 interface Note {
   id: string;
   title: string;
   content: string;
-  parent?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
+  tags: string[];
+  pinned: boolean;
   starred: boolean;
+}
+
+interface NoteTemplate {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
   tags: string[];
 }
 
-interface Folder {
-  id: string;
-  name: string;
-  parent?: string;
-}
+const INITIAL_NOTES: Note[] = [
+  {
+    id: '1',
+    title: 'Project Ideas',
+    content: 'Here are some project ideas for the next quarter:\n- Mobile app redesign\n- API integration with third-party services\n- Performance optimization',
+    createdAt: new Date('2023-05-01'),
+    updatedAt: new Date('2023-05-10'),
+    tags: ['Ideas', 'Planning'],
+    pinned: true,
+    starred: true
+  },
+  {
+    id: '2',
+    title: 'Meeting Notes',
+    content: 'Discussion points from today\'s meeting:\n1. Budget review\n2. Timeline adjustments\n3. Resource allocation',
+    createdAt: new Date('2023-05-05'),
+    updatedAt: new Date('2023-05-05'),
+    tags: ['Meetings', 'Important'],
+    pinned: false,
+    starred: false
+  }
+];
+
+const NOTE_TEMPLATES: NoteTemplate[] = [
+  {
+    id: 'template1',
+    name: 'Meeting Notes',
+    description: 'Template for capturing meeting discussions',
+    content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n1. \n2. \n3. \n\n## Discussion\n\n## Action Items\n- [ ] \n- [ ] \n- [ ] \n\n## Next Steps\n\n',
+    tags: ['Meetings']
+  },
+  {
+    id: 'template2',
+    name: 'Project Brief',
+    description: 'Template for new project specifications',
+    content: '# Project Brief\n\n**Project Name:** \n**Start Date:** \n**End Date:** \n\n## Objectives\n\n## Scope\n\n## Deliverables\n\n## Stakeholders\n\n## Budget\n\n## Timeline\n\n',
+    tags: ['Project', 'Planning']
+  },
+  {
+    id: 'template3',
+    name: 'Weekly Report',
+    description: 'Template for weekly status updates',
+    content: '# Weekly Report\n\n**Week of:** \n\n## Accomplishments\n\n## In Progress\n\n## Blockers\n\n## Next Week Plans\n\n',
+    tags: ['Reports', 'Weekly']
+  }
+];
 
 const Notes = () => {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [currentFolder, setCurrentFolder] = useState<string | undefined>(undefined);
-  const [breadcrumbs, setBreadcrumbs] = useState<{id?: string, name: string}[]>([{ name: 'Notes' }]);
+  const [notes, setNotes] = useState<Note[]>(INITIAL_NOTES);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
-  const [newNote, setNewNote] = useState<Partial<Note>>({
-    title: '',
-    content: '',
-    tags: []
-  });
-  const [newFolder, setNewFolder] = useState<Partial<Folder>>({
-    name: ''
-  });
   const [isEditing, setIsEditing] = useState(false);
-  
-  useEffect(() => {
-    setTimeout(() => {
-      const mockFolders: Folder[] = [
-        { id: 'f1', name: 'Personal' },
-        { id: 'f2', name: 'Work' },
-        { id: 'f3', name: 'Project Ideas', parent: 'f2' },
-        { id: 'f4', name: 'Travel', parent: 'f1' }
-      ];
-      
-      const mockNotes: Note[] = [
-        {
-          id: 'n1',
-          title: 'Getting Started',
-          content: 'Welcome to your notes app! Here are some tips to get started...',
-          createdAt: '2023-05-10T10:00:00Z',
-          updatedAt: '2023-05-10T10:00:00Z',
-          starred: true,
-          tags: ['info', 'tutorial']
-        },
-        {
-          id: 'n2',
-          title: 'Project Requirements',
-          content: '1. User authentication\n2. Dashboard with analytics\n3. Project management features',
-          parent: 'f2',
-          createdAt: '2023-05-12T14:30:00Z',
-          updatedAt: '2023-05-14T09:15:00Z',
-          starred: true,
-          tags: ['work', 'planning']
-        },
-        {
-          id: 'n3',
-          title: 'Weekend Plans',
-          content: 'Things to do this weekend:\n- Hiking at the national park\n- Dinner with friends\n- Start reading new book',
-          parent: 'f1',
-          createdAt: '2023-05-15T18:20:00Z',
-          updatedAt: '2023-05-15T18:20:00Z',
-          starred: false,
-          tags: ['personal', 'plans']
-        },
-        {
-          id: 'n4',
-          title: 'App Ideas',
-          content: 'Potential app ideas to explore:\n1. Fitness tracker with social features\n2. Recipe manager with meal planning\n3. Productivity tool with Pomodoro timer',
-          parent: 'f3',
-          createdAt: '2023-05-17T11:45:00Z',
-          updatedAt: '2023-05-18T10:30:00Z',
-          starred: false,
-          tags: ['ideas', 'development']
-        },
-        {
-          id: 'n5',
-          title: 'Japan Trip Plans',
-          content: 'Places to visit:\n- Tokyo\n- Kyoto\n- Osaka\n- Hiroshima',
-          parent: 'f4',
-          createdAt: '2023-05-19T09:00:00Z',
-          updatedAt: '2023-05-19T09:00:00Z',
-          starred: false,
-          tags: ['travel', 'planning']
-        },
-        {
-          id: 'n6',
-          title: 'Meeting Notes',
-          content: 'Discussion points:\n- Q2 goals review\n- New feature priorities\n- Team structure changes',
-          parent: 'f2',
-          createdAt: '2023-05-20T15:00:00Z',
-          updatedAt: '2023-05-20T16:30:00Z',
-          starred: false,
-          tags: ['work', 'meetings']
-        }
-      ];
-      
-      setFolders(mockFolders);
-      setNotes(mockNotes);
-      setLoading(false);
-    }, 800);
-  }, []);
-  
-  // Update breadcrumbs when folder changes
-  useEffect(() => {
-    if (currentFolder === undefined) {
-      setBreadcrumbs([{ name: 'Notes' }]);
-      return;
-    }
-    
-    const breadcrumbPath = [];
-    let currentItem = currentFolder;
-    
-    breadcrumbPath.unshift({
-      id: currentItem,
-      name: folders.find(f => f.id === currentItem)?.name || 'Unknown Folder'
-    });
-    
-    let parentFolder = folders.find(f => f.id === currentItem)?.parent;
-    while (parentFolder) {
-      breadcrumbPath.unshift({
-        id: parentFolder,
-        name: folders.find(f => f.id === parentFolder)?.name || 'Unknown Folder'
-      });
-      parentFolder = folders.find(f => f.id === parentFolder)?.parent;
-    }
-    
-    setBreadcrumbs([{ name: 'Notes' }, ...breadcrumbPath]);
-  }, [currentFolder, folders]);
-  
-  // Filter notes based on current folder, search and filters
-  const filteredNotes = notes.filter(note => {
-    // Filter by folder
-    const matchesFolder = currentFolder === undefined ? 
-      !note.parent : note.parent === currentFolder;
-    
-    // Filter by search
-    const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                       note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                       note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    // Apply active filter
-    let matchesFilter = true;
-    if (activeFilter === 'starred') {
-      matchesFilter = note.starred;
-    } else if (activeFilter === 'recent') {
-      // Just a mock for recent notes, in a real app would check date
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      matchesFilter = new Date(note.updatedAt) > weekAgo;
-    }
-    
-    return matchesFolder && matchesSearch && matchesFilter;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [newNoteTitle, setNewNoteTitle] = useState('');
+  const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteTag, setNewNoteTag] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [editorState, setEditorState] = useState({
+    isBold: false,
+    isItalic: false,
+    isUnderline: false
   });
-  
-  // Filter folders based on current folder
-  const filteredFolders = folders.filter(folder => folder.parent === currentFolder);
-  
-  const handleCreateNote = () => {
-    if (!newNote.title) {
-      toast.error('Please enter a title for your note');
-      return;
+
+  useEffect(() => {
+    // Load notes from localStorage if available
+    const savedNotes = localStorage.getItem('notes');
+    if (savedNotes) {
+      try {
+        const parsedNotes = JSON.parse(savedNotes);
+        // Convert string dates back to Date objects
+        const processedNotes = parsedNotes.map((note: any) => ({
+          ...note,
+          createdAt: new Date(note.createdAt),
+          updatedAt: new Date(note.updatedAt)
+        }));
+        setNotes(processedNotes);
+      } catch (error) {
+        console.error('Error parsing notes from localStorage:', error);
+      }
     }
+  }, []);
+
+  useEffect(() => {
+    // Save notes to localStorage whenever they change
+    localStorage.setItem('notes', JSON.stringify(notes));
+  }, [notes]);
+
+  const filteredNotes = notes.filter(note => {
+    const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const createdNote: Note = {
-      id: `n${Date.now()}`,
-      title: newNote.title!,
-      content: newNote.content || '',
-      parent: currentFolder,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      starred: false,
-      tags: Array.isArray(newNote.tags) ? newNote.tags : []
-    };
+    if (activeTab === 'all') return matchesSearch;
+    if (activeTab === 'pinned') return matchesSearch && note.pinned;
+    if (activeTab === 'starred') return matchesSearch && note.starred;
     
-    setNotes([createdNote, ...notes]);
-    setNewNote({ title: '', content: '', tags: [] });
-    setNoteDialogOpen(false);
-    toast.success('Note created successfully');
-  };
-  
-  const handleCreateFolder = () => {
-    if (!newFolder.name) {
-      toast.error('Please enter a name for your folder');
-      return;
-    }
-    
-    const createdFolder: Folder = {
-      id: `f${Date.now()}`,
-      name: newFolder.name!,
-      parent: currentFolder
-    };
-    
-    setFolders([...folders, createdFolder]);
-    setNewFolder({ name: '' });
-    setFolderDialogOpen(false);
-    toast.success('Folder created successfully');
-  };
-  
-  const handleOpenNote = (note: Note) => {
+    return matchesSearch;
+  });
+
+  const handleSelectNote = (note: Note) => {
     setActiveNote(note);
     setIsEditing(false);
   };
-  
-  const handleSaveNote = () => {
+
+  const handleEditNote = () => {
+    if (!activeNote) return;
+    setNewNoteTitle(activeNote.title);
+    setNewNoteContent(activeNote.content);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
     if (!activeNote) return;
     
-    setNotes(prev => prev.map(note => 
-      note.id === activeNote.id ? 
-        { ...activeNote, updatedAt: new Date().toISOString() } : 
-        note
-    ));
+    const updatedNotes = notes.map(note => 
+      note.id === activeNote.id 
+        ? { 
+            ...note, 
+            title: newNoteTitle, 
+            content: newNoteContent,
+            updatedAt: new Date()
+          }
+        : note
+    );
     
+    setNotes(updatedNotes);
+    setActiveNote({
+      ...activeNote,
+      title: newNoteTitle,
+      content: newNoteContent,
+      updatedAt: new Date()
+    });
     setIsEditing(false);
-    toast.success('Note saved successfully');
+    toast.success('Note updated successfully');
   };
-  
-  const handleDeleteNote = (noteId: string) => {
-    setNotes(prev => prev.filter(note => note.id !== noteId));
+
+  const handleCreateNote = () => {
+    const newNote: Note = {
+      id: Date.now().toString(),
+      title: newNoteTitle || 'Untitled Note',
+      content: newNoteContent || '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: [],
+      pinned: false,
+      starred: false
+    };
     
+    setNotes([...notes, newNote]);
+    setNewNoteTitle('');
+    setNewNoteContent('');
+    toast.success('Note created successfully');
+  };
+
+  const handleCreateFromTemplate = (template: NoteTemplate) => {
+    const newNote: Note = {
+      id: Date.now().toString(),
+      title: `${template.name} - ${format(new Date(), 'MMM d, yyyy')}`,
+      content: template.content,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: template.tags,
+      pinned: false,
+      starred: false
+    };
+    
+    setNotes([...notes, newNote]);
+    setActiveNote(newNote);
+    setIsEditing(false);
+    setShowTemplates(false);
+    toast.success(`Created note from "${template.name}" template`);
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    setNotes(notes.filter(note => note.id !== noteId));
     if (activeNote?.id === noteId) {
       setActiveNote(null);
+      setIsEditing(false);
     }
-    
     toast.success('Note deleted successfully');
   };
-  
-  const handleToggleStar = (noteId: string) => {
-    setNotes(prev => prev.map(note => 
-      note.id === noteId ? 
-        { ...note, starred: !note.starred } : 
-        note
-    ));
+
+  const handleTogglePin = (noteId: string) => {
+    const updatedNotes = notes.map(note => 
+      note.id === noteId 
+        ? { ...note, pinned: !note.pinned }
+        : note
+    );
+    setNotes(updatedNotes);
     
     if (activeNote?.id === noteId) {
-      setActiveNote(prev => prev ? { ...prev, starred: !prev.starred } : null);
+      setActiveNote({ ...activeNote, pinned: !activeNote.pinned });
     }
   };
-  
-  const handleNavigateToFolder = (folderId?: string) => {
-    setCurrentFolder(folderId);
-    setActiveNote(null);
+
+  const handleToggleStar = (noteId: string) => {
+    const updatedNotes = notes.map(note => 
+      note.id === noteId 
+        ? { ...note, starred: !note.starred }
+        : note
+    );
+    setNotes(updatedNotes);
+    
+    if (activeNote?.id === noteId) {
+      setActiveNote({ ...activeNote, starred: !activeNote.starred });
+    }
   };
-  
+
+  const handleAddTag = () => {
+    if (!activeNote || !newNoteTag.trim()) return;
+    
+    if (activeNote.tags.includes(newNoteTag.trim())) {
+      toast.error('Tag already exists');
+      return;
+    }
+    
+    const updatedTags = [...activeNote.tags, newNoteTag.trim()];
+    const updatedNotes = notes.map(note => 
+      note.id === activeNote.id 
+        ? { ...note, tags: updatedTags }
+        : note
+    );
+    
+    setNotes(updatedNotes);
+    setActiveNote({ ...activeNote, tags: updatedTags });
+    setNewNoteTag('');
+    toast.success('Tag added successfully');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    if (!activeNote) return;
+    
+    const updatedTags = activeNote.tags.filter(tag => tag !== tagToRemove);
+    const updatedNotes = notes.map(note => 
+      note.id === activeNote.id 
+        ? { ...note, tags: updatedTags }
+        : note
+    );
+    
+    setNotes(updatedNotes);
+    setActiveNote({ ...activeNote, tags: updatedTags });
+    toast.success('Tag removed');
+  };
+
+  const formatText = (format: string) => {
+    // Mock rich text formatting actions
+    switch (format) {
+      case 'bold':
+        setEditorState({ ...editorState, isBold: !editorState.isBold });
+        toast.info('Bold formatting applied');
+        break;
+      case 'italic':
+        setEditorState({ ...editorState, isItalic: !editorState.isItalic });
+        toast.info('Italic formatting applied');
+        break;
+      case 'underline':
+        setEditorState({ ...editorState, isUnderline: !editorState.isUnderline });
+        toast.info('Underline formatting applied');
+        break;
+      default:
+        toast.info(`${format} formatting applied`);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Notes</h1>
-          <p className="text-muted-foreground">
-            Organize and manage your notes and documents
-          </p>
-        </div>
-        
+    <div className="flex flex-col h-[calc(100vh-100px)]">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-3xl font-bold">Notes</h1>
         <div className="flex items-center gap-2">
-          <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+          <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <FolderPlus className="h-4 w-4 mr-2" />
-                New Folder
+              <Button variant="outline" size="sm">
+                <FileText className="h-4 w-4 mr-2" />
+                Templates
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Create New Folder</DialogTitle>
+                <DialogTitle>Note Templates</DialogTitle>
               </DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="folder-name">Folder Name</Label>
-                  <Input 
-                    id="folder-name"
-                    value={newFolder.name}
-                    onChange={(e) => setNewFolder({ ...newFolder, name: e.target.value })}
-                    placeholder="Enter folder name"
-                  />
-                </div>
-                {currentFolder && (
-                  <div className="text-sm text-muted-foreground">
-                    Creating in: {breadcrumbs.map(b => b.name).join(' / ')}
-                  </div>
-                )}
+              <div className="grid gap-4 py-4">
+                {NOTE_TEMPLATES.map(template => (
+                  <Card key={template.id} className="cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleCreateFromTemplate(template)}>
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-medium">{template.name}</h3>
+                          <p className="text-sm text-muted-foreground">{template.description}</p>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {template.tags.map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setFolderDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={handleCreateFolder}>
-                  Create Folder
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
           
-          <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+          <Dialog>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Note
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Create New Note</DialogTitle>
               </DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="note-title">Title</Label>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="title" className="text-right">Title</Label>
                   <Input 
-                    id="note-title"
-                    value={newNote.title}
-                    onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
-                    placeholder="Enter note title"
+                    id="title" 
+                    value={newNoteTitle} 
+                    onChange={(e) => setNewNoteTitle(e.target.value)} 
+                    placeholder="Note title..."
+                    className="col-span-3"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="note-content">Content</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="content" className="text-right">Content</Label>
                   <Textarea 
-                    id="note-content"
-                    value={newNote.content}
-                    onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
-                    placeholder="Enter note content"
-                    rows={6}
+                    id="content" 
+                    value={newNoteContent} 
+                    onChange={(e) => setNewNoteContent(e.target.value)} 
+                    placeholder="Write your note content here..."
+                    className="col-span-3 min-h-[150px]"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="note-tags">Tags (comma separated)</Label>
-                  <Input 
-                    id="note-tags"
-                    placeholder="work, important, idea"
-                    onChange={(e) => setNewNote({ 
-                      ...newNote, 
-                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-                    })}
-                  />
-                </div>
-                {currentFolder && (
-                  <div className="text-sm text-muted-foreground">
-                    Creating in: {breadcrumbs.map(b => b.name).join(' / ')}
-                  </div>
-                )}
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setNoteDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={handleCreateNote}>
-                  Create Note
-                </Button>
+                <Button onClick={handleCreateNote}>Create Note</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
       
-      {/* Breadcrumb navigation */}
-      <div className="flex items-center space-x-1 text-sm">
-        {breadcrumbs.map((item, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-1" />}
-            <Button 
-              variant="ghost"
-              className="h-auto p-1"
-              onClick={() => handleNavigateToFolder(item.id)}
-            >
-              {item.name}
-            </Button>
-          </React.Fragment>
-        ))}
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left sidebar with filters and folders */}
-        <div className="md:col-span-1">
-          <Card>
-            <CardHeader className="py-4">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search notes..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+      <div className="flex gap-4 h-full">
+        {/* Notes Sidebar */}
+        <Card className="w-1/3 overflow-hidden">
+          <CardHeader className="p-4 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search notes..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-3">
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="pinned">Pinned</TabsTrigger>
+                <TabsTrigger value="starred">Starred</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardHeader>
+          
+          <CardContent className="p-0 overflow-y-auto h-[calc(100vh-270px)]">
+            {filteredNotes.length > 0 ? (
+              <div className="divide-y">
+                {filteredNotes.map(note => (
+                  <div key={note.id} 
+                    className={`p-4 cursor-pointer hover:bg-muted transition-colors ${activeNote?.id === note.id ? 'bg-muted' : ''}`}
+                    onClick={() => handleSelectNote(note)}>
+                    <div className="flex justify-between items-start mb-1">
+                      <h3 className="font-medium line-clamp-1">{note.title}</h3>
+                      <div className="flex items-center gap-1">
+                        {note.pinned && <span className="text-blue-500">📌</span>}
+                        {note.starred && <span className="text-yellow-500">⭐</span>}
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{note.content}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {note.tags.slice(0, 2).map(tag => (
+                          <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                        ))}
+                        {note.tags.length > 2 && <Badge variant="outline" className="text-xs">+{note.tags.length - 2}</Badge>}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(note.updatedAt), 'MMM d, yyyy')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Button 
-                  variant={activeFilter === 'all' ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => setActiveFilter('all')}
-                >
-                  <StickyNote className="h-4 w-4 mr-2" />
-                  All Notes
-                </Button>
-                <Button 
-                  variant={activeFilter === 'starred' ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => setActiveFilter('starred')}
-                >
-                  <Star className="h-4 w-4 mr-2" />
-                  Starred
-                </Button>
-                <Button 
-                  variant={activeFilter === 'recent' ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => setActiveFilter('recent')}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Recent
+            ) : (
+              <div className="p-6 text-center">
+                <p className="text-muted-foreground">No notes found</p>
+                <Button variant="outline" className="mt-2" onClick={() => setShowTemplates(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Note
                 </Button>
               </div>
-              
-              <Separator />
-              
-              <div className="space-y-1">
-                <div className="flex items-center justify-between py-1">
-                  <h3 className="text-sm font-medium">Folders</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setFolderDialogOpen(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Note Editor */}
+        <Card className="flex-1">
+          {activeNote ? (
+            <div className="h-full flex flex-col">
+              <CardHeader className="border-b p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    {isEditing ? (
+                      <Input 
+                        value={newNoteTitle}
+                        onChange={(e) => setNewNoteTitle(e.target.value)}
+                        className="text-xl font-bold"
+                        placeholder="Note title"
+                      />
+                    ) : (
+                      <CardTitle>{activeNote.title}</CardTitle>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isEditing && (
+                      <>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleToggleStar(activeNote.id)}
+                        >
+                          <Star className={`h-4 w-4 ${activeNote.starred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleTogglePin(activeNote.id)}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className={`${activeNote.pinned ? 'fill-blue-500 text-blue-500' : ''}`}>
+                            <path d="M9.62129 1.13607C9.81656 0.940808 10.1331 0.940809 10.3284 1.13607L13.8639 4.67157C14.0592 4.86683 14.0592 5.18341 13.8639 5.37868C13.6687 5.57394 13.3521 5.57394 13.1568 5.37868L9.97483 2.19672L6.37525 5.79629C6.22894 5.9426 6.0312 6.01746 5.82491 6.00014C5.61862 5.98282 5.43209 5.8751 5.31286 5.7051L4.79553 4.91753L2.2699 7.44316C2.07464 7.63842 1.75806 7.63842 1.56279 7.44316C1.36753 7.2479 1.36753 6.93131 1.56279 6.73605L4.32583 3.97301C4.45337 3.84547 4.63255 3.78947 4.81183 3.82227C4.9911 3.85506 5.14628 3.97252 5.22957 4.1367L5.74689 4.92427L9.62129 1.13607ZM9.97483 6.08302C9.77957 5.88776 9.46298 5.88776 9.26772 6.08302C9.07246 6.27828 9.07246 6.59487 9.26772 6.79013L10.6109 8.13332C10.8062 8.32858 10.8062 8.64516 10.6109 8.84043C10.4157 9.03569 10.0991 9.03569 9.90385 8.84043L8.56066 7.49723C8.1702 7.10677 8.1702 6.47008 8.56066 6.07961C8.95112 5.68915 9.58781 5.68915 9.97828 6.07961L10.0426 6.14388L11.3345 7.43582L13.1568 5.61357C13.352 5.41831 13.6686 5.41831 13.8639 5.61357C14.0591 5.80883 14.0591 6.12542 13.8639 6.32068L11.8284 8.35619C11.6331 8.55145 11.3166 8.55145 11.1213 8.35619L9.97483 7.20973L9.97483 6.08302ZM1.06555 13.9344C1.06555 13.3822 1.5133 12.9344 2.06555 12.9344H12.9344C13.4866 12.9344 13.9344 13.3822 13.9344 13.9344C13.9344 14.4866 13.4866 14.9344 12.9344 14.9344H2.06555C1.5133 14.9344 1.06555 14.4866 1.06555 13.9344Z" />
+                          </svg>
+                        </Button>
+                      </>
+                    )}
+                    
+                    {isEditing ? (
+                      <>
+                        <Button variant="outline" onClick={() => setIsEditing(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleSaveEdit}>
+                          Save
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="outline" onClick={handleEditNote}>
+                          Edit
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditNote()}>
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {/* share functionality */}}>
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {/* duplicate functionality */}}>
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-600" 
+                              onClick={() => handleDeleteNote(activeNote.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </div>
                 </div>
                 
-                {filteredFolders.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">
-                    {currentFolder ? 'No subfolders' : 'No folders created yet'}
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    {filteredFolders.map((folder) => (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center text-xs text-muted-foreground gap-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>Created {format(new Date(activeNote.createdAt), 'MMM d, yyyy')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>Updated {format(new Date(activeNote.updatedAt), 'MMM d, yyyy')}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {isEditing && (
+                  <div className="flex items-center mt-4 border p-1 rounded-md">
+                    <div className="flex items-center gap-0.5">
                       <Button 
-                        key={folder.id} 
                         variant="ghost" 
-                        className="w-full justify-start"
-                        onClick={() => handleNavigateToFolder(folder.id)}
+                        size="icon" 
+                        className={`h-8 w-8 rounded-sm ${editorState.isBold ? 'bg-muted' : ''}`} 
+                        onClick={() => formatText('bold')}
                       >
-                        <FolderPlus className="h-4 w-4 mr-2 text-amber-600" />
-                        {folder.name}
+                        <Bold className="h-4 w-4" />
                       </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-8 w-8 rounded-sm ${editorState.isItalic ? 'bg-muted' : ''}`} 
+                        onClick={() => formatText('italic')}
+                      >
+                        <Italic className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-8 w-8 rounded-sm ${editorState.isUnderline ? 'bg-muted' : ''}`} 
+                        onClick={() => formatText('underline')}
+                      >
+                        <Underline className="h-4 w-4" />
+                      </Button>
+                      <span className="w-px h-6 bg-border mx-1" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('heading')}>
+                        <Heading2 className="h-4 w-4" />
+                      </Button>
+                      <span className="w-px h-6 bg-border mx-1" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('bulletList')}>
+                        <List className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('numberedList')}>
+                        <ListOrdered className="h-4 w-4" />
+                      </Button>
+                      <span className="w-px h-6 bg-border mx-1" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('alignLeft')}>
+                        <AlignLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('alignCenter')}>
+                        <AlignCenter className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('alignRight')}>
+                        <AlignRight className="h-4 w-4" />
+                      </Button>
+                      <span className="w-px h-6 bg-border mx-1" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('image')}>
+                        <ImageIcon className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-sm" onClick={() => formatText('settings')}>
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex flex-wrap items-center gap-2 mt-4">
+                  {activeNote.tags.map(tag => (
+                    <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                      {tag}
+                      {isEditing && (
+                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-xs">
+                          ×
+                        </button>
+                      )}
+                    </Badge>
+                  ))}
+                  {isEditing && (
+                    <div className="flex items-center">
+                      <Input
+                        value={newNoteTag}
+                        onChange={(e) => setNewNoteTag(e.target.value)}
+                        placeholder="Add tag..."
+                        className="h-7 w-24 text-xs"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddTag();
+                          }
+                        }}
+                      />
+                      <Button variant="ghost" size="sm" onClick={handleAddTag}>
+                        +
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              
+              <CardContent className="p-4 overflow-y-auto flex-1">
+                {isEditing ? (
+                  <Textarea 
+                    value={newNoteContent} 
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    className="min-h-[300px] border-none focus-visible:ring-0 resize-none h-full"
+                    placeholder="Write your note content here..."
+                  />
+                ) : (
+                  <div className="prose prose-sm max-w-none">
+                    {activeNote.content.split('\n').map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
                     ))}
                   </div>
                 )}
-                
-                {currentFolder && (
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-muted-foreground"
-                    onClick={() => handleNavigateToFolder(folders.find(f => f.id === currentFolder)?.parent)}
-                  >
-                    <ChevronRight className="h-4 w-4 mr-2 rotate-180" />
-                    Back
-                  </Button>
-                )}
+              </CardContent>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center p-6 text-center">
+              <div className="mb-4">
+                <FileText className="h-12 w-12 text-muted-foreground" />
               </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Middle column with notes list */}
-        <div className="md:col-span-1">
-          <Card className="h-[calc(100vh-180px)] flex flex-col">
-            <CardHeader className="py-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-medium">
-                Notes {filteredNotes.length > 0 && `(${filteredNotes.length})`}
-              </CardTitle>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7"
-                onClick={() => setNoteDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-auto">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">Loading notes...</p>
-                </div>
-              ) : filteredNotes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <StickyNote className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium mb-1">No notes found</h3>
-                  <p className="text-sm text-muted-foreground mb-4 text-center">
-                    {searchQuery ? 'Try a different search term' : 'Create your first note to get started'}
-                  </p>
-                  <Button onClick={() => setNoteDialogOpen(true)}>
+              <h3 className="text-lg font-medium mb-2">No Note Selected</h3>
+              <p className="text-muted-foreground mb-4">
+                Select a note from the sidebar or create a new one to get started.
+              </p>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    New Note
+                    Create New Note
                   </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredNotes.map((note) => (
-                    <div 
-                      key={note.id} 
-                      className={`p-3 rounded-md cursor-pointer hover:bg-muted transition-all ${
-                        activeNote?.id === note.id ? 'bg-muted border-l-4 border-primary' : ''
-                      }`}
-                      onClick={() => handleOpenNote(note)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-medium line-clamp-1">
-                            {note.title}
-                          </h3>
-                          <p className="line-clamp-2 text-sm text-muted-foreground mt-1">
-                            {note.content || 'No content'}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="flex flex-wrap gap-1">
-                              {note.tags.slice(0, 2).map((tag, idx) => (
-                                <Badge key={idx} variant="outline" className="px-1 text-xs">
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {note.tags.length > 2 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{note.tags.length - 2}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex-1" />
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(note.updatedAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-6 w-6 text-${note.starred ? 'amber-500' : 'muted-foreground'}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleStar(note.id);
-                          }}
-                        >
-                          <Star className="h-4 w-4" fill={note.starred ? 'currentColor' : 'none'} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Right column with note detail */}
-        <div className="md:col-span-1">
-          <Card className="h-[calc(100vh-180px)] flex flex-col">
-            {!activeNote ? (
-              <div className="flex flex-col items-center justify-center h-full p-6">
-                <FileEdit className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="font-medium mb-1">No note selected</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  Select a note to view or edit its content
-                </p>
-              </div>
-            ) : (
-              <>
-                <CardHeader className="py-4 flex flex-row items-center justify-between">
-                  <div className="space-y-1">
-                    {isEditing ? (
-                      <Input
-                        value={activeNote.title}
-                        onChange={(e) => setActiveNote({...activeNote, title: e.target.value})}
-                        className="font-medium"
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Create New Note</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="new-title" className="text-right">Title</Label>
+                      <Input 
+                        id="new-title" 
+                        value={newNoteTitle} 
+                        onChange={(e) => setNewNoteTitle(e.target.value)} 
+                        placeholder="Note title..."
+                        className="col-span-3"
                       />
-                    ) : (
-                      <CardTitle className="text-base font-medium">{activeNote.title}</CardTitle>
-                    )}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <CalendarClock className="h-3 w-3 mr-1" />
-                        {new Date(activeNote.updatedAt).toLocaleDateString()}
-                      </div>
-                      {activeNote.tags.length > 0 && (
-                        <div className="flex items-center text-xs text-muted-foreground">
-                          <Tag className="h-3 w-3 mr-1" />
-                          {activeNote.tags.join(', ')}
-                        </div>
-                      )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="new-content" className="text-right">Content</Label>
+                      <Textarea 
+                        id="new-content" 
+                        value={newNoteContent} 
+                        onChange={(e) => setNewNoteContent(e.target.value)} 
+                        placeholder="Write your note content here..."
+                        className="col-span-3 min-h-[150px]"
+                      />
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-1">
-                    {isEditing ? (
-                      <Button variant="ghost" size="icon" onClick={handleSaveNote}>
-                        <Save className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                        <FileEdit className="h-4 w-4" />
-                      </Button>
-                    )}
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
-                          onClick={() => handleToggleStar(activeNote.id)}
-                          className={activeNote.starred ? 'text-amber-500' : ''}
-                        >
-                          <Star className="h-4 w-4 mr-2" fill={activeNote.starred ? 'currentColor' : 'none'} />
-                          {activeNote.starred ? 'Unstar' : 'Star'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                          <FileEdit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.info("Move note feature coming soon")}>
-                          <FolderPlus className="h-4 w-4 mr-2" />
-                          Move
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-red-600"
-                          onClick={() => handleDeleteNote(activeNote.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                
-                <Separator />
-                
-                <CardContent className="flex-1 overflow-auto py-4">
-                  {isEditing ? (
-                    <Textarea
-                      value={activeNote.content}
-                      onChange={(e) => setActiveNote({...activeNote, content: e.target.value})}
-                      className="min-h-[calc(100vh-320px)]"
-                    />
-                  ) : (
-                    <div className="whitespace-pre-line">
-                      {activeNote.content || 'No content'}
-                    </div>
-                  )}
-                </CardContent>
-                
-                {isEditing && (
-                  <>
-                    <Separator />
-                    <div className="p-4 flex justify-end">
-                      <Button onClick={handleSaveNote}>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Changes
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </Card>
-        </div>
+                  <DialogFooter>
+                    <Button onClick={handleCreateNote}>Create Note</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

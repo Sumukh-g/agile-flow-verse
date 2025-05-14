@@ -54,19 +54,29 @@ const Login: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // In a real app, this would validate credentials with a server
-      // For demo purposes, we'll just log in the user
-      localStorage.setItem('user', JSON.stringify({
+      // For demo purposes, we'll create a user object
+      const user = {
         id: Date.now().toString(),
         name: 'Demo User',
         email: formData.email,
         isAuthenticated: true
-      }));
+      };
+      
+      // Store user in localStorage
+      localStorage.setItem('user', JSON.stringify(user));
       
       toast.success("Login successful! Redirecting...");
       
-      // Redirect to dashboard after login
+      // Check if user has completed setup
+      const userSetup = localStorage.getItem('userSetup');
+      
+      // Redirect based on setup status
       setTimeout(() => {
-        navigate('/');
+        if (userSetup) {
+          navigate('/dashboard');
+        } else {
+          navigate('/setup');
+        }
       }, 1000);
     } catch (error) {
       toast.error("Invalid email or password. Please try again.");

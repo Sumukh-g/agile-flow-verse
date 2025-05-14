@@ -41,10 +41,14 @@ const RequireAuth = ({ children }: { children: JSX.Element }) => {
     setIsSetupCompleted(!!userSetup);
 
     if (!authenticated && !['/login', '/signup', '/'].includes(location.pathname)) {
+      // Redirect to login if not authenticated
       navigate('/login', { replace: true });
     } else if (authenticated && !userSetup && location.pathname !== '/setup') {
       // Redirect to setup if authenticated but setup not completed
       navigate('/setup', { replace: true });
+    } else if (authenticated && userSetup && ['/login', '/signup', '/'].includes(location.pathname)) {
+      // Redirect to dashboard if authenticated and setup completed but on auth pages
+      navigate('/dashboard', { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -79,7 +83,7 @@ const App = () => (
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route path="/setup" element={<Setup />} />
+          <Route path="/setup" element={<RequireAuth><Setup /></RequireAuth>} />
           
           {/* Protected routes */}
           <Route element={<RequireAuth><Layout /></RequireAuth>}>

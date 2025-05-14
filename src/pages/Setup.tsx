@@ -1,481 +1,261 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
-
-interface SetupStepProps {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}
-
-const SetupStep = ({ title, description, children }: SetupStepProps) => (
-  <div className="space-y-4 py-6">
-    <div>
-      <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="text-muted-foreground">{description}</p>
-    </div>
-    {children}
-  </div>
-);
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { toast } from "sonner";
 
 const Setup = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [loading, setLoading] = useState(false);
-  
-  // Setup form states
-  const [profileData, setProfileData] = useState({
-    firstName: '',
-    lastName: '',
-    jobTitle: '',
-    company: '',
-    team: '',
-    avatar: null
-  });
-  
-  const [workspaceData, setWorkspaceData] = useState({
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    type: 'personal',
-    inviteTeam: false
+    companyName: '',
+    teamSize: '',
+    industry: '',
+    projectTypes: [] as string[],
+    workflowDescription: '',
   });
-  
-  const [preferences, setPreferences] = useState({
-    theme: 'light',
-    notifications: ['email-important', 'app-all'],
-    features: ['tasks', 'projects', 'dashboard']
-  });
-  
-  // Form change handlers
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setProfileData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
-  const handleWorkspaceChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    setWorkspaceData((prev) => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value 
-    }));
+
+  const handleRadioChange = (value: string) => {
+    setFormData(prev => ({ ...prev, teamSize: value }));
   };
-  
-  const updateNotificationPreference = (value: string) => {
-    setPreferences(prev => {
-      const currentNotifications = [...prev.notifications];
-      
-      if (currentNotifications.includes(value)) {
-        return {
-          ...prev,
-          notifications: currentNotifications.filter(item => item !== value)
-        };
+
+  const handleProjectTypeToggle = (type: string) => {
+    setFormData(prev => {
+      const projectTypes = [...prev.projectTypes];
+      if (projectTypes.includes(type)) {
+        return { ...prev, projectTypes: projectTypes.filter(t => t !== type) };
       } else {
-        return {
-          ...prev,
-          notifications: [...currentNotifications, value]
-        };
+        return { ...prev, projectTypes: [...projectTypes, type] };
       }
     });
   };
-  
-  const updateFeaturePreference = (value: string) => {
-    setPreferences(prev => {
-      const currentFeatures = [...prev.features];
-      
-      if (currentFeatures.includes(value)) {
-        return {
-          ...prev,
-          features: currentFeatures.filter(item => item !== value)
-        };
-      } else {
-        return {
-          ...prev,
-          features: [...currentFeatures, value]
-        };
-      }
-    });
-  };
-  
-  // Navigation functions
+
   const nextStep = () => {
-    setCurrentStep(prev => Math.min(prev + 1, 2));
+    if (currentStep === 1) {
+      if (!formData.name || !formData.companyName) {
+        toast.error("Please fill in all required fields");
+        return;
+      }
+    } else if (currentStep === 2) {
+      if (!formData.teamSize || formData.projectTypes.length === 0) {
+        toast.error("Please select team size and at least one project type");
+        return;
+      }
+    }
+    
+    setCurrentStep(prev => prev + 1);
   };
-  
+
   const prevStep = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 0));
+    setCurrentStep(prev => prev - 1);
   };
-  
-  const completeSetup = () => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     setLoading(true);
     
-    // In a real app, this would be an API call
-    setTimeout(() => {
-      // Save setup data
+    try {
+      // Save setup data to localStorage
       localStorage.setItem('userSetup', JSON.stringify({
-        profile: profileData,
-        workspace: workspaceData,
-        preferences
+        ...formData,
+        completed: true,
+        setupDate: new Date().toISOString()
       }));
       
+      toast.success("Setup completed successfully! Redirecting to dashboard...");
+      
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    } catch (error) {
+      toast.error("An error occurred. Please try again.");
+    } finally {
       setLoading(false);
-      toast.success('Setup completed! Welcome to your workspace.');
-      navigate('/dashboard');
-    }, 1500);
+    }
   };
-  
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-3xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Welcome! Let's set up your workspace</CardTitle>
-          <CardDescription>Complete these steps to get started with your account</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Progress Indicator */}
-          <div className="w-full mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">
-                Step {currentStep + 1} of 3
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {currentStep === 0 && 'Your Profile'}
-                {currentStep === 1 && 'Workspace Setup'}
-                {currentStep === 2 && 'Preferences'}
-              </span>
-            </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary" 
-                style={{ width: `${((currentStep + 1) / 3) * 100}%` }}
-              ></div>
-            </div>
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-md">
+        <div className="mb-6 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="bg-indigo-600 text-white p-2 rounded">PM</div>
+            <span className="font-semibold text-2xl">ProjectMaster</span>
           </div>
+          <h1 className="text-2xl font-bold tracking-tight">Welcome to ProjectMaster</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Let's set up your account
+          </p>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {currentStep === 1 ? "Personal Information" : 
+               currentStep === 2 ? "Team & Projects" : "Workflow Setup"}
+            </CardTitle>
+            <CardDescription>
+              Step {currentStep} of 3
+            </CardDescription>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(currentStep / 3) * 100}%` }}></div>
+            </div>
+          </CardHeader>
           
-          {/* Step 1: Profile Information */}
-          {currentStep === 0 && (
-            <SetupStep 
-              title="Complete Your Profile" 
-              description="Tell us a bit about yourself to personalize your experience."
-            >
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={currentStep === 3 ? handleSubmit : (e) => e.preventDefault()}>
+            <CardContent>
+              {currentStep === 1 && (
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="name">Your Name</Label>
                     <Input 
-                      id="firstName" 
-                      name="firstName" 
-                      value={profileData.firstName} 
-                      onChange={handleProfileChange}
-                      placeholder="John" 
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="John Doe"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
+                    <Label htmlFor="companyName">Company/Organization Name</Label>
                     <Input 
-                      id="lastName" 
-                      name="lastName" 
-                      value={profileData.lastName} 
-                      onChange={handleProfileChange}
-                      placeholder="Doe" 
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="jobTitle">Job Title</Label>
-                  <Input 
-                    id="jobTitle" 
-                    name="jobTitle" 
-                    value={profileData.jobTitle} 
-                    onChange={handleProfileChange}
-                    placeholder="Product Manager" 
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company</Label>
-                    <Input 
-                      id="company" 
-                      name="company" 
-                      value={profileData.company} 
-                      onChange={handleProfileChange}
-                      placeholder="Acme Inc." 
+                      id="companyName"
+                      name="companyName"
+                      value={formData.companyName}
+                      onChange={handleInputChange}
+                      placeholder="Acme Inc."
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="team">Team</Label>
+                    <Label htmlFor="industry">Industry</Label>
                     <Input 
-                      id="team" 
-                      name="team" 
-                      value={profileData.team} 
-                      onChange={handleProfileChange}
-                      placeholder="Engineering" 
+                      id="industry"
+                      name="industry"
+                      value={formData.industry}
+                      onChange={handleInputChange}
+                      placeholder="Technology, Marketing, etc."
                     />
                   </div>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="avatar">Profile Picture</Label>
-                  <Input 
-                    id="avatar" 
-                    name="avatar" 
-                    type="file" 
-                    accept="image/*" 
-                    className="cursor-pointer"
-                    onChange={() => toast.info('Profile picture upload will be available in production')}
-                  />
-                </div>
-              </div>
-            </SetupStep>
-          )}
-          
-          {/* Step 2: Workspace Setup */}
-          {currentStep === 1 && (
-            <SetupStep 
-              title="Set Up Your Workspace" 
-              description="Configure your workspace to match your team's needs."
-            >
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="workspaceName">Workspace Name</Label>
-                  <Input 
-                    id="workspaceName" 
-                    name="name" 
-                    value={workspaceData.name} 
-                    onChange={handleWorkspaceChange}
-                    placeholder="My Awesome Workspace" 
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="workspaceDescription">Description (optional)</Label>
-                  <Textarea 
-                    id="workspaceDescription" 
-                    name="description" 
-                    value={workspaceData.description} 
-                    onChange={handleWorkspaceChange}
-                    placeholder="What is this workspace for?" 
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Workspace Type</Label>
-                  <RadioGroup 
-                    value={workspaceData.type} 
-                    onValueChange={(value) => setWorkspaceData({ ...workspaceData, type: value })}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="personal" id="personal" />
-                      <Label htmlFor="personal" className="cursor-pointer">Personal</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="team" id="team" />
-                      <Label htmlFor="team" className="cursor-pointer">Team</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="organization" id="organization" />
-                      <Label htmlFor="organization" className="cursor-pointer">Organization</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="inviteTeam" 
-                    name="inviteTeam"
-                    checked={workspaceData.inviteTeam} 
-                    onCheckedChange={(checked) => 
-                      setWorkspaceData({ ...workspaceData, inviteTeam: checked as boolean })
-                    } 
-                  />
-                  <Label htmlFor="inviteTeam" className="cursor-pointer">
-                    Invite team members after setup
-                  </Label>
-                </div>
-              </div>
-            </SetupStep>
-          )}
-          
-          {/* Step 3: Preferences */}
-          {currentStep === 2 && (
-            <SetupStep 
-              title="Customize Your Experience" 
-              description="Set your preferences to optimize your workflow."
-            >
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <Label>Theme Preference</Label>
-                  <RadioGroup 
-                    value={preferences.theme} 
-                    onValueChange={(value) => setPreferences({ ...preferences, theme: value })}
-                    className="flex flex-col sm:flex-row gap-4"
-                  >
-                    <div className="flex items-center space-x-2 border rounded-md p-3 flex-1">
-                      <RadioGroupItem value="light" id="light" />
-                      <Label htmlFor="light" className="cursor-pointer">Light</Label>
-                    </div>
-                    <div className="flex items-center space-x-2 border rounded-md p-3 flex-1">
-                      <RadioGroupItem value="dark" id="dark" />
-                      <Label htmlFor="dark" className="cursor-pointer">Dark</Label>
-                    </div>
-                    <div className="flex items-center space-x-2 border rounded-md p-3 flex-1">
-                      <RadioGroupItem value="system" id="system" />
-                      <Label htmlFor="system" className="cursor-pointer">System Default</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-3">
-                  <Label>Notification Preferences</Label>
+              )}
+              
+              {currentStep === 2 && (
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="email-important" 
-                        checked={preferences.notifications.includes('email-important')} 
-                        onCheckedChange={() => updateNotificationPreference('email-important')} 
-                      />
-                      <Label htmlFor="email-important" className="cursor-pointer">
-                        Email notifications for important updates
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="email-all" 
-                        checked={preferences.notifications.includes('email-all')} 
-                        onCheckedChange={() => updateNotificationPreference('email-all')} 
-                      />
-                      <Label htmlFor="email-all" className="cursor-pointer">
-                        Email notifications for all updates
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="app-all" 
-                        checked={preferences.notifications.includes('app-all')} 
-                        onCheckedChange={() => updateNotificationPreference('app-all')} 
-                      />
-                      <Label htmlFor="app-all" className="cursor-pointer">
-                        In-app notifications
-                      </Label>
+                    <Label>Team Size</Label>
+                    <RadioGroup 
+                      value={formData.teamSize} 
+                      onValueChange={handleRadioChange}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="solo" id="solo" />
+                        <Label htmlFor="solo">Solo/Freelancer</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="small" id="small" />
+                        <Label htmlFor="small">Small Team (2-10)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="medium" id="medium" />
+                        <Label htmlFor="medium">Medium Team (11-50)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="large" id="large" />
+                        <Label htmlFor="large">Large Team (50+)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Project Types (select all that apply)</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {["Software Development", "Marketing", "Design", "Research", "Construction", "Consulting", "Other"].map(type => (
+                        <div
+                          key={type}
+                          className={`border rounded-md p-2 cursor-pointer ${
+                            formData.projectTypes.includes(type) ? 'bg-indigo-50 border-indigo-300' : ''
+                          }`}
+                          onClick={() => handleProjectTypeToggle(type)}
+                        >
+                          {type}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-                
-                <Separator />
-                
-                <div className="space-y-3">
-                  <Label>Features You'll Use</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-tasks" 
-                        checked={preferences.features.includes('tasks')} 
-                        onCheckedChange={() => updateFeaturePreference('tasks')} 
-                      />
-                      <Label htmlFor="feature-tasks" className="cursor-pointer">
-                        Task Management
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-projects" 
-                        checked={preferences.features.includes('projects')} 
-                        onCheckedChange={() => updateFeaturePreference('projects')} 
-                      />
-                      <Label htmlFor="feature-projects" className="cursor-pointer">
-                        Project Management
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-calendar" 
-                        checked={preferences.features.includes('calendar')} 
-                        onCheckedChange={() => updateFeaturePreference('calendar')} 
-                      />
-                      <Label htmlFor="feature-calendar" className="cursor-pointer">
-                        Calendar
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-dashboard" 
-                        checked={preferences.features.includes('dashboard')} 
-                        onCheckedChange={() => updateFeaturePreference('dashboard')} 
-                      />
-                      <Label htmlFor="feature-dashboard" className="cursor-pointer">
-                        Dashboard
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-automation" 
-                        checked={preferences.features.includes('automation')} 
-                        onCheckedChange={() => updateFeaturePreference('automation')} 
-                      />
-                      <Label htmlFor="feature-automation" className="cursor-pointer">
-                        Automations
-                      </Label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 border rounded-md p-3">
-                      <Checkbox 
-                        id="feature-reports" 
-                        checked={preferences.features.includes('reports')} 
-                        onCheckedChange={() => updateFeaturePreference('reports')} 
-                      />
-                      <Label htmlFor="feature-reports" className="cursor-pointer">
-                        Reports
-                      </Label>
-                    </div>
+              )}
+              
+              {currentStep === 3 && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="workflowDescription">Describe your workflow process</Label>
+                    <Textarea 
+                      id="workflowDescription"
+                      name="workflowDescription"
+                      value={formData.workflowDescription}
+                      onChange={handleInputChange}
+                      placeholder="How do you typically manage projects? What stages do they go through?"
+                      rows={4}
+                    />
+                  </div>
+                  
+                  <div className="p-4 bg-indigo-50 rounded-md">
+                    <h3 className="font-medium text-indigo-800">All Set!</h3>
+                    <p className="text-sm text-indigo-600">
+                      You can customize your workspace further after setup. Click "Complete Setup" to start using ProjectMaster.
+                    </p>
                   </div>
                 </div>
-              </div>
-            </SetupStep>
-          )}
-          
-          {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={prevStep}
-              disabled={currentStep === 0}
-            >
-              Back
-            </Button>
+              )}
+            </CardContent>
             
-            <Button
-              type="button"
-              onClick={currentStep < 2 ? nextStep : completeSetup}
-              disabled={loading}
-            >
-              {loading && <span className="mr-2">Loading...</span>}
-              {currentStep < 2 ? 'Continue' : 'Complete Setup'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <CardFooter>
+              <div className="flex justify-between w-full">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={prevStep}
+                  disabled={currentStep === 1}
+                >
+                  Back
+                </Button>
+                
+                {currentStep < 3 ? (
+                  <Button type="button" onClick={nextStep}>
+                    Continue
+                  </Button>
+                ) : (
+                  <Button type="submit" disabled={loading}>
+                    {loading ? "Completing..." : "Complete Setup"}
+                  </Button>
+                )}
+              </div>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 };
