@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { List, Kanban, Calendar, GanttChart } from "lucide-react";
+import { List, Kanban, Calendar, GanttChart, BarChart3 } from "lucide-react";
 
 interface TaskViewTabsProps {
   activeView: string;
@@ -27,6 +27,10 @@ const TaskViewTabs: React.FC<TaskViewTabsProps> = ({ activeView, onChange }) => 
         <TabsTrigger value="timeline" className="flex items-center gap-2">
           <GanttChart className="h-4 w-4" />
           <span className="hidden sm:inline">Timeline</span>
+        </TabsTrigger>
+        <TabsTrigger value="reports" className="flex items-center gap-2">
+          <BarChart3 className="h-4 w-4" />
+          <span className="hidden sm:inline">Reports</span>
         </TabsTrigger>
       </TabsList>
     </Tabs>

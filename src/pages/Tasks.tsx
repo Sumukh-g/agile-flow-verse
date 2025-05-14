@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Plus, SlidersHorizontal, Lock, ArrowUpDown, Eye, EyeOff, MoreHorizontal, CheckSquare, ListChecks } from 'lucide-react';
+import { Search, Filter, Plus, SlidersHorizontal, Lock, ArrowUpDown, Eye, EyeOff, MoreHorizontal, CheckSquare, ListChecks, SaveAll } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,8 @@ import TaskViewTabs from '@/components/tasks/TaskViewTabs';
 import CreateTaskDialog from '@/components/tasks/CreateTaskDialog';
 import TaskCalendarView from '@/components/tasks/TaskCalendarView';
 import TaskTimelineView from '@/components/tasks/TaskTimelineView';
+import TaskReportView from '@/components/tasks/TaskReportView';
+import TaskDetailsPanel from '@/components/tasks/TaskDetailsPanel';
 import { toast } from 'sonner';
 
 // Task data
@@ -127,6 +129,7 @@ const INITIAL_TASKS = {
 interface Task {
   id: string;
   title: string;
+  description?: string;
   priority: string;
   dueDate: string;
   assignee: string;
@@ -147,6 +150,14 @@ const Tasks = () => {
     tags: true,
     status: true
   });
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [savedViews, setSavedViews] = useState<{id: string, name: string}[]>([
+    {id: 'v1', name: 'My Tasks'},
+    {id: 'v2', name: 'High Priority'},
+    {id: 'v3', name: 'Due This Week'}
+  ]);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
   useEffect(() => {
     // Flatten all tasks for list/calendar/timeline views
@@ -263,6 +274,44 @@ const Tasks = () => {
     }));
   };
 
+  const toggleFilter = (filter: string) => {
+    setActiveFilters(prev => 
+      prev.includes(filter) 
+        ? prev.filter(f => f !== filter) 
+        : [...prev, filter]
+    );
+    
+    toast.success(
+      `Filter ${activeFilters.includes(filter) ? 'removed' : 'applied'}: ${filter}`
+    );
+  };
+
+  const saveCurrentView = () => {
+    const newView = {
+      id: `v${savedViews.length + 1}`,
+      name: `Custom View ${savedViews.length + 1}`
+    };
+    setSavedViews([...savedViews, newView]);
+    toast.success(`View "${newView.name}" saved successfully`);
+  };
+
+  const openTaskDetails = (task: Task) => {
+    setSelectedTaskForDetails(task);
+    setIsDetailsOpen(true);
+  };
+
+  const updateTask = (updatedTask: Task) => {
+    setTasks(prev => {
+      const newTasks = { ...prev };
+      for (const [status, taskList] of Object.entries(newTasks)) {
+        newTasks[status] = taskList.map(task => 
+          task.id === updatedTask.id ? updatedTask : task
+        );
+      }
+      return newTasks;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -285,7 +334,7 @@ const Tasks = () => {
           />
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {selectedTasks.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -314,10 +363,60 @@ const Tasks = () => {
             </DropdownMenu>
           )}
           
-          <Button variant="outline" size="sm">
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
+          {/* Filter dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Filter className="mr-2 h-4 w-4" />
+                Filter
+                {activeFilters.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1">
+                    {activeFilters.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => toggleFilter('My Tasks')}>
+                <Checkbox checked={activeFilters.includes('My Tasks')} className="mr-2" />
+                My Tasks
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toggleFilter('High Priority')}>
+                <Checkbox checked={activeFilters.includes('High Priority')} className="mr-2" />
+                High Priority
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toggleFilter('Due Soon')}>
+                <Checkbox checked={activeFilters.includes('Due Soon')} className="mr-2" />
+                Due Soon
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setActiveFilters([])}>
+                Clear All Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Saved Views dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Eye className="mr-2 h-4 w-4" />
+                Saved Views
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {savedViews.map(view => (
+                <DropdownMenuItem key={view.id} onClick={() => toast.info(`Switched to view: ${view.name}`)}>
+                  {view.name}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={saveCurrentView}>
+                <SaveAll className="mr-2 h-4 w-4" />
+                Save Current View
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <Button variant="outline" size="sm">
             <SlidersHorizontal className="mr-2 h-4 w-4" />
@@ -397,6 +496,32 @@ const Tasks = () => {
         </div>
       </div>
       
+      {/* Quick filter chips */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {activeFilters.map(filter => (
+            <Badge 
+              key={filter} 
+              variant="secondary"
+              className="cursor-pointer"
+              onClick={() => toggleFilter(filter)}
+            >
+              {filter} ×
+            </Badge>
+          ))}
+          {activeFilters.length > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 px-2 text-xs"
+              onClick={() => setActiveFilters([])}
+            >
+              Clear All
+            </Button>
+          )}
+        </div>
+      )}
+      
       {/* View tabs */}
       <TaskViewTabs activeView={view} onChange={setView} />
       
@@ -448,11 +573,17 @@ const Tasks = () => {
             </TableHeader>
             <TableBody>
               {filteredFlatTasks.map(task => (
-                <TableRow key={task.id}>
-                  <TableCell>
+                <TableRow 
+                  key={task.id}
+                  className="cursor-pointer"
+                  onClick={() => openTaskDetails(task)}
+                >
+                  <TableCell onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelectTask(task.id);
+                  }}>
                     <Checkbox 
                       checked={selectedTasks.has(task.id)}
-                      onCheckedChange={() => toggleSelectTask(task.id)}
                     />
                   </TableCell>
                   <TableCell className="font-medium">{task.title}</TableCell>
@@ -499,7 +630,7 @@ const Tasks = () => {
                       </Badge>
                     </TableCell>
                   )}
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -516,8 +647,16 @@ const Tasks = () => {
                           Add Subtask
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>Edit Task</DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">Delete Task</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openTaskDetails(task)}>Edit Task</DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleBulkAction('delete');
+                          }}
+                        >
+                          Delete Task
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -527,7 +666,14 @@ const Tasks = () => {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
                     <div className="text-muted-foreground">No tasks found</div>
-                    <Button variant="outline" className="mt-4">
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => {
+                        const dialog = document.querySelector('[data-state="closed"]') as HTMLElement;
+                        if (dialog) dialog.click();
+                      }}
+                    >
                       <Plus className="mr-2 h-4 w-4" />
                       Add Task
                     </Button>
@@ -560,7 +706,11 @@ const Tasks = () => {
               <div className="flex-1 overflow-y-auto bg-slate-50 p-2 rounded-b-md">
                 <div className="flex flex-col gap-2">
                   {tasks.map(task => (
-                    <Card key={task.id} className="border shadow-sm">
+                    <Card 
+                      key={task.id} 
+                      className="border shadow-sm cursor-pointer"
+                      onClick={() => openTaskDetails(task)}
+                    >
                       <CardContent className="p-3">
                         <div className="space-y-2">
                           <div className="font-medium text-sm">{task.title}</div>
@@ -613,6 +763,18 @@ const Tasks = () => {
       {view === 'timeline' && (
         <TaskTimelineView tasks={allTasksFlat} onTaskCreate={handleTaskAdd} />
       )}
+      
+      {view === 'reports' && (
+        <TaskReportView tasks={allTasksFlat} />
+      )}
+      
+      {/* Task Details Panel */}
+      <TaskDetailsPanel
+        task={selectedTaskForDetails}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        onTaskUpdate={updateTask}
+      />
     </div>
   );
 };

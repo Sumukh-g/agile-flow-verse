@@ -20,21 +20,30 @@ import CustomDashboard from "@/pages/CustomDashboard";
 import SignUp from "@/pages/auth/SignUp";
 import Login from "@/pages/auth/Login";
 import LandingPage from "@/pages/LandingPage";
+import Setup from "@/pages/Setup";
 
 // Authentication check component
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Check if user is authenticated
     const user = localStorage.getItem('user');
     const authenticated = !!user;
     setIsAuthenticated(authenticated);
+    
+    // Check if setup is completed
+    const userSetup = localStorage.getItem('userSetup');
+    setIsSetupCompleted(!!userSetup);
 
     if (!authenticated && !['/login', '/signup', '/'].includes(location.pathname)) {
       navigate('/login', { replace: true });
+    } else if (authenticated && !userSetup && location.pathname !== '/setup') {
+      // Redirect to setup if authenticated but setup not completed
+      navigate('/setup', { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -69,6 +78,7 @@ const App = () => (
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/setup" element={<Setup />} />
           
           {/* Protected routes */}
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
