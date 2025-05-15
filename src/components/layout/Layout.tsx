@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Header from './Header';
 import AppSidebar from './AppSidebar';
+import StickyNote from '@/components/global/StickyNote'; // Added import
 
 const Layout = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -46,6 +47,7 @@ const Layout = () => {
             </div>
           </main>
         </div>
+        <StickyNote /> {/* Added StickyNote component */}
       </div>
     </SidebarProvider>
   );
