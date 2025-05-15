@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,7 +15,8 @@ import {
   Pencil,
   Move,
   Settings,
-  Table
+  Table,
+  Clock
 } from "lucide-react";
 import { toast } from "sonner";
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
@@ -125,11 +125,16 @@ const CustomDashboard = () => {
     description: ''
   });
   const [editWidgetId, setEditWidgetId] = useState<string | null>(null);
-  const [newWidgetData, setNewWidgetData] = useState({
+  const [newWidgetData, setNewWidgetData] = useState<{
+    type: string;
+    title: string;
+    width: 1 | 2 | 3 | 4;
+    height: 1 | 2;
+  }>({
     type: '',
     title: '',
-    width: 2 as const,
-    height: 1 as const
+    width: 2, // Default width
+    height: 1  // Default height
   });
 
   const currentDashboard = dashboards.find(d => d.id === activeDashboard) || DEFAULT_DASHBOARD;
