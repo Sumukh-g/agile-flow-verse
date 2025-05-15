@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom'; // Import useLocation
 import { StickyNote as StickyNoteIcon, X, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,24 +10,35 @@ const StickyNote: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [note, setNote] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const location = useLocation(); // Get location object
+  const noteKey = `stickyNote_${location.pathname}`; // Create a unique key based on the path
 
   useEffect(() => {
-    const savedNote = localStorage.getItem('globalStickyNote');
+    const savedNote = localStorage.getItem(noteKey);
     if (savedNote) {
       setNote(savedNote);
+    } else {
+      setNote(''); // Ensure note is reset if no saved note for this page
     }
-  }, []);
+  }, [noteKey]); // Rerun effect if noteKey changes (i.e., page changes)
 
   useEffect(() => {
-    localStorage.setItem('globalStickyNote', note);
-  }, [note]);
+    localStorage.setItem(noteKey, note);
+  }, [note, noteKey]);
 
   const toggleOpen = () => {
     setIsOpen(!isOpen);
     if (isOpen) { // Closing
       setIsEditing(false);
     } else { // Opening
-      if (!note) setIsEditing(true); // Auto-edit if note is empty
+      // Reload note when opening, in case it was changed on another tab for the same page
+      const savedNote = localStorage.getItem(noteKey);
+      if (savedNote) {
+        setNote(savedNote);
+      } else {
+        setNote('');
+      }
+      if (!note && !savedNote) setIsEditing(true); // Auto-edit if note is empty
     }
   };
 
@@ -77,8 +89,8 @@ const StickyNote: React.FC = () => {
             onBlur={() => setIsEditing(false)}
           />
         ) : (
-          <div 
-            className="w-full h-32 p-2 text-sm whitespace-pre-wrap overflow-y-auto cursor-text" 
+          <div
+            className="w-full h-32 p-2 text-sm whitespace-pre-wrap overflow-y-auto cursor-text"
             onClick={() => setIsEditing(true)}
           >
             {note || <span className="text-muted-foreground">Click to add a note...</span>}
@@ -90,3 +102,4 @@ const StickyNote: React.FC = () => {
 };
 
 export default StickyNote;
+
