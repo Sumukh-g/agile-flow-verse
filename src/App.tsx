@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -22,6 +21,12 @@ import SignUp from "@/pages/auth/SignUp";
 import Login from "@/pages/auth/Login";
 import LandingPage from "@/pages/LandingPage";
 import Setup from "@/pages/Setup";
+
+// Import new pages
+import AutomationsPage from "@/pages/AutomationsPage";
+import IntegrationsPage from "@/pages/IntegrationsPage";
+import DeveloperPage from "@/pages/DeveloperPage";
+import AdminPage from "@/pages/AdminPage";
 
 // Authentication check component
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -97,10 +102,11 @@ const App = () => (
             <Route path="/pages" element={<PagesDirectory />} />
             <Route path="/notes" element={<Notes />} />
             <Route path="/custom-dashboard" element={<CustomDashboard />} />
-            <Route path="/automations" element={<PlaceholderPage title="Automations" />} />
-            <Route path="/integrations" element={<PlaceholderPage title="Integrations" />} />
-            <Route path="/developer" element={<PlaceholderPage title="Developer" />} />
-            <Route path="/admin" element={<PlaceholderPage title="Admin" />} />
+            {/* Updated routes to use new page components */}
+            <Route path="/automations" element={<AutomationsPage />} />
+            <Route path="/integrations" element={<IntegrationsPage />} />
+            <Route path="/developer" element={<DeveloperPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
           
           {/* Catch-all route */}
