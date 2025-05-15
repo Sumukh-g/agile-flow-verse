@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -7,7 +6,10 @@ import {
   Bell, 
   User,
   Menu,
-  LogOut
+  LogOut,
+  Briefcase,
+  CheckSquare,
+  StickyNote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +22,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -87,6 +88,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       toast.info(`Searching for "${searchQuery}"`);
+      // navigate(`/search?q=${searchQuery}`); // Optional: navigate to a search results page
     }
   };
 
@@ -128,9 +130,26 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
         </form>
 
         <div className="flex items-center ml-auto gap-1 md:gap-2">
-          <Button variant="ghost" size="icon" className="text-slate-500 md:hidden" onClick={handleSearch}>
-            <Search className="h-5 w-5" />
-          </Button>
+          {/* Mobile search button - consider making this open a modal or an input field */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="icon" className="text-slate-500 md:hidden">
+                 <Search className="h-5 w-5" />
+               </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="p-2 md:hidden">
+              <form onSubmit={handleSearch} className="flex w-full">
+                 <Input
+                    type="search"
+                    placeholder="Search..."
+                    className="w-full bg-slate-50"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  <Button type="submit" size="sm" className="ml-2">Search</Button>
+              </form>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <DropdownMenu open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -157,28 +176,38 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-slate-500 relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                {notifications.length > 0 && (
+                   <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel className="flex items-center justify-between">
                 Notifications
-                <Button variant="ghost" size="sm" className="h-8 text-xs">
-                  Mark all as read
-                </Button>
+                {notifications.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => toast.info("Marked all as read (mock)")}>
+                    Mark all as read
+                  </Button>
+                )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.map(notification => (
-                <DropdownMenuItem key={notification.id} className="flex flex-col items-start py-2 cursor-pointer">
+              {notifications.length > 0 ? notifications.map(notification => (
+                <DropdownMenuItem key={notification.id} className="flex flex-col items-start py-2 cursor-pointer hover:bg-slate-50" onClick={() => toast.info(`Notification: ${notification.title}`)}>
                   <div className="font-medium text-sm">{notification.title}</div>
                   <div className="text-muted-foreground text-xs">{notification.description}</div>
                   <div className="text-xs text-muted-foreground mt-1">{notification.time}</div>
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="justify-center text-sm">
-                View all notifications
-              </DropdownMenuItem>
+              )) : (
+                <DropdownMenuItem disabled className="text-center text-sm text-muted-foreground py-4">No new notifications</DropdownMenuItem>
+              )}
+              {notifications.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => toast.info("Viewing all notifications (mock)")}>
+                    View all notifications
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           
@@ -204,11 +233,11 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}>Dashboard</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/custom-dashboard')}>My Dashboard</DropdownMenuItem>
-                  <DropdownMenuItem>Profile</DropdownMenuItem>
-                  <DropdownMenuItem>Settings</DropdownMenuItem>
-                  <DropdownMenuItem>Help</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast.info("Navigating to Profile (mock)")}>Profile</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast.info("Navigating to Settings (mock)")}>Settings</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toast.info("Navigating to Help (mock)")}>Help</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 hover:!bg-red-50 hover:!text-red-700">
                     <LogOut className="mr-2 h-4 w-4" />
                     Log out
                   </DropdownMenuItem>
@@ -226,8 +255,5 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
     </header>
   );
 };
-
-// Import these at the top of your file
-import { Briefcase, CheckSquare, StickyNote } from 'lucide-react';
 
 export default Header;

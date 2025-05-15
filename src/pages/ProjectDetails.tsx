@@ -1,36 +1,57 @@
-
 import React, { useState } from 'react';
-import { useParams, NavLink, Outlet } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, FileEdit, FileText, Calendar, Clock, Shield, FileSpreadsheet, FileBox, FileInput, Layers } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { 
+  CheckCircle, 
+  FileEdit, 
+  FileText, 
+  Calendar, 
+  Clock, 
+  Shield, 
+  FileSpreadsheet, 
+  FileBox, 
+  FileInput, 
+  Layers,
+  StickyNote // Added for Notes tab
+} from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea"; // Added for Notes tab
 import { toast } from "sonner";
+
+// Mock data for projects
+const MOCK_PROJECTS = [
+  { id: "1", name: "Website Redesign", description: "Revamp the company website.", icon: "WR", metrics: { completed: 5, updated: 2, created: 8, due: 3 } },
+  { id: "2", name: "Mobile App Development", description: "Create a new mobile app for iOS and Android.", icon: "MA", metrics: { completed: 10, updated: 5, created: 12, due: 4 } },
+  { id: "project-manager", name: "Project Management Tool", description: "The tool we are building right now!", icon: "PM", metrics: { completed: 0, updated: 0, created: 0, due: 0 } },
+  { id: "marketing-campaign", name: "Q3 Marketing Campaign", description: "Launch new marketing initiatives.", icon: "MC", metrics: { completed: 2, updated: 1, created: 5, due: 1 } },
+];
 
 const ProjectDetails = () => {
   const { projectId } = useParams();
   const [activeTab, setActiveTab] = useState<string>("summary");
   
-  // Mock data for this project
-  const project = {
-    name: "Project Manager",
-    metrics: {
-      completed: 0,
-      updated: 0,
-      created: 0,
-      due: 0
-    }
-  };
+  // Find the project by ID, or use a default if not found or no ID
+  const currentProject = 
+    MOCK_PROJECTS.find(p => p.id === projectId) || 
+    MOCK_PROJECTS.find(p => p.name === "Project Manager") || // Fallback for the original hardcoded name
+    { 
+      id: projectId || "default", 
+      name: `Project ${projectId || "Overview"}`, 
+      icon: projectId ? projectId.substring(0,2).toUpperCase() : "P",
+      metrics: { completed: 0, updated: 0, created: 0, due: 0 } 
+    };
 
-  // When a tab is clicked
+  const [projectNote, setProjectNote] = useState(''); // State for project-specific note
+
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    toast.info(`Viewing ${value} tab`);
+    toast.info(`Viewing ${value} tab for ${currentProject.name}`);
   };
 
-  // Handle create work item button
   const handleCreateWorkItem = () => {
-    toast.info("Creating new work item");
+    toast.info(`Creating new work item for ${currentProject.name}`);
+    // Potentially navigate or open a dialog
   };
 
   return (
@@ -39,10 +60,13 @@ const ProjectDetails = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <span className="bg-blue-600 text-white p-1.5 rounded">PM</span>
-            {project.name}
+            <span className="bg-indigo-600 text-white p-1.5 rounded flex items-center justify-center h-8 w-8 text-sm">
+              {currentProject.icon}
+            </span>
+            {currentProject.name}
           </h1>
         </div>
+        {/* ... keep existing code (Share and Automation buttons) */}
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline">
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -83,6 +107,11 @@ const ProjectDetails = () => {
               <Clock className="h-4 w-4" />
               Timeline
             </TabsTrigger>
+            {/* New Notes Tab */}
+            <TabsTrigger value="notes" className="px-4 flex items-center gap-2">
+              <StickyNote className="h-4 w-4" />
+              Notes
+            </TabsTrigger>
             <TabsTrigger value="approvals" className="px-4 flex items-center gap-2">
               <Shield className="h-4 w-4" />
               Approvals
@@ -110,10 +139,11 @@ const ProjectDetails = () => {
           </TabsList>
         </Tabs>
       </div>
-
-      {/* Content for Summary Tab */}
+      
+      {/* Content for Tabs */}
       {activeTab === "summary" && (
         <div className="space-y-6">
+          {/* ... keep existing code (Filter button and Metrics Cards, using currentProject.metrics) */}
           <div className="flex">
             <Button variant="outline" className="gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -130,7 +160,7 @@ const ProjectDetails = () => {
                 <CheckCircle className="h-6 w-6 text-gray-700" />
               </div>
               <div>
-                <div className="font-semibold text-lg">{project.metrics.completed} completed</div>
+                <div className="font-semibold text-lg">{currentProject.metrics.completed} completed</div>
                 <div className="text-sm text-gray-600">in the last 7 days</div>
               </div>
             </Card>
@@ -140,7 +170,7 @@ const ProjectDetails = () => {
                 <FileEdit className="h-6 w-6 text-gray-700" />
               </div>
               <div>
-                <div className="font-semibold text-lg">{project.metrics.updated} updated</div>
+                <div className="font-semibold text-lg">{currentProject.metrics.updated} updated</div>
                 <div className="text-sm text-gray-600">in the last 7 days</div>
               </div>
             </Card>
@@ -150,7 +180,7 @@ const ProjectDetails = () => {
                 <FileText className="h-6 w-6 text-gray-700" />
               </div>
               <div>
-                <div className="font-semibold text-lg">{project.metrics.created} created</div>
+                <div className="font-semibold text-lg">{currentProject.metrics.created} created</div>
                 <div className="text-sm text-gray-600">in the last 7 days</div>
               </div>
             </Card>
@@ -160,13 +190,12 @@ const ProjectDetails = () => {
                 <Calendar className="h-6 w-6 text-gray-700" />
               </div>
               <div>
-                <div className="font-semibold text-lg">{project.metrics.due} due soon</div>
+                <div className="font-semibold text-lg">{currentProject.metrics.due} due soon</div>
                 <div className="text-sm text-gray-600">in the next 7 days</div>
               </div>
             </Card>
           </div>
-
-          {/* Status Overview */}
+          {/* ... keep existing code (Status Overview, No Activity Yet, Priority Breakdown, Types of Work) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6 bg-gray-50">
               <h2 className="text-lg font-semibold mb-1">Status overview</h2>
@@ -249,17 +278,65 @@ const ProjectDetails = () => {
         </div>
       )}
 
-      {/* Placeholders for other tabs */}
       {activeTab === "board" && (
-        <div className="min-h-[400px] flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <h3 className="text-lg font-medium mb-2">Kanban Board View</h3>
-            <p className="text-muted-foreground mb-4">Organize your tasks in columns. Drag and drop to change status.</p>
+        <div className="min-h-[600px] p-4 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Project Board</h3>
             <Button onClick={handleCreateWorkItem}>Create New Task</Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* To Do Column */}
+            <div className="bg-slate-100 p-4 rounded-lg">
+              <h4 className="font-semibold mb-3 text-slate-700">To Do</h4>
+              <div className="space-y-3 min-h-[100px]">
+                <Card className="p-3 bg-white shadow-sm">
+                  <p className="font-medium text-sm">Task 1: Design homepage mockup</p>
+                  <p className="text-xs text-slate-500 mt-1">Due: May 20</p>
+                </Card>
+                <Card className="p-3 bg-white shadow-sm">
+                  <p className="font-medium text-sm">Task 2: Setup database schema</p>
+                  <p className="text-xs text-slate-500 mt-1">Due: May 22</p>
+                </Card>
+              </div>
+            </div>
+            {/* In Progress Column */}
+            <div className="bg-slate-100 p-4 rounded-lg">
+              <h4 className="font-semibold mb-3 text-slate-700">In Progress</h4>
+              <div className="space-y-3 min-h-[100px]">
+                <Card className="p-3 bg-white shadow-sm">
+                  <p className="font-medium text-sm">Task 3: Develop API endpoints</p>
+                  <p className="text-xs text-slate-500 mt-1">Due: May 25</p>
+                </Card>
+              </div>
+            </div>
+            {/* Done Column */}
+            <div className="bg-slate-100 p-4 rounded-lg">
+              <h4 className="font-semibold mb-3 text-slate-700">Done</h4>
+              <div className="space-y-3 min-h-[100px]">
+                <Card className="p-3 bg-white shadow-sm opacity-70">
+                  <p className="font-medium text-sm line-through">Task 4: Initial research</p>
+                  <p className="text-xs text-slate-500 mt-1">Completed: May 10</p>
+                </Card>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {activeTab === "notes" && (
+        <div className="p-4 space-y-4">
+          <h3 className="text-lg font-medium">Project Notes for {currentProject.name}</h3>
+          <Textarea
+            placeholder="Add your notes for this project here..."
+            value={projectNote}
+            onChange={(e) => setProjectNote(e.target.value)}
+            className="min-h-[200px] text-sm"
+          />
+          <Button onClick={() => toast.success("Note saved (mock)")}>Save Note (Mock)</Button>
+        </div>
+      )}
+
+      {/* ... keep existing placeholders for other tabs (list, calendar, timeline, etc.) ... */}
       {activeTab === "list" && (
         <div className="min-h-[400px] flex items-center justify-center">
           <div className="text-center max-w-md">
@@ -289,8 +366,7 @@ const ProjectDetails = () => {
           </div>
         </div>
       )}
-
-      {/* Additional tab contents would go here */}
+      {/* Remaining tabs: approvals, forms, pages, attachments, all-work, reports will keep their placeholder content */}
     </div>
   );
 };
