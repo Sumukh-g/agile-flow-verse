@@ -27,6 +27,7 @@ import AutomationsPage from "@/pages/AutomationsPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import DeveloperPage from "@/pages/DeveloperPage";
 import AdminPage from "@/pages/AdminPage";
+import BestInClassExtrasPage from "@/pages/BestInClassExtrasPage"; // Added import
 
 // Authentication check component
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -102,11 +103,11 @@ const App = () => (
             <Route path="/pages" element={<PagesDirectory />} />
             <Route path="/notes" element={<Notes />} />
             <Route path="/custom-dashboard" element={<CustomDashboard />} />
-            {/* Updated routes to use new page components */}
             <Route path="/automations" element={<AutomationsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/developer" element={<DeveloperPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/extras" element={<BestInClassExtrasPage />} /> {/* Added new route */}
           </Route>
           
           {/* Catch-all route */}
