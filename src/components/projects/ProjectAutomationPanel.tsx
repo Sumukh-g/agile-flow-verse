@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter 
@@ -61,7 +60,7 @@ interface Automation {
     condition?: string;
   };
   actions: {
-    type: 'update-status' | 'assign' | 'notify' | 'create-task' | 'webhook';
+    type: 'update-status' | 'assign' | 'notify' | 'create-task' | 'webhook' | 'send-email';
     config: any;
   }[];
   enabled: boolean;
@@ -83,7 +82,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
     trigger: {
       type: 'status-change'
     },
-    actions: [],
+    actions: [{ type: 'notify', config: { recipients: ['assignee'] } }],
     enabled: true
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -154,8 +153,8 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
         },
         {
           id: 'auto4',
-          name: 'Create weekly progress report',
-          description: 'Generate a summary report every Monday',
+          name: 'Create weekly progress report task',
+          description: 'Generate a task for reviewing weekly progress every Monday',
           trigger: {
             type: 'scheduled',
             condition: 'day == "Monday" && time == "9:00 AM"'
@@ -173,7 +172,30 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
           enabled: false,
           lastRun: '7 days ago',
           runCount: 4
-        }
+        },
+        // New "Email on Task Completion" automation
+        {
+          id: 'auto5',
+          name: 'Notify Team on Task Completion',
+          description: 'When a task is marked as complete, send an email notification to the project team. (Email sending requires backend setup)',
+          trigger: {
+            type: 'status-change',
+            condition: 'status == "Completed"',
+          },
+          actions: [
+            {
+              type: 'send-email',
+              config: {
+                recipients: ['project-team'],
+                subjectTemplate: 'Task Completed: {{task.name}}',
+                bodyTemplate: 'The task "{{task.name}}" in project "{{project.name}}" has been marked as complete by {{user.name}}.',
+              },
+            },
+          ],
+          enabled: true,
+          lastRun: 'Never',
+          runCount: 0,
+        },
       ];
       setAutomations(mockAutomations);
       setLoading(false);
@@ -209,6 +231,8 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
         return <Plus className="h-4 w-4" />;
       case 'webhook':
         return <ExternalLink className="h-4 w-4" />;
+      case 'send-email':
+        return <Mail className="h-4 w-4" />;
       default:
         return <Zap className="h-4 w-4" />;
     }
@@ -234,13 +258,19 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
       return;
     }
     
+    let currentActions = newAutomation.actions;
+    if (!Array.isArray(currentActions) || currentActions.length === 0) {
+        currentActions = [{ type: 'notify', config: { message: 'Default notification' } }];
+        toast.info("Default action added as none was selected.");
+    }
+
     const newAuto: Automation = {
       id: `auto${Date.now()}`,
       name: newAutomation.name || 'New Automation',
       description: newAutomation.description || 'New automation rule',
       trigger: newAutomation.trigger || { type: 'manual' },
-      actions: newAutomation.actions || [{ type: 'notify', config: { recipients: ['assignee'] } }],
-      enabled: true
+      actions: currentActions,
+      enabled: newAutomation.enabled !== undefined ? newAutomation.enabled : true,
     };
     
     setAutomations(prev => [newAuto, ...prev]);
@@ -249,14 +279,19 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
       name: '',
       description: '',
       trigger: { type: 'status-change' },
-      actions: [],
+      actions: [{ type: 'notify', config: { recipients: ['assignee'] } }],
       enabled: true
     });
     toast.success('New automation created');
   };
   
   const handleRunAutomation = (id: string) => {
-    toast.success(`Manually triggered automation`);
+    const automation = automations.find(a => a.id === id);
+    if (automation?.actions.some(act => act.type === 'send-email')) {
+        toast.info(`Manually triggered automation "${automation.name}". Email sending requires backend setup.`);
+    } else {
+        toast.success(`Manually triggered automation "${automation?.name || 'Unknown'}"`);
+    }
   };
   
   if (loading) {
@@ -283,7 +318,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
         <div>
           <CardTitle>Project Automations</CardTitle>
           <CardDescription>
-            Configure automated workflows for this project
+            Configure automated workflows for this project. (Backend needed for full execution)
           </CardDescription>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -297,7 +332,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
             <DialogHeader>
               <DialogTitle>Create New Automation</DialogTitle>
               <DialogDescription>
-                Set up a new automated workflow for your project
+                Set up a new automated workflow. (Full execution requires backend integration)
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -347,18 +382,26 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="action-type">Actions</Label>
+                  <Label>Actions</Label>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => toast.info("This would allow adding multiple actions")}
+                    onClick={() => toast.info("Adding multiple actions dynamically is a more complex UI feature for future enhancement.")}
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    Add Action
+                    Add Action Step
                   </Button>
                 </div>
                 
-                <Select>
+                <Select
+                    value={newAutomation.actions && newAutomation.actions.length > 0 ? newAutomation.actions[0].type : undefined}
+                    onValueChange={(val) => 
+                        setNewAutomation({
+                            ...newAutomation,
+                            actions: [{ type: val as any, config: { message: 'Configure this action' } }] 
+                        })
+                    }
+                >
                   <SelectTrigger id="action-type">
                     <SelectValue placeholder="Select action" />
                   </SelectTrigger>
@@ -368,8 +411,12 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                     <SelectItem value="notify">Send Notification</SelectItem>
                     <SelectItem value="create-task">Create Task</SelectItem>
                     <SelectItem value="webhook">Trigger Webhook</SelectItem>
+                    <SelectItem value="send-email">Send Email</SelectItem>
                   </SelectContent>
                 </Select>
+                 <p className="text-xs text-muted-foreground">
+                    Detailed configuration for actions (e.g., email content, recipients) would appear here based on selection.
+                </p>
               </div>
               
               <div className="flex items-center space-x-2 pt-2">
@@ -442,7 +489,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                                   {auto.trigger.type === 'scheduled' && 'On schedule'}
                                   {auto.trigger.type === 'manual' && 'Manually triggered'}
                                   {auto.trigger.condition && (
-                                    <span className="text-xs bg-slate-100 px-1.5 ml-1 rounded">
+                                    <span className="text-xs bg-slate-100 px-1.5 py-0.5 ml-1 rounded">
                                       {auto.trigger.condition}
                                     </span>
                                   )}
@@ -462,12 +509,13 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                                     <div className="p-1.5 rounded-md bg-slate-200 mr-2">
                                       {getActionIcon(action.type)}
                                     </div>
-                                    <div className="text-sm">
+                                    <div className="text-sm truncate">
                                       {action.type === 'update-status' && `Update status to "${action.config.newStatus}"`}
                                       {action.type === 'assign' && `Assign to ${action.config.assignee}`}
-                                      {action.type === 'notify' && `Send notification to ${action.config.recipients?.join(', ')}`}
+                                      {action.type === 'notify' && `Send notification to ${action.config.recipients?.join(', ')}: "${action.config.message?.substring(0,30)}..."`}
                                       {action.type === 'create-task' && `Create task "${action.config.title}"`}
-                                      {action.type === 'webhook' && `Trigger webhook`}
+                                      {action.type === 'webhook' && `Trigger webhook: ${action.config.url || 'Not configured'}`}
+                                      {action.type === 'send-email' && `Send email to ${action.config.recipients?.join(', ')} (Subject: "${action.config.subjectTemplate?.substring(0,20)}...")`}
                                     </div>
                                   </div>
                                 ))}
@@ -476,33 +524,34 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                           </div>
                         </div>
                         
-                        <div className="flex flex-row md:flex-col items-center md:items-end gap-2">
+                        <div className="flex flex-row md:flex-col items-center md:items-end gap-2 mt-4 md:mt-0">
                           {auto.lastRun && (
                             <div className="text-xs text-right text-muted-foreground">
-                              Last run: {auto.lastRun}
+                              Last run: {auto.lastRun} ({auto.runCount || 0} times)
                             </div>
                           )}
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-center">
                             <Button 
                               variant="outline" 
                               size="sm"
                               onClick={() => handleRunAutomation(auto.id)}
+                              title="Manually run this automation"
                             >
                               <Play className="h-3 w-3 mr-1" />
                               Run
                             </Button>
-                            <div className="flex items-center space-x-2">
-                              <Switch 
-                                id={`switch-${auto.id}`} 
-                                checked={auto.enabled} 
-                                onCheckedChange={(checked) => handleToggleAutomation(auto.id, checked)}
-                              />
-                            </div>
+                            <Switch 
+                              id={`switch-${auto.id}`} 
+                              checked={auto.enabled} 
+                              onCheckedChange={(checked) => handleToggleAutomation(auto.id, checked)}
+                              title={auto.enabled ? "Disable Automation" : "Enable Automation"}
+                            />
                             <Button 
                               variant="ghost" 
                               size="icon" 
                               className="h-8 w-8"
                               onClick={() => handleDeleteAutomation(auto.id)}
+                              title="Delete Automation"
                             >
                               <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
@@ -520,7 +569,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
             <div className="border rounded-md overflow-hidden">
               <div className="bg-slate-50 px-4 py-3 flex items-center justify-between border-b">
                 <h3 className="font-medium">Recent Executions</h3>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => toast.info("Log download feature coming soon.")}>
                   Download Logs
                 </Button>
               </div>
@@ -570,6 +619,9 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                     </Button>
                   </div>
                 </div>
+                 <div className="px-4 py-3 text-center text-muted-foreground">
+                    No recent executions for new automations. Execution history requires backend logging.
+                  </div>
               </div>
             </div>
           </TabsContent>
@@ -579,7 +631,7 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
               <div>
                 <h3 className="text-lg font-medium mb-2">Automation Settings</h3>
                 <p className="text-muted-foreground">
-                  Configure global settings for automations in this project
+                  Configure global settings for automations in this project. (Settings persistence requires backend).
                 </p>
               </div>
               
@@ -590,30 +642,39 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                   <div>
                     <h4 className="font-medium">Error Notifications</h4>
                     <p className="text-sm text-muted-foreground">
-                      Send notifications when automations fail
+                      Send notifications (e.g., to project admins) when automations fail.
                     </p>
                   </div>
-                  <Switch />
+                  <Switch id="error-notifications" />
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-medium">Audit Logging</h4>
+                    <h4 className="font-medium">Audit Logging Level</h4>
                     <p className="text-sm text-muted-foreground">
-                      Keep detailed logs of all automation executions
+                      Control the detail level of automation execution logs.
                     </p>
                   </div>
-                  <Switch defaultChecked />
+                   <Select defaultValue="basic">
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="basic">Basic</SelectItem>
+                            <SelectItem value="detailed">Detailed</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-medium">Allow Manual Triggers</h4>
+                    <h4 className="font-medium">Allow Manual Triggers by Default</h4>
                     <p className="text-sm text-muted-foreground">
-                      Enable manually running automations on-demand
+                      Enable manually running automations by default for new rules.
                     </p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch id="manual-triggers-default" defaultChecked />
                 </div>
               </div>
               
@@ -623,20 +684,20 @@ const ProjectAutomationPanel = ({ projectId }: ProjectAutomationPanelProps) => {
                 <h4 className="font-medium">Monthly Execution Quota</h4>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span>Used: 38 / 1,000</span>
+                    <span>Used: 38 / 1,000 (Example)</span>
                     <span className="text-muted-foreground">3.8%</span>
                   </div>
                   <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div className="bg-blue-500 h-full rounded-full" style={{ width: '3.8%' }} />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Quota resets on the 1st of each month
+                    Quota resets on the 1st of each month. (Tracking requires backend).
                   </p>
                 </div>
               </div>
               
               <div className="pt-2">
-                <Button variant="outline" onClick={() => toast.success("Settings saved")}>
+                <Button variant="outline" onClick={() => toast.success("Settings saved (locally for demo). Backend needed for persistence.")}>
                   <Settings className="h-4 w-4 mr-2" />
                   Save Settings
                 </Button>
