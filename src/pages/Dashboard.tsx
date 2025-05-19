@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Clock, 
@@ -9,13 +8,41 @@ import {
   ArrowUpRight, 
   MessageSquare, 
   Bell, 
-  Zap
+  Zap,
+  Briefcase, // For Company/Industry
+  Users, // For Team Size
+  ClipboardList // For Project Types
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from '@/components/ui/separator';
 
+interface UserSetupData {
+  name?: string; // name is from user, not setup data for display here
+  companyName?: string;
+  teamSize?: string;
+  industry?: string;
+  projectTypes?: string[];
+  workflowDescription?: string;
+  completed?: boolean;
+  setupDate?: string;
+}
+
 const Dashboard = () => {
+  const [userSetupData, setUserSetupData] = useState<UserSetupData | null>(null);
+
+  useEffect(() => {
+    const setupDataString = localStorage.getItem('userSetup');
+    if (setupDataString) {
+      try {
+        const parsedData = JSON.parse(setupDataString);
+        setUserSetupData(parsedData);
+      } catch (error) {
+        console.error("Failed to parse user setup data from localStorage", error);
+      }
+    }
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -24,6 +51,52 @@ const Dashboard = () => {
           Welcome back! Here's an overview of your workspace.
         </p>
       </div>
+
+      {/* User Setup Information Card */}
+      {userSetupData && userSetupData.completed && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center">
+              <Briefcase className="mr-2 h-5 w-5 text-indigo-500" />
+              Workspace Profile
+            </CardTitle>
+            <CardDescription>
+              This workspace is configured based on your setup choices.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {userSetupData.companyName && (
+              <div className="flex items-center">
+                <Briefcase className="mr-2 h-4 w-4 text-muted-foreground" />
+                <strong>Company:</strong><span className="ml-1">{userSetupData.companyName}</span>
+              </div>
+            )}
+            {userSetupData.industry && (
+              <div className="flex items-center">
+                <Zap className="mr-2 h-4 w-4 text-muted-foreground" /> {/* Using Zap as a generic icon for industry */}
+                <strong>Industry:</strong><span className="ml-1">{userSetupData.industry}</span>
+              </div>
+            )}
+            {userSetupData.teamSize && (
+              <div className="flex items-center">
+                <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                <strong>Team Size:</strong><span className="ml-1">{userSetupData.teamSize.charAt(0).toUpperCase() + userSetupData.teamSize.slice(1)}</span>
+              </div>
+            )}
+            {userSetupData.projectTypes && userSetupData.projectTypes.length > 0 && (
+              <div className="flex items-start">
+                <ClipboardList className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <strong>Project Focus:</strong>
+                  <ul className="list-disc list-inside ml-1">
+                    {userSetupData.projectTypes.map(type => <li key={type}>{type}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="dashboard-grid">
@@ -184,7 +257,7 @@ const StatsCard = ({
               <p className="text-xs text-muted-foreground">{description}</p>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              {trendValue && <span className="text-green-500">{trendValue} </span>}
+              {trendValue && <span className={`${trendValue.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{trendValue} </span>}
               {trendLabel}
             </p>
           </div>

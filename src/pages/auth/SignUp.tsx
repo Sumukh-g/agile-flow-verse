@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -78,11 +77,11 @@ const SignUp: React.FC = () => {
         isAuthenticated: true
       }));
       
-      toast.success("Account created successfully! Redirecting...");
+      toast.success("Account created successfully! Redirecting to setup...");
       
-      // Redirect to dashboard after signup
+      // Redirect to setup page after signup
       setTimeout(() => {
-        navigate('/');
+        navigate('/setup');
       }, 1000);
     } catch (error) {
       toast.error("An error occurred. Please try again.");
