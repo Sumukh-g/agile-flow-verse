@@ -1,6 +1,4 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,8 +10,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 
 const Setup = () => {
@@ -172,6 +172,10 @@ const Setup = () => {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="solo" id="solo" />
                         <Label htmlFor="solo">Solo/Freelancer</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="student" id="student" />
+                        <Label htmlFor="solo">Student</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="small" id="small" />

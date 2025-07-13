@@ -1,427 +1,543 @@
-
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import FlowchartBoard from '@/components/boards/FlowchartBoard';
+import GanttBoard from '@/components/boards/GanttBoard';
+import KanbanBoard from '@/components/boards/KanbanBoard';
+import MindmapBoard from '@/components/boards/MindmapBoard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Filter, Settings, Plus, MoreHorizontal } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuLabel
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { toast } from 'sonner';
-
-interface Task {
-  id: string;
-  title: string;
-  priority: string;
-  status: string;
-  dueDate: string;
-  assignee: string;
-  tags: string[];
-}
-
-interface Column {
-  id: string;
-  title: string;
-  tasks: Task[];
-  color: string;
-}
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Brain,
+    Calendar,
+    Columns,
+    Filter,
+    GitBranch,
+    Grid2X2,
+    LayoutDashboard,
+    Lock,
+    MoreHorizontal,
+    Plus,
+    Rows3,
+    Star,
+    StarOff,
+    Trello,
+    Unlock,
+    UserPlus,
+    Users
+} from 'lucide-react';
+import { useState } from 'react';
+import { toast } from "sonner";
 
 interface ProjectBoardViewProps {
   projectId?: string;
 }
 
-const ProjectBoardView = ({ projectId }: ProjectBoardViewProps) => {
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [boardConfig, setBoardConfig] = useState({
-    showWipLimits: true,
-    compactCards: false,
+interface BoardCard {
+  id: string;
+  title: string;
+  description: string;
+  collaborators: string[];
+  tags: string[];
+  createdAt: string;
+  starred?: boolean;
+  template?: boolean;
+  type?: 'kanban' | 'scrum' | 'custom' | 'timeline';
+  visibility?: 'private' | 'team' | 'public';
+}
+
+const BOARD_TYPES = [
+  { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, description: 'Overview of all boards and projects' },
+  { id: 'gantt', name: 'Gantt Chart', icon: Calendar, description: 'Timeline and project management' },
+  { id: 'mindmap', name: 'Mindmap', icon: Brain, description: 'Visual thinking and idea mapping' },
+  { id: 'flowchart', name: 'Flowchart', icon: GitBranch, description: 'Process flows and diagrams' },
+  { id: 'kanban', name: 'Kanban', icon: Trello, description: 'Task management and workflows' }
+];
+
+const ProjectBoardView = ({ projectId = 'p1' }: ProjectBoardViewProps) => {
+  const [boards, setBoards] = useState<BoardCard[]>([
+    {
+      id: `${projectId}-board-1`,
+      title: `${projectId.toUpperCase()} - Main Kanban`,
+      description: 'Primary task management board for this project',
+      collaborators: ['JD', 'AS', 'BW'],
+      tags: ['Project', 'Main'],
+      createdAt: '2 days ago',
+      starred: true,
+      type: 'kanban',
+      visibility: 'team'
+    },
+    {
+      id: `${projectId}-board-2`,
+      title: `${projectId.toUpperCase()} - Timeline`,
+      description: 'Project timeline and milestone tracking',
+      collaborators: ['JD', 'CB'],
+      tags: ['Timeline', 'Planning'],
+      createdAt: '1 week ago',
+      type: 'timeline',
+      visibility: 'team'
+    },
+    {
+      id: `${projectId}-board-3`,
+      title: `${projectId.toUpperCase()} - Brainstorming`,
+      description: 'Ideas and concept development',
+      collaborators: ['AS', 'DP'],
+      tags: ['Ideas', 'Creative'],
+      createdAt: '3 days ago',
+      type: 'custom',
+      visibility: 'team'
+    }
+  ]);
+  
+  const [newBoardTitle, setNewBoardTitle] = useState('');
+  const [newBoardDesc, setNewBoardDesc] = useState('');
+  const [newBoardType, setNewBoardType] = useState<string>('kanban');
+  const [newBoardVisibility, setNewBoardVisibility] = useState<string>('team');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [selectedBoardType, setSelectedBoardType] = useState('kanban');
+  
+  const filteredBoards = boards.filter(board => {
+    const matchesSearch = board.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      board.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      board.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+    let matchesFilter = true;
+    if (activeFilter === 'starred') {
+      matchesFilter = board.starred === true;
+    } else if (activeFilter === 'recent') {
+      matchesFilter = board.createdAt.includes('day');
+    } else if (activeFilter === 'templates') {
+      matchesFilter = board.template === true;
+    }
+    
+    return matchesSearch && matchesFilter;
   });
-  
-  useEffect(() => {
-    setTimeout(() => {
-      const mockColumns: Column[] = [
-        {
-          id: 'todo',
-          title: 'To Do',
-          color: 'bg-slate-200',
-          tasks: [
-            {
-              id: 't1',
-              title: 'Research competitor products',
-              priority: 'Medium',
-              status: 'To Do',
-              dueDate: '2023-06-15',
-              assignee: 'JD',
-              tags: ['Research', 'Marketing'],
-            },
-            {
-              id: 't2',
-              title: 'Create design wireframes',
-              priority: 'High',
-              status: 'To Do',
-              dueDate: '2023-06-12',
-              assignee: 'AS',
-              tags: ['Design', 'UX'],
-            }
-          ]
-        },
-        {
-          id: 'inprogress',
-          title: 'In Progress',
-          color: 'bg-blue-200',
-          tasks: [
-            {
-              id: 't3',
-              title: 'Implement authentication system',
-              priority: 'High',
-              status: 'In Progress',
-              dueDate: '2023-06-10',
-              assignee: 'RM',
-              tags: ['Backend', 'Security'],
-            }
-          ]
-        },
-        {
-          id: 'review',
-          title: 'In Review',
-          color: 'bg-purple-200',
-          tasks: [
-            {
-              id: 't4',
-              title: 'Frontend performance optimization',
-              priority: 'Medium',
-              status: 'In Review',
-              dueDate: '2023-06-08',
-              assignee: 'JD',
-              tags: ['Frontend', 'Performance'],
-            }
-          ]
-        },
-        {
-          id: 'done',
-          title: 'Done',
-          color: 'bg-green-200',
-          tasks: [
-            {
-              id: 't5',
-              title: 'Project setup and repository',
-              priority: 'High',
-              status: 'Done',
-              dueDate: '2023-06-01',
-              assignee: 'TW',
-              tags: ['DevOps'],
-            }
-          ]
-        }
-      ];
-      setColumns(mockColumns);
-      setLoading(false);
-    }, 800);
-  }, [projectId]);
-  
-  const handleDragStart = (e: React.DragEvent, taskId: string, sourceColumnId: string) => {
-    e.dataTransfer.setData('taskId', taskId);
-    e.dataTransfer.setData('sourceColumnId', sourceColumnId);
+
+  const handleCreateBoard = () => {
+    if (!newBoardTitle.trim()) {
+      toast.error('Please enter a board title');
+      return;
+    }
+
+    const newBoard: BoardCard = {
+      id: `${projectId}-board-${Date.now()}`,
+      title: newBoardTitle,
+      description: newBoardDesc,
+      collaborators: ['JD'],
+      tags: ['Project'],
+      createdAt: 'Just now',
+      type: newBoardType as 'kanban' | 'scrum' | 'custom' | 'timeline',
+      visibility: newBoardVisibility as 'private' | 'team' | 'public'
+    };
+
+    setBoards(prev => [newBoard, ...prev]);
+    setNewBoardTitle('');
+    setNewBoardDesc('');
+    setDialogOpen(false);
+    toast.success('Project board created successfully');
   };
-  
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+
+  const handleDeleteBoard = (id: string) => {
+    setBoards(prev => prev.filter(board => board.id !== id));
+    toast.success('Board deleted');
   };
-  
-  const handleDrop = (e: React.DragEvent, targetColumnId: string) => {
-    e.preventDefault();
-    const taskId = e.dataTransfer.getData('taskId');
-    const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
+
+  const handleOpenBoard = (id: string) => {
+    const board = boards.find(b => b.id === id);
+    toast.success(`Opening ${board?.title}`);
+  };
+
+  const handleStarBoard = (id: string) => {
+    setBoards(prev => prev.map(board =>
+      board.id === id ? { ...board, starred: !board.starred } : board
+    ));
     
-    if (sourceColumnId === targetColumnId) return;
-    
-    setColumns(prevColumns => {
-      // Find the task in the source column
-      const sourceColumn = prevColumns.find(col => col.id === sourceColumnId);
-      if (!sourceColumn) return prevColumns;
-      
-      const taskToMove = sourceColumn.tasks.find(task => task.id === taskId);
-      if (!taskToMove) return prevColumns;
-      
-      // Create new array with task removed from source column
-      const updatedColumns = prevColumns.map(col => {
-        if (col.id === sourceColumnId) {
-          return {
-            ...col,
-            tasks: col.tasks.filter(task => task.id !== taskId)
-          };
-        }
-        if (col.id === targetColumnId) {
-          // Update the task's status based on the target column
-          const updatedTask = {
-            ...taskToMove,
-            status: col.title
-          };
-          // Add task to target column
-          return {
-            ...col,
-            tasks: [...col.tasks, updatedTask]
-          };
-        }
-        return col;
-      });
-      
-      toast.success(`Task moved to ${prevColumns.find(col => col.id === targetColumnId)?.title}`);
-      return updatedColumns;
-    });
+    const board = boards.find(b => b.id === id);
+    const action = board?.starred ? 'removed from' : 'added to';
+    toast.success(`${board?.title} ${action} favorites`);
   };
-  
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-100 text-red-800';
-      case 'Medium':
-        return 'bg-amber-100 text-amber-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
+
+  const getTypeIcon = (type?: string) => {
+    switch (type) {
+      case 'kanban':
+        return <Columns className="h-4 w-4 mr-1" />;
+      case 'scrum':
+        return <Grid2X2 className="h-4 w-4 mr-1" />;
+      case 'timeline':
+        return <Rows3 className="h-4 w-4 mr-1" />;
       default:
-        return 'bg-slate-100 text-slate-800';
+        return <Columns className="h-4 w-4 mr-1" />;
     }
   };
-  
-  const handleAddTask = (columnId: string) => {
-    toast.info(`Adding task to ${columns.find(col => col.id === columnId)?.title}`);
+
+  const getVisibilityIcon = (visibility?: string) => {
+    switch (visibility) {
+      case 'private':
+        return <Lock className="h-4 w-4 mr-1" />;
+      case 'public':
+        return <Unlock className="h-4 w-4 mr-1" />;
+      case 'team':
+        return <Users className="h-4 w-4 mr-1" />;
+      default:
+        return <Users className="h-4 w-4 mr-1" />;
+    }
   };
-  
-  const toggleBoardConfig = (key: keyof typeof boardConfig) => {
-    setBoardConfig(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-    toast.success(`${key} ${boardConfig[key] ? 'disabled' : 'enabled'}`);
-  };
-  
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Project Board</CardTitle>
-        </CardHeader>
-        <CardContent className="h-96 flex items-center justify-center">
-          <div className="animate-pulse text-center">
-            <p>Loading board...</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-  
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Project Board</CardTitle>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold tracking-tight">Project Boards</h2>
+        <p className="text-muted-foreground">
+          Visual boards and charts for this project.
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Input
+            type="search"
+            placeholder="Search project boards..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
         <div className="flex items-center gap-2">
+          <Tabs value={activeFilter} onValueChange={setActiveFilter} className="hidden md:block">
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="starred">Starred</TabsTrigger>
+              <TabsTrigger value="recent">Recent</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+            <DropdownMenuTrigger asChild className="md:hidden">
+              <Button variant="outline">
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuLabel>Filter Tasks</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => toast.info("Filtered by assignee")}>
-                By Assignee
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info("Filtered by priority")}>
-                By Priority
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info("Filtered by date")}>
-                By Due Date
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('all')}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('starred')}>Starred</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('recent')}>Recent</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Board Settings
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuLabel>Board Configuration</DropdownMenuLabel>
-              <DropdownMenuItem 
-                onClick={() => toggleBoardConfig('showWipLimits')}
-                className={boardConfig.showWipLimits ? "font-medium" : ""}
-              >
-                {boardConfig.showWipLimits ? "✓ " : ""}
-                Show WIP Limits
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => toggleBoardConfig('compactCards')}
-                className={boardConfig.compactCards ? "font-medium" : ""}
-              >
-                {boardConfig.compactCards ? "✓ " : ""}
-                Compact Cards
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => toast.info("Managing columns")}>
-                Manage Columns
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info("Saving board view")}>
-                Save Board View
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <div className="flex gap-6 min-h-[500px]">
-          {columns.map(column => (
-            <div 
-              key={column.id}
-              className="flex flex-col min-w-[250px] w-[250px]"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, column.id)}
-            >
-              <div className={`px-3 py-2 rounded-t-md flex items-center justify-between ${column.color}`}>
-                <div className="flex items-center">
-                  <h3 className="font-medium text-sm">{column.title}</h3>
-                  <span className="bg-white text-xs font-medium rounded-full px-2 py-0.5 ml-2 text-slate-600">
-                    {column.tasks.length}
-                  </span>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6"
-                  onClick={() => handleAddTask(column.id)}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto bg-slate-50 p-2 rounded-b-md">
-                {column.tasks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-sm text-muted-foreground p-4 border border-dashed rounded-md">
-                    <p>No tasks</p>
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      onClick={() => handleAddTask(column.id)}
-                    >
-                      Add a task
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {column.tasks.map(task => (
-                      <Card 
-                        key={task.id} 
-                        className="border shadow-sm cursor-grab"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task.id, column.id)}
-                      >
-                        <CardContent className={`p-3 ${boardConfig.compactCards ? 'py-2' : ''}`}>
-                          <div className="space-y-2">
-                            <div className="font-medium text-sm">{task.title}</div>
-                            
-                            <div className="flex items-center justify-between text-xs">
-                              <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                                {task.priority}
-                              </Badge>
-                              <span className="text-muted-foreground">{new Date(task.dueDate).toLocaleDateString()}</span>
-                            </div>
-                            
-                            {!boardConfig.compactCards && (
-                              <div className="flex items-center justify-between">
-                                <div className="flex gap-1">
-                                  {task.tags.slice(0, 2).map((tag, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                  {task.tags.length > 2 && (
-                                    <span className="text-xs text-muted-foreground">+{task.tags.length - 2}</span>
-                                  )}
-                                </div>
-                                
-                                <Avatar className="h-6 w-6">
-                                  <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                                    {task.assignee}
-                                  </AvatarFallback>
-                                </Avatar>
-                              </div>
-                            )}
-                            
-                            {boardConfig.compactCards && (
-                              <div className="flex items-center justify-between">
-                                <Avatar className="h-5 w-5">
-                                  <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
-                                    {task.assignee}
-                                  </AvatarFallback>
-                                </Avatar>
-                                
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                      <MoreHorizontal className="h-3 w-3" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => toast.info("Edit task")}>
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => toast.info("View task details")}>
-                                      View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      onClick={() => {
-                                        setColumns(prev => prev.map(col => ({
-                                          ...col,
-                                          tasks: col.tasks.filter(t => t.id !== task.id)
-                                        })));
-                                        toast.success("Task deleted");
-                                      }} 
-                                      className="text-red-600"
-                                    >
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          <div className="flex flex-col min-w-[250px] border-2 border-dashed border-slate-200 rounded-md p-4 flex items-center justify-center text-muted-foreground">
+        
+          <div className="flex border rounded-md">
             <Button 
-              variant="outline" 
-              className="border-dashed"
-              onClick={() => toast.info("Adding new column")}
+              variant={viewMode === 'grid' ? 'default' : 'ghost'} 
+              size="icon" 
+              onClick={() => setViewMode('grid')}
+              className="rounded-none rounded-l-md"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Column
+              <Grid2X2 className="h-4 w-4" />
+            </Button>
+            <Separator orientation="vertical" />
+            <Button 
+              variant={viewMode === 'list' ? 'default' : 'ghost'} 
+              size="icon"
+              onClick={() => setViewMode('list')}
+              className="rounded-none rounded-r-md"
+            >
+              <Rows3 className="h-4 w-4" />
             </Button>
           </div>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Board
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Project Board</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input 
+                    id="title" 
+                    placeholder="Enter board title" 
+                    value={newBoardTitle}
+                    onChange={(e) => setNewBoardTitle(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea 
+                    id="description" 
+                    placeholder="Enter board description"
+                    value={newBoardDesc}
+                    onChange={(e) => setNewBoardDesc(e.target.value)} 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Board Type</Label>
+                    <Select value={newBoardType} onValueChange={setNewBoardType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select board type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kanban">Kanban Board</SelectItem>
+                        <SelectItem value="scrum">Scrum Board</SelectItem>
+                        <SelectItem value="timeline">Timeline</SelectItem>
+                        <SelectItem value="custom">Custom Board</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="visibility">Visibility</Label>
+                    <Select value={newBoardVisibility} onValueChange={setNewBoardVisibility}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="private">Private</SelectItem>
+                        <SelectItem value="team">Team</SelectItem>
+                        <SelectItem value="public">Public</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateBoard}>Create Board</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Board Type Selection */}
+      <div className="w-full overflow-x-auto py-2 mb-2">
+        <div className="flex gap-2 min-w-[400px]">
+          {BOARD_TYPES.map(type => {
+            const IconComponent = type.icon;
+            return (
+              <button
+                key={type.id}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors whitespace-nowrap font-medium text-base ${selectedBoardType === type.id ? 'bg-indigo-600 text-white shadow' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                onClick={() => setSelectedBoardType(type.id)}
+                style={{ minWidth: 120 }}
+              >
+                <IconComponent className="h-4 w-4" />
+                <span>{type.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Board Content */}
+      {selectedBoardType === 'dashboard' && (
+        <>
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBoards.map((board) => (
+                <Card key={board.id} className={`overflow-hidden ${board.template ? 'border-dashed' : ''}`}>
+                  <CardHeader className="p-5">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg flex-1">{board.title}</CardTitle>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => handleStarBoard(board.id)}
+                        >
+                          {board.starred ? 
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                            <StarOff className="h-4 w-4" />
+                          }
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleOpenBoard(board.id)}>Open</DropdownMenuItem>
+                            <DropdownMenuItem>Edit</DropdownMenuItem>
+                            <DropdownMenuItem>Share</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={() => handleDeleteBoard(board.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    <CardDescription className="line-clamp-2">{board.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-5 pt-0">
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {board.tags.map((tag, idx) => (
+                        <Badge key={idx} variant="outline">{tag}</Badge>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex -space-x-2">
+                        {board.collaborators.map((person, idx) => (
+                          <Avatar key={idx} className="h-7 w-7 border-2 border-background">
+                            <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                              {person}
+                            </AvatarFallback>
+                          </Avatar>
+                        ))}
+                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full border-2 border-background">
+                          <UserPlus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {getTypeIcon(board.type)}
+                          {board.type}
+                        </Badge>
+                        <Badge variant="outline">
+                          {getVisibilityIcon(board.visibility)}
+                          {board.visibility}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="p-3 border-t bg-muted/20">
+                    <div className="flex justify-between w-full items-center">
+                      <span className="text-xs text-muted-foreground">{board.createdAt}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleOpenBoard(board.id)}
+                      >
+                        Open Board
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader className="py-4 px-6">
+                <div className="grid grid-cols-12 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-6">Name</div>
+                  <div className="col-span-2">Type</div>
+                  <div className="col-span-2">Visibility</div>
+                  <div className="col-span-1">Created</div>
+                  <div className="col-span-1"></div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {filteredBoards.map((board) => (
+                  <div 
+                    key={board.id}
+                    className="grid grid-cols-12 items-center px-6 py-3 hover:bg-muted/50 border-b last:border-0"
+                  >
+                    <div className="col-span-6 flex items-center gap-3">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 flex-shrink-0"
+                        onClick={() => handleStarBoard(board.id)}
+                      >
+                        {board.starred ? 
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" /> : 
+                          <StarOff className="h-4 w-4" />
+                        }
+                      </Button>
+                      <div>
+                        <p className="font-medium">{board.title}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{board.description}</p>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <Badge variant="outline">
+                        {getTypeIcon(board.type)}
+                        {board.type}
+                      </Badge>
+                    </div>
+                    <div className="col-span-2">
+                      <Badge variant="outline">
+                        {getVisibilityIcon(board.visibility)}
+                        {board.visibility}
+                      </Badge>
+                    </div>
+                    <div className="col-span-1 text-xs text-muted-foreground">
+                      {board.createdAt}
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenBoard(board.id)}>Open</DropdownMenuItem>
+                          <DropdownMenuItem>Edit</DropdownMenuItem>
+                          <DropdownMenuItem>Share</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="text-red-600"
+                            onClick={() => handleDeleteBoard(board.id)}
+                          >
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          
+          {filteredBoards.length === 0 && (
+            <div className="text-center py-12">
+              <h3 className="text-lg font-medium mb-2">No boards found</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchTerm ? 'Try a different search term' : 'Create your first project board to get started'}
+              </p>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Board
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+      
+      {selectedBoardType === 'gantt' && <GanttBoard />}
+      {selectedBoardType === 'kanban' && <KanbanBoard />}
+      {selectedBoardType === 'flowchart' && <FlowchartBoard />}
+      {selectedBoardType === 'mindmap' && <MindmapBoard />}
+    </div>
   );
 };
 
-export default ProjectBoardView;
+export default ProjectBoardView; 

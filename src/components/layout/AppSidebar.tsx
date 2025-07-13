@@ -1,47 +1,47 @@
-
-import React, { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Briefcase,
-  CheckSquare,
-  Trello,
-  Calendar,
-  FileText,
-  Zap,
-  Layers,
-  Code,
-  Shield,
-  Plus,
-  MoreHorizontal,
-  Settings,
-  Star,
-  Folder,
-  FileType,
-  PanelRight,
-  ChevronDown,
-  ChevronUp,
-  StickyNote
-} from 'lucide-react';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    useSidebar,
+} from "@/components/ui/sidebar";
+import {
+    Bell,
+    Briefcase,
+    Calendar,
+    Check,
+    CheckSquare,
+    ChevronDown,
+    ChevronUp,
+    Code,
+    FileText,
+    Folder,
+    Layers,
+    LayoutDashboard,
+    MoreHorizontal,
+    PanelRight,
+    Pencil,
+    Plus,
+    Shield,
+    Star,
+    StickyNote,
+    Trello,
+    X,
+    Zap
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
-import { useLocation } from 'react-router-dom';
 
 interface Project {
   id: string;
@@ -66,6 +66,8 @@ export const AppSidebar = () => {
   const [newProjectStatus, setNewProjectStatus] = useState<'active' | 'on-hold' | 'completed'>('active');
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [customExpanded, setCustomExpanded] = useState(true);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   
   useEffect(() => {
     // Expand the projects drawer if we're on projects page or a specific project
@@ -82,7 +84,9 @@ export const AppSidebar = () => {
     { title: 'Boards', icon: Trello, path: '/boards' },
     { title: 'Calendar', icon: Calendar, path: '/calendar' },
     { title: 'Pages', icon: FileText, path: '/pages' },
-    { title: 'Notes', icon: StickyNote, path: '/notes' }
+    { title: 'Notes', icon: StickyNote, path: '/notes' },
+    { title: 'Notifications', icon: Bell, path: '/notifications' },
+    { title: 'Extras', icon: Star, path: '/extras' }
   ];
 
   // System navigation items
@@ -148,6 +152,28 @@ export const AppSidebar = () => {
       default:
         return 'bg-slate-100 text-slate-800';
     }
+  };
+
+  const handleStartEdit = (project: Project) => {
+    setEditingProjectId(project.id);
+    setEditingName(project.name);
+  };
+
+  const handleSaveEdit = (id: string) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, name: editingName } : p));
+    setEditingProjectId(null);
+    setEditingName('');
+    toast.success('Project name updated');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProjectId(null);
+    setEditingName('');
+  };
+
+  const handleStatusChange = (id: string, status: Project['status']) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    toast.success('Project status updated');
   };
 
   return (
@@ -301,10 +327,41 @@ export const AppSidebar = () => {
                           <Folder className="mr-2 h-4 w-4 text-slate-400" />
                           {!collapsed && (
                             <>
-                              <span className="truncate max-w-[130px]">{project.name}</span>
-                              <Badge variant="outline" className={`ml-2 ${getStatusColor(project.status)} text-xs`}>
-                                {project.status}
-                              </Badge>
+                              {editingProjectId === project.id ? (
+                                <>
+                                  <input
+                                    className="border rounded px-1 py-0.5 text-sm max-w-[90px]"
+                                    value={editingName}
+                                    onChange={e => setEditingName(e.target.value)}
+                                    autoFocus
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleSaveEdit(project.id);
+                                      if (e.key === 'Escape') handleCancelEdit();
+                                    }}
+                                  />
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleSaveEdit(project.id)}><Check className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelEdit}><X className="h-4 w-4" /></Button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="truncate max-w-[90px]">{project.name}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 ml-1 opacity-0 group-hover:opacity-100" onClick={e => { e.stopPropagation(); handleStartEdit(project); }}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Badge variant="outline" className={`ml-2 ${getStatusColor(project.status)} text-xs cursor-pointer`}>
+                                    {project.status}
+                                  </Badge>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(project.id, 'active')}>Active</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(project.id, 'on-hold')}>On Hold</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(project.id, 'completed')}>Completed</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </>
                           )}
                         </div>

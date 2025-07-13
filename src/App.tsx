@@ -1,80 +1,117 @@
-import { useEffect, useState } from "react";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import Layout from "@/components/layout/Layout";
-import Dashboard from "@/pages/Dashboard";
-import Projects from "@/pages/Projects";
-import ProjectDetails from "@/pages/ProjectDetails";
-import ProjectDashboard from "@/pages/ProjectDashboard";
-import Tasks from "@/pages/Tasks";
 import BoardsPage from "@/pages/Boards";
-import CalendarPage from "@/pages/CalendarPage";
-import PagesDirectory from "@/pages/PagesDirectory";
+import CustomDashboard from "@/pages/CustomDashboard";
+import Dashboard from "@/pages/Dashboard";
+import LandingPage from "@/pages/LandingPage";
 import NotFound from "@/pages/NotFound";
 import Notes from "@/pages/Notes";
-import CustomDashboard from "@/pages/CustomDashboard";
-import SignUp from "@/pages/auth/SignUp";
-import Login from "@/pages/auth/Login";
-import LandingPage from "@/pages/LandingPage";
+import NotificationsCenter from "@/pages/NotificationsCenter";
+import PagesDirectory from "@/pages/PagesDirectory";
+import ProjectDashboard from "@/pages/ProjectDashboard";
+import Projects from "@/pages/Projects";
 import Setup from "@/pages/Setup";
+import Tasks from "@/pages/Tasks";
+import Login from "@/pages/auth/Login";
+import SignUp from "@/pages/auth/SignUp";
 
 // Import new pages
-import AutomationsPage from "@/pages/AutomationsPage";
-import IntegrationsPage from "@/pages/IntegrationsPage";
-import DeveloperPage from "@/pages/DeveloperPage";
 import AdminPage from "@/pages/AdminPage";
-import BestInClassExtrasPage from "@/pages/BestInClassExtrasPage"; // Added import
+import AutomationsPage from "@/pages/AutomationsPage";
+import BestInClassExtrasPage from "@/pages/BestInClassExtrasPage";
+import CalendarHub from "@/pages/CalendarHub";
+import DeveloperPage from "@/pages/DeveloperPage";
+import IntegrationsPage from "@/pages/IntegrationsPage";
 
-// Authentication check component
-const RequireAuth = ({ children }: { children: JSX.Element }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(null);
+// Auth context and components
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => void;
+  loading: boolean;
+}
+
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
+
+const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is authenticated
-    const user = localStorage.getItem('user');
-    const authenticated = !!user;
-    setIsAuthenticated(authenticated);
-    
-    // Check if setup is completed
-    const userSetup = localStorage.getItem('userSetup');
-    setIsSetupCompleted(!!userSetup);
-
-    if (!authenticated && !['/login', '/signup', '/'].includes(location.pathname)) {
-      // Redirect to login if not authenticated
-      navigate('/login', { replace: true });
-    } else if (authenticated && !userSetup && location.pathname !== '/setup') {
-      // Redirect to setup if authenticated but setup not completed
-      navigate('/setup', { replace: true });
-    } else if (authenticated && userSetup && ['/login', '/signup', '/'].includes(location.pathname)) {
-      // Redirect to dashboard if authenticated and setup completed but on auth pages
-      navigate('/dashboard', { replace: true });
+    // Check if user is logged in (simulate checking localStorage/sessionStorage)
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
     }
-  }, [location.pathname, navigate]);
+    setLoading(false);
+  }, []);
 
-  if (isAuthenticated === null) {
-    // Still checking authentication
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
+  const login = async (email: string, password: string) => {
+    // Simulate API call
+    const mockUser = { id: '1', email, name: email.split('@')[0] };
+    setUser(mockUser);
+    localStorage.setItem('user', JSON.stringify(mockUser));
+  };
 
-  return children;
+  const signup = async (email: string, password: string, name: string) => {
+    // Simulate API call
+    const mockUser = { id: '1', email, name };
+    setUser(mockUser);
+    localStorage.setItem('user', JSON.stringify(mockUser));
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-// Placeholder pages for routes not yet implemented
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="min-h-[50vh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-2xl font-bold mb-4">{title} Page</h1>
-      <p className="text-muted-foreground">This page is under development.</p>
-    </div>
-  </div>
-);
+// Project redirect component
+const ProjectRedirect = () => {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (projectId) {
+      navigate(`/projects/${projectId}/dashboard`, { replace: true });
+    }
+  }, [projectId, navigate]);
+  
+  return null;
+};
+
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  
+  // For demo purposes, we'll assume the user is always authenticated
+  // In a real app, you'd check authentication status here
+  const isAuthenticated = true;
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return <>{children}</>;
+};
 
 const queryClient = new QueryClient();
 
@@ -84,35 +121,38 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/setup" element={<RequireAuth><Setup /></RequireAuth>} />
-          
-          {/* Protected routes */}
-          <Route element={<RequireAuth><Layout /></RequireAuth>}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:projectId" element={<ProjectDetails />} />
-            <Route path="/projects/:projectId/dashboard" element={<ProjectDashboard />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/boards" element={<BoardsPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/pages" element={<PagesDirectory />} />
-            <Route path="/notes" element={<Notes />} />
-            <Route path="/custom-dashboard" element={<CustomDashboard />} />
-            <Route path="/automations" element={<AutomationsPage />} />
-            <Route path="/integrations" element={<IntegrationsPage />} />
-            <Route path="/developer" element={<DeveloperPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/extras" element={<BestInClassExtrasPage />} /> {/* Added new route */}
-          </Route>
-          
-          {/* Catch-all route */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/setup" element={<RequireAuth><Setup /></RequireAuth>} />
+            
+            {/* Protected routes */}
+            <Route element={<RequireAuth><Layout /></RequireAuth>}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/projects" element={<Projects />} />
+              <Route path="/projects/:projectId" element={<ProjectRedirect />} />
+              <Route path="/projects/:projectId/dashboard" element={<ProjectDashboard />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/boards" element={<BoardsPage />} />
+              <Route path="/calendar" element={<CalendarHub />} />
+              <Route path="/pages" element={<PagesDirectory />} />
+              <Route path="/notes" element={<Notes />} />
+              <Route path="/notifications" element={<NotificationsCenter />} />
+              <Route path="/custom-dashboard" element={<CustomDashboard />} />
+              <Route path="/automations" element={<AutomationsPage />} />
+              <Route path="/integrations" element={<IntegrationsPage />} />
+              <Route path="/developer" element={<DeveloperPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/extras" element={<BestInClassExtrasPage />} />
+            </Route>
+            
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

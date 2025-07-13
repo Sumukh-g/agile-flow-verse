@@ -1,34 +1,51 @@
-
-import React, { useState, useEffect } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
-  Search, Filter, Plus, ArrowUpDown, MoreHorizontal,
-  CheckSquare, Layers, Clock
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    ArrowUpDown,
+    Calendar,
+    CheckSquare,
+    Clock,
+    Edit,
+    Eye,
+    Flag,
+    Layers,
+    MoreHorizontal,
+    Plus,
+    Search,
+    Trash2
 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 interface Task {
   id: string;
   title: string;
+  description?: string;
   priority: string;
   status: string;
   dueDate: string;
   assignee: string;
   tags: string[];
-  description?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  createdDate: string;
+  updatedDate: string;
 }
 
 interface ProjectTasksListProps {
@@ -44,55 +61,100 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     key: keyof Task | null;
     direction: 'asc' | 'desc'
   }>({ key: null, direction: 'asc' });
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterAssignee, setFilterAssignee] = useState('all');
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
   
   useEffect(() => {
     // Fetch tasks for specific project
     setTimeout(() => {
       const mockTasks: Task[] = [
         {
-          id: 't1',
+          id: `${projectId}-t1`,
           title: 'Design system components',
+          description: 'Create reusable UI components for the design system',
           priority: 'High',
           status: 'In Progress',
-          dueDate: '2023-06-10',
-          assignee: 'JD',
-          tags: ['Design', 'UI']
+          dueDate: '2024-02-10',
+          assignee: 'John Doe',
+          tags: ['Design', 'UI'],
+          estimatedHours: 16,
+          actualHours: 8,
+          createdDate: '2024-01-15',
+          updatedDate: '2024-01-16'
         },
         {
-          id: 't2',
+          id: `${projectId}-t2`,
           title: 'API integration for authentication',
+          description: 'Integrate OAuth and JWT authentication system',
           priority: 'High',
           status: 'To Do',
-          dueDate: '2023-06-15',
-          assignee: 'TW',
-          tags: ['Backend', 'API']
+          dueDate: '2024-02-15',
+          assignee: 'Alice Smith',
+          tags: ['Backend', 'API', 'Security'],
+          estimatedHours: 20,
+          actualHours: 0,
+          createdDate: '2024-01-14',
+          updatedDate: '2024-01-14'
         },
         {
-          id: 't3',
+          id: `${projectId}-t3`,
           title: 'User feedback analysis',
+          description: 'Analyze user feedback from beta testing phase',
           priority: 'Medium',
           status: 'To Do',
-          dueDate: '2023-06-20',
-          assignee: 'AS',
-          tags: ['Research', 'UX']
+          dueDate: '2024-02-20',
+          assignee: 'Bob Wilson',
+          tags: ['Research', 'UX', 'Analysis'],
+          estimatedHours: 12,
+          actualHours: 0,
+          createdDate: '2024-01-13',
+          updatedDate: '2024-01-13'
         },
         {
-          id: 't4',
+          id: `${projectId}-t4`,
           title: 'Mobile responsive layouts',
+          description: 'Implement responsive design for mobile devices',
           priority: 'Medium',
           status: 'In Progress',
-          dueDate: '2023-06-12',
-          assignee: 'RM',
-          tags: ['Frontend', 'Mobile']
+          dueDate: '2024-02-12',
+          assignee: 'Charlie Brown',
+          tags: ['Frontend', 'Mobile', 'CSS'],
+          estimatedHours: 14,
+          actualHours: 6,
+          createdDate: '2024-01-12',
+          updatedDate: '2024-01-15'
         },
         {
-          id: 't5',
+          id: `${projectId}-t5`,
           title: 'Documentation update',
+          description: 'Update API documentation and user guides',
           priority: 'Low',
           status: 'Done',
-          dueDate: '2023-06-05',
-          assignee: 'JD',
-          tags: ['Documentation']
+          dueDate: '2024-02-05',
+          assignee: 'Diana Prince',
+          tags: ['Documentation', 'API'],
+          estimatedHours: 8,
+          actualHours: 7,
+          createdDate: '2024-01-10',
+          updatedDate: '2024-01-12'
+        },
+        {
+          id: `${projectId}-t6`,
+          title: 'Performance optimization',
+          description: 'Optimize application performance and loading times',
+          priority: 'High',
+          status: 'In Review',
+          dueDate: '2024-02-08',
+          assignee: 'Eve Adams',
+          tags: ['Performance', 'Frontend', 'Backend'],
+          estimatedHours: 18,
+          actualHours: 16,
+          createdDate: '2024-01-08',
+          updatedDate: '2024-01-14'
         }
       ];
       setTasks(mockTasks);
@@ -126,10 +188,16 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     return tasksToSort;
   }, [tasks, sortConfig]);
   
-  const filteredTasks = sortedTasks.filter(task => 
-    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    task.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredTasks = sortedTasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         task.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
+    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+    const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee;
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
+  });
   
   const toggleSelectTask = (taskId: string) => {
     const newSelected = new Set(selectedTasks);
@@ -143,10 +211,8 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
   
   const toggleSelectAll = () => {
     if (selectedTasks.size === filteredTasks.length) {
-      // Deselect all
       setSelectedTasks(new Set());
     } else {
-      // Select all
       const allIds = filteredTasks.map(task => task.id);
       setSelectedTasks(new Set(allIds));
     }
@@ -158,38 +224,369 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
       return;
     }
     
-    toast.success(`${action} ${selectedTasks.size} tasks`);
     if (action === 'delete') {
       setTasks(prevTasks => prevTasks.filter(task => !selectedTasks.has(task.id)));
       setSelectedTasks(new Set());
+      toast.success(`Deleted ${selectedTasks.size} tasks`);
+    } else if (action === 'status') {
+      toast.success(`Updated status for ${selectedTasks.size} tasks`);
+    } else {
+      toast.success(`${action} applied to ${selectedTasks.size} tasks`);
     }
+  };
+
+  const handleCreateTask = (taskData: any) => {
+    const newTask: Task = {
+      id: `${projectId}-t${Date.now()}`,
+      title: taskData.title,
+      description: taskData.description,
+      priority: taskData.priority,
+      status: taskData.status,
+      dueDate: taskData.dueDate,
+      assignee: taskData.assignee,
+      tags: taskData.tags?.split(',').map((tag: string) => tag.trim()) || [],
+      estimatedHours: parseInt(taskData.estimatedHours) || 0,
+      actualHours: 0,
+      createdDate: new Date().toISOString().split('T')[0],
+      updatedDate: new Date().toISOString().split('T')[0]
+    };
+
+    setTasks(prevTasks => [...prevTasks, newTask]);
+    toast.success('Task created successfully!');
+    setIsCreateTaskOpen(false);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+  };
+
+  const handleUpdateTask = (taskData: any) => {
+    if (!editingTask) return;
+
+    const updatedTask: Task = {
+      ...editingTask,
+      title: taskData.title,
+      description: taskData.description,
+      priority: taskData.priority,
+      status: taskData.status,
+      dueDate: taskData.dueDate,
+      assignee: taskData.assignee,
+      tags: taskData.tags?.split(',').map((tag: string) => tag.trim()) || [],
+      estimatedHours: parseInt(taskData.estimatedHours) || 0,
+      actualHours: parseInt(taskData.actualHours) || 0,
+      updatedDate: new Date().toISOString().split('T')[0]
+    };
+
+    setTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === editingTask.id ? updatedTask : task
+      )
+    );
+
+    toast.success('Task updated successfully!');
+    setEditingTask(null);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+    toast.success('Task deleted successfully!');
   };
   
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'High':
-        return 'bg-red-100 text-red-800';
-      case 'Medium':
-        return 'bg-amber-100 text-amber-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
+      case 'High': return 'bg-red-100 text-red-800 border-red-200';
+      case 'Medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
   
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'To Do':
-        return 'bg-slate-100 text-slate-800';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'Done':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
+      case 'To Do': return 'bg-gray-100 text-gray-800';
+      case 'In Progress': return 'bg-blue-100 text-blue-800';
+      case 'In Review': return 'bg-purple-100 text-purple-800';
+      case 'Done': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case 'High': return <Flag className="h-3 w-3 text-red-500" />;
+      case 'Medium': return <Flag className="h-3 w-3 text-yellow-500" />;
+      case 'Low': return <Flag className="h-3 w-3 text-green-500" />;
+      default: return <Flag className="h-3 w-3 text-gray-500" />;
+    }
+  };
+
+  const TaskForm = ({ task, onSubmit, onCancel }: { task?: Task; onSubmit: (data: any) => void; onCancel: () => void }) => {
+    const [formData, setFormData] = useState({
+      title: task?.title || '',
+      description: task?.description || '',
+      priority: task?.priority || 'Medium',
+      status: task?.status || 'To Do',
+      dueDate: task?.dueDate || '',
+      assignee: task?.assignee || '',
+      tags: task?.tags?.join(', ') || '',
+      estimatedHours: task?.estimatedHours?.toString() || '',
+      actualHours: task?.actualHours?.toString() || '0'
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      onSubmit(formData);
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="title">Task Title</Label>
+          <Input
+            id="title"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            placeholder="Enter task title"
+            required
+          />
+        </div>
+        
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Enter task description"
+          />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="priority">Priority</Label>
+            <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="Low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="To Do">To Do</SelectItem>
+                <SelectItem value="In Progress">In Progress</SelectItem>
+                <SelectItem value="In Review">In Review</SelectItem>
+                <SelectItem value="Done">Done</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="assignee">Assignee</Label>
+            <Select value={formData.assignee} onValueChange={(value) => setFormData({ ...formData, assignee: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="John Doe">John Doe</SelectItem>
+                <SelectItem value="Alice Smith">Alice Smith</SelectItem>
+                <SelectItem value="Bob Wilson">Bob Wilson</SelectItem>
+                <SelectItem value="Charlie Brown">Charlie Brown</SelectItem>
+                <SelectItem value="Diana Prince">Diana Prince</SelectItem>
+                <SelectItem value="Eve Adams">Eve Adams</SelectItem>
+                <SelectItem value="Frank Miller">Frank Miller</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="dueDate">Due Date</Label>
+            <Input
+              id="dueDate"
+              type="date"
+              value={formData.dueDate}
+              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+            />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="estimatedHours">Estimated Hours</Label>
+            <Input
+              id="estimatedHours"
+              type="number"
+              value={formData.estimatedHours}
+              onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
+              placeholder="0"
+            />
+          </div>
+          
+          {task && (
+            <div>
+              <Label htmlFor="actualHours">Actual Hours</Label>
+              <Input
+                id="actualHours"
+                type="number"
+                value={formData.actualHours}
+                onChange={(e) => setFormData({ ...formData, actualHours: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+          )}
+        </div>
+        
+        <div>
+          <Label htmlFor="tags">Tags (comma separated)</Label>
+          <Input
+            id="tags"
+            value={formData.tags}
+            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+            placeholder="frontend, backend, design"
+          />
+        </div>
+        
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            {task ? 'Update Task' : 'Create Task'}
+          </Button>
+        </div>
+      </form>
+    );
+  };
+
+  const TaskDetailsDialog = ({ task, onClose }: { task: Task; onClose: () => void }) => (
+    <Dialog open={!!task} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {getPriorityIcon(task.priority)}
+            {task.title}
+          </DialogTitle>
+          <DialogDescription>
+            Task details and information
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Status</Label>
+              <Badge className={`mt-1 ${getStatusColor(task.status)}`}>
+                {task.status}
+              </Badge>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Priority</Label>
+              <Badge className={`mt-1 ${getPriorityColor(task.priority)}`}>
+                {task.priority}
+              </Badge>
+            </div>
+          </div>
+          
+          {task.description && (
+            <div>
+              <Label className="text-sm font-medium">Description</Label>
+              <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Assignee</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback className="text-xs">
+                    {task.assignee.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm">{task.assignee}</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Due Date</Label>
+              <div className="flex items-center gap-1 mt-1">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{task.dueDate}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Time Tracking</Label>
+              <div className="flex items-center gap-1 mt-1">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{task.actualHours || 0}h / {task.estimatedHours || 0}h</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Progress</Label>
+              <div className="mt-1">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full" 
+                    style={{ 
+                      width: `${Math.min(100, ((task.actualHours || 0) / (task.estimatedHours || 1)) * 100)}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {task.tags.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium">Tags</Label>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {task.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+            <div>
+              <Label className="text-sm font-medium">Created</Label>
+              <p className="mt-1">{task.createdDate}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Last Updated</Label>
+              <p className="mt-1">{task.updatedDate}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => handleEditTask(task)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Task
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (loading) {
     return (
@@ -198,9 +595,9 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
           <CardTitle>Project Tasks</CardTitle>
           <CardDescription>Loading tasks...</CardDescription>
         </CardHeader>
-        <CardContent className="min-h-[300px] flex items-center justify-center">
+        <CardContent className="h-96 flex items-center justify-center">
           <div className="animate-pulse text-center">
-            <p>Loading task list...</p>
+            <p>Loading tasks...</p>
           </div>
         </CardContent>
       </Card>
@@ -208,176 +605,277 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
-          <CardTitle>Project Tasks</CardTitle>
-          <CardDescription>Manage all tasks for this project</CardDescription>
+          <h2 className="text-2xl font-bold">Project Tasks</h2>
+          <p className="text-muted-foreground">Manage and track all project tasks</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => toast.info("Adding new task")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Task
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search tasks..."
-              className="pl-8 w-full"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        <div className="flex gap-2">
+          {selectedTasks.size > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  Bulk Actions ({selectedTasks.size})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleBulkAction('status')}>
+                  Update Status
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBulkAction('assignee')}>
+                  Change Assignee
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => handleBulkAction('delete')}
+                  className="text-red-600"
+                >
+                  Delete Tasks
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedTasks.size > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Bulk Actions ({selectedTasks.size})
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => handleBulkAction('mark-complete')}>
-                    Mark Complete
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkAction('assign')}>
-                    Assign To...
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => handleBulkAction('delete')}
-                    className="text-red-600"
-                  >
-                    Delete Selected
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            
-            <Button variant="outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Filter
-            </Button>
-            
-            <Button variant="outline" size="sm">
-              <ArrowUpDown className="mr-2 h-4 w-4" />
-              Sort
-            </Button>
-          </div>
+          <Dialog open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Task
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Task</DialogTitle>
+                <DialogDescription>
+                  Add a new task to the project
+                </DialogDescription>
+              </DialogHeader>
+              <TaskForm 
+                onSubmit={handleCreateTask}
+                onCancel={() => setIsCreateTaskOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Filters and Search */}
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
         
-        <div className="rounded-md border overflow-hidden">
+        <div className="flex gap-2">
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="To Do">To Do</SelectItem>
+              <SelectItem value="In Progress">In Progress</SelectItem>
+              <SelectItem value="In Review">In Review</SelectItem>
+              <SelectItem value="Done">Done</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priority</SelectItem>
+              <SelectItem value="High">High</SelectItem>
+              <SelectItem value="Medium">Medium</SelectItem>
+              <SelectItem value="Low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Assignee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignees</SelectItem>
+              <SelectItem value="John Doe">John Doe</SelectItem>
+              <SelectItem value="Alice Smith">Alice Smith</SelectItem>
+              <SelectItem value="Bob Wilson">Bob Wilson</SelectItem>
+              <SelectItem value="Charlie Brown">Charlie Brown</SelectItem>
+              <SelectItem value="Diana Prince">Diana Prince</SelectItem>
+              <SelectItem value="Eve Adams">Eve Adams</SelectItem>
+              <SelectItem value="Frank Miller">Frank Miller</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Tasks Table */}
+      <Card>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">
-                  <Checkbox 
-                    checked={selectedTasks.size > 0 && selectedTasks.size === filteredTasks.length}
+                  <Checkbox
+                    checked={selectedTasks.size === filteredTasks.length && filteredTasks.length > 0}
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="cursor-pointer" onClick={() => handleSort('title')}>
-                  <div className="flex items-center gap-2">
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('title')}
+                    className="h-auto p-0 font-medium"
+                  >
                     Task
-                    {sortConfig.key === 'title' && (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </div>
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
                 </TableHead>
-                <TableHead className="cursor-pointer" onClick={() => handleSort('priority')}>
-                  <div className="flex items-center gap-2">
-                    Priority
-                    {sortConfig.key === 'priority' && (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead className="cursor-pointer" onClick={() => handleSort('status')}>
-                  <div className="flex items-center gap-2">
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('status')}
+                    className="h-auto p-0 font-medium"
+                  >
                     Status
-                    {sortConfig.key === 'status' && (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </div>
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
                 </TableHead>
-                <TableHead className="cursor-pointer" onClick={() => handleSort('dueDate')}>
-                  <div className="flex items-center gap-2">
-                    Due Date
-                    {sortConfig.key === 'dueDate' && (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </div>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('priority')}
+                    className="h-auto p-0 font-medium"
+                  >
+                    Priority
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
                 </TableHead>
                 <TableHead>Assignee</TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('dueDate')}
+                    className="h-auto p-0 font-medium"
+                  >
+                    Due Date
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead>Progress</TableHead>
                 <TableHead>Tags</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSelectTask(task.id);
-                  }}>
-                    <Checkbox checked={selectedTasks.has(task.id)} />
-                  </TableCell>
-                  <TableCell className="font-medium">{task.title}</TableCell>
+                <TableRow key={task.id} className="hover:bg-muted/50">
                   <TableCell>
-                    <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                      {task.priority}
-                    </Badge>
+                    <Checkbox
+                      checked={selectedTasks.has(task.id)}
+                      onCheckedChange={() => toggleSelectTask(task.id)}
+                    />
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getStatusColor(task.status)}>
+                    <div className="space-y-1">
+                      <div className="font-medium">{task.title}</div>
+                      {task.description && (
+                        <div className="text-sm text-muted-foreground line-clamp-1">
+                          {task.description}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(task.status)}>
                       {task.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{new Date(task.dueDate).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                        {task.assignee}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="flex items-center gap-1">
+                      {getPriorityIcon(task.priority)}
+                      <Badge variant="outline" className={getPriorityColor(task.priority)}>
+                        {task.priority}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">
+                          {task.assignee.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{task.assignee}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm">{task.dueDate}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{task.actualHours || 0}h / {task.estimatedHours || 0}h</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div 
+                          className="bg-blue-600 h-1.5 rounded-full" 
+                          style={{ 
+                            width: `${Math.min(100, ((task.actualHours || 0) / (task.estimatedHours || 1)) * 100)}%` 
+                          }}
+                        ></div>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {task.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600"
-                        >
+                      {task.tags.slice(0, 2).map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
                           {tag}
-                        </span>
+                        </Badge>
                       ))}
+                      {task.tags.length > 2 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{task.tags.length - 2}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <MoreHorizontal className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast.info(`Edit task: ${task.title}`)}>
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.info(`Viewing task details: ${task.title}`)}>
+                        <DropdownMenuItem onClick={() => setViewingTask(task)}>
+                          <Eye className="h-3 w-3 mr-2" />
                           View Details
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditTask(task)}>
+                          <Edit className="h-3 w-3 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => {
-                          setTasks(prevTasks => prevTasks.filter(t => t.id !== task.id));
-                          toast.success(`Task "${task.title}" deleted`);
-                        }} className="text-red-600">
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-3 w-3 mr-2" />
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -385,30 +883,58 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredTasks.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <div className="flex flex-col items-center gap-2">
-                      <CheckSquare className="h-8 w-8 text-muted-foreground" />
-                      <p className="text-muted-foreground">No tasks found</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-2"
-                        onClick={() => toast.info("Creating new task")}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Task
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
-        </div>
-      </CardContent>
-    </Card>
+          
+          {filteredTasks.length === 0 && (
+            <div className="text-center py-12">
+              <Layers className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No tasks found</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery || filterStatus !== 'all' || filterPriority !== 'all' || filterAssignee !== 'all'
+                  ? 'Try adjusting your filters or search terms'
+                  : 'Get started by creating your first task'
+                }
+              </p>
+              {!searchQuery && filterStatus === 'all' && filterPriority === 'all' && filterAssignee === 'all' && (
+                <Button onClick={() => setIsCreateTaskOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Task
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Update task details
+            </DialogDescription>
+          </DialogHeader>
+          {editingTask && (
+            <TaskForm 
+              task={editingTask}
+              onSubmit={handleUpdateTask}
+              onCancel={() => setEditingTask(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Task Details Dialog */}
+      {viewingTask && (
+        <TaskDetailsDialog 
+          task={viewingTask} 
+          onClose={() => setViewingTask(null)} 
+        />
+      )}
+    </div>
   );
 };
 
-export default ProjectTasksList;
+export default ProjectTasksList; 

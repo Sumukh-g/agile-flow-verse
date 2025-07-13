@@ -1,41 +1,51 @@
-
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from '@/components/ui/separator';
-import { 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  Sparkles,
-  MessageSquare, 
-  FileText,
-  Layers,
-  Zap,
-  Settings,
-  ArrowUpRight
-} from 'lucide-react';
-import ProjectAutomationPanel from "@/components/projects/ProjectAutomationPanel";
-import ProjectTasksList from "@/components/projects/ProjectTasksList";
+import ProjectAllWorkView from "@/components/projects/ProjectAllWorkView";
+import ProjectApprovalsView from "@/components/projects/ProjectApprovalsView";
+import ProjectAttachmentsView from "@/components/projects/ProjectAttachmentsView";
 import ProjectBoardView from "@/components/projects/ProjectBoardView";
+import ProjectCRM from "@/components/projects/ProjectCRM";
+import ProjectCalendarView from "@/components/projects/ProjectCalendarView";
+import ProjectFormsView from "@/components/projects/ProjectFormsView";
+import ProjectIssueTracker from "@/components/projects/ProjectIssueTracker";
+import ProjectNotesView from "@/components/projects/ProjectNotesView";
+import ProjectPagesView from "@/components/projects/ProjectPagesView";
+import ProjectReportsView from "@/components/projects/ProjectReportsView";
+import ProjectTasksList from "@/components/projects/ProjectTasksList";
 import ProjectTimelineView from "@/components/projects/ProjectTimelineView";
-import ProjectSettingsPanel from "@/components/projects/ProjectSettingsPanel";
-import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    BarChart3,
+    Building2,
+    Calendar,
+    CheckCircle2,
+    CheckSquare,
+    ClipboardList,
+    Clock,
+    FileText,
+    Filter,
+    FormInput,
+    Layers,
+    MessageSquare,
+    Paperclip,
+    Share,
+    Sparkles,
+    StickyNote,
+    Users
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const ProjectDashboard = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("summary");
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     // Fetch project data based on projectId
-    // This is a mock implementation - in a real app, you would fetch from an API
     setTimeout(() => {
       const mockProject = {
         id: projectId,
@@ -91,262 +101,268 @@ const ProjectDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Project Header */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-            <span className="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-0.5 text-sm font-medium text-blue-800">
-              {project.status}
-            </span>
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+            <span className="text-xl font-bold">P1</span>
           </div>
-          <p className="text-muted-foreground mt-1">
-            {project.description}
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                {project.status}
+              </Badge>
+            </div>
+            <p className="text-muted-foreground mt-1">
+              {project.description}
+            </p>
+          </div>
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/edit`)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
+          <Button variant="outline">
+            <Share className="h-4 w-4 mr-2" />
+            Share
           </Button>
-          <Button>
-            <ArrowUpRight className="h-4 w-4 mr-2" />
-            Actions
+          <Button className="bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Automation
           </Button>
         </div>
       </div>
+
+      {/* Filter Bar */}
+      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Filter</span>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">0 completed</p>
+                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+              </div>
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">0 updated</p>
+                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+              </div>
+              <FileText className="h-8 w-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">0 created</p>
+                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+              </div>
+              <Sparkles className="h-8 w-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-l-orange-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">0 due soon</p>
+                <p className="text-xs text-muted-foreground">in the next 7 days</p>
+              </div>
+              <Calendar className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 mb-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
-          <TabsTrigger value="board">Board</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="automation">Automation</TabsTrigger>
+        <TabsList className="grid grid-cols-6 lg:grid-cols-14 mb-4 h-auto p-1">
+          <TabsTrigger value="summary" className="flex items-center gap-1 text-xs">
+            <BarChart3 className="h-3 w-3" />
+            Summary
+          </TabsTrigger>
+          <TabsTrigger value="board" className="flex items-center gap-1 text-xs">
+            <Layers className="h-3 w-3" />
+            Board
+          </TabsTrigger>
+          <TabsTrigger value="list" className="flex items-center gap-1 text-xs">
+            <ClipboardList className="h-3 w-3" />
+            List
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-1 text-xs">
+            <Calendar className="h-3 w-3" />
+            Calendar
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-1 text-xs">
+            <Clock className="h-3 w-3" />
+            Timeline
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="flex items-center gap-1 text-xs">
+            <StickyNote className="h-3 w-3" />
+            Notes
+          </TabsTrigger>
+          <TabsTrigger value="approvals" className="flex items-center gap-1 text-xs">
+            <CheckSquare className="h-3 w-3" />
+            Approvals
+          </TabsTrigger>
+          <TabsTrigger value="forms" className="flex items-center gap-1 text-xs">
+            <FormInput className="h-3 w-3" />
+            Forms
+          </TabsTrigger>
+          <TabsTrigger value="pages" className="flex items-center gap-1 text-xs">
+            <FileText className="h-3 w-3" />
+            Pages
+          </TabsTrigger>
+          <TabsTrigger value="attachments" className="flex items-center gap-1 text-xs">
+            <Paperclip className="h-3 w-3" />
+            Attachments
+          </TabsTrigger>
+          <TabsTrigger value="allwork" className="flex items-center gap-1 text-xs">
+            <Users className="h-3 w-3" />
+            All work
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="flex items-center gap-1 text-xs">
+            <BarChart3 className="h-3 w-3" />
+            Reports
+          </TabsTrigger>
+          <TabsTrigger value="crm" className="flex items-center gap-1 text-xs">
+            <Building2 className="h-3 w-3" />
+            CRM
+          </TabsTrigger>
+          <TabsTrigger value="issuetracker" className="flex items-center gap-1 text-xs">
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 7l-1.5 1.5M5 7l1.5 1.5M12 3v2m0 14v2m7-7h2m-18 0h2m15.07-4.93l-1.41 1.41M6.34 17.66l-1.41-1.41M17.66 17.66l-1.41-1.41M6.34 6.34l-1.41 1.41"/><circle cx="12" cy="12" r="7"/></svg>
+            Issue Tracker
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="overview" className="space-y-6">
-          {/* Project Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Tasks</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <h3 className="text-2xl font-bold">{project.tasks.total}</h3>
-                      <p className="text-xs text-muted-foreground">Total</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      <span className="text-green-500">{project.tasks.completed} </span>
-                      completed
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-full bg-blue-100">
-                    <CheckCircle2 className="h-5 w-5 text-blue-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Timeline</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <h3 className="text-2xl font-bold">{project.progress}%</h3>
-                      <p className="text-xs text-muted-foreground">Complete</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Due {project.dueDate}
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-full bg-amber-100">
-                    <Clock className="h-5 w-5 text-amber-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Issues</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <h3 className="text-2xl font-bold">3</h3>
-                      <p className="text-xs text-muted-foreground">Open</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      <span className="text-red-500">1 </span>
-                      blocker
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-full bg-red-100">
-                    <AlertCircle className="h-5 w-5 text-red-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Milestones</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <h3 className="text-2xl font-bold">2</h3>
-                      <p className="text-xs text-muted-foreground">Upcoming</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Next in 5 days
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-full bg-indigo-100">
-                    <Sparkles className="h-5 w-5 text-indigo-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* Progress Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <TabsContent value="summary" className="space-y-6">
+          {/* Status Overview */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">Project Progress</CardTitle>
-                <CardDescription>Overall project completion status</CardDescription>
+                <CardTitle>Status overview</CardTitle>
+                <CardDescription>
+                  The status overview for this project will display here after you{' '}
+                  <span className="text-purple-600 underline cursor-pointer">create some work items</span>
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Overall Progress</span>
-                    <span className="font-medium">{project.progress}%</span>
-                  </div>
-                  <Progress value={project.progress} className="h-2" />
-                </div>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="text-8xl font-bold text-muted-foreground/20 mb-4">0</div>
+                <p className="text-muted-foreground mb-6">Total work items</p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mt-4">
-                  <div className="flex flex-col gap-1">
-                    <div className="text-muted-foreground">To Do</div>
-                    <div className="font-medium">{project.tasks.todo} tasks</div>
+                <div className="space-y-2 w-full">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      <span className="text-sm">To Do</span>
+                    </div>
+                    <span className="text-sm font-medium">0</span>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="text-muted-foreground">In Progress</div>
-                    <div className="font-medium">{project.tasks.inProgress} tasks</div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                      <span className="text-sm">Testing</span>
+                    </div>
+                    <span className="text-sm font-medium">0</span>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="text-muted-foreground">Completed</div>
-                    <div className="font-medium">{project.tasks.completed} tasks</div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-pink-500"></div>
+                      <span className="text-sm">Design</span>
+                    </div>
+                    <span className="text-sm font-medium">0</span>
                   </div>
-                </div>
-                
-                <div className="pt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full text-center" 
-                    onClick={() => setActiveTab("tasks")}
-                  >
-                    View All Tasks
-                  </Button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-sm">Concepting</span>
+                    </div>
+                    <span className="text-sm font-medium">0</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
             
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">Recent Activities</CardTitle>
-                <CardDescription>Latest updates on this project</CardDescription>
+                <CardTitle>No activity yet</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {project.recentActivities.map((activity: any) => (
-                  <div key={activity.id} className="flex items-start gap-4">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>{activity.user}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center">
-                        <p className="text-sm font-medium">{activity.user}</p>
-                        <Separator orientation="vertical" className="mx-2 h-4" />
-                        <p className="text-sm text-muted-foreground">{activity.time}</p>
-                      </div>
-                      <p className="text-sm">
-                        {activity.action} <span className="font-medium">{activity.item}</span>
-                      </p>
-                    </div>
-                    <div className="p-1.5 rounded-full bg-blue-100 text-blue-600">
-                      <activity.icon className="h-3.5 w-3.5" />
-                    </div>
-                  </div>
-                ))}
-                
-                <div className="pt-2">
-                  <Button 
-                    variant="ghost" 
-                    className="w-full text-center text-sm"
-                    onClick={() => toast.info("Activity history coming soon")}
-                  >
-                    View All Activity
-                  </Button>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="p-4 rounded-full bg-blue-100 mb-4">
+                  <CheckCircle2 className="h-12 w-12 text-blue-500" />
                 </div>
+                <p className="text-center text-muted-foreground mb-6">
+                  Create a few work items and invite some teammates to your project to see activity here.
+                </p>
               </CardContent>
             </Card>
           </div>
-          
-          {/* Automation Rules Overview */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Automation Rules</CardTitle>
-              <CardDescription>Active automation workflows for this project</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {project.automations.map((rule: any) => (
-                <div key={rule.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-full bg-purple-100 text-purple-600">
-                      <Zap className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{rule.name}</p>
-                      <p className="text-xs text-muted-foreground">Last run: {rule.lastRun}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                      {rule.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              
-              <div className="pt-2">
-                <Button 
-                  onClick={() => setActiveTab("automation")} 
-                  className="w-full text-center"
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  Manage Automations
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="tasks">
-          <ProjectTasksList projectId={projectId} />
         </TabsContent>
         
         <TabsContent value="board">
           <ProjectBoardView projectId={projectId} />
         </TabsContent>
         
+        <TabsContent value="list">
+          <ProjectTasksList projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="calendar">
+          <ProjectCalendarView projectId={projectId} />
+        </TabsContent>
+        
         <TabsContent value="timeline">
           <ProjectTimelineView projectId={projectId} />
         </TabsContent>
         
-        <TabsContent value="automation">
-          <ProjectAutomationPanel projectId={projectId} />
+        <TabsContent value="notes">
+          <ProjectNotesView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="approvals">
+          <ProjectApprovalsView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="forms">
+          <ProjectFormsView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="pages">
+          <ProjectPagesView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="attachments">
+          <ProjectAttachmentsView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="allwork">
+          <ProjectAllWorkView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="reports">
+          <ProjectReportsView projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="crm">
+          <ProjectCRM projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="issuetracker">
+          <ProjectIssueTracker projectId={projectId} />
         </TabsContent>
       </Tabs>
     </div>

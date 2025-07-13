@@ -1,611 +1,1011 @@
-
-import React, { useState } from 'react';
-import { Search, Grid, List, Filter, MoreVertical } from 'lucide-react';
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
-  DropdownMenu,
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { toast } from "sonner";
-import CreateProjectDialog from '@/components/projects/CreateProjectDialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    Activity,
+    Building2,
+    Calendar,
+    CheckCircle2,
+    DollarSign,
+    Download,
+    Edit,
+    Eye,
+    FileText,
+    Filter,
+    Grid,
+    List,
+    Mail,
+    MoreVertical,
+    Phone,
+    Plus,
+    Search,
+    Target,
+    Trash2,
+    TrendingUp,
+    Upload,
+    Users,
+    Zap
+} from 'lucide-react';
+import React, { useState } from 'react';
+import { toast } from 'sonner';
 
-// Project data
-const INITIAL_PROJECTS = [
-  {
-    id: 1,
-    name: "Website Redesign",
-    description: "Complete overhaul of the company website with new branding",
-    status: "In Progress",
-    progress: 65,
-    members: ["JD", "AS", "TW"],
-    team: "Design",
-    created: "2 weeks ago"
-  },
-  {
-    id: 2,
-    name: "Mobile App Development",
-    description: "Creating a new mobile application for customer engagement",
-    status: "Planning",
-    progress: 25,
-    members: ["RM", "JW", "AS"],
-    team: "Mobile",
-    created: "1 month ago"
-  },
-  {
-    id: 3,
-    name: "CRM Integration",
-    description: "Integrate our systems with the new customer relationship management platform",
-    status: "On Hold",
-    progress: 10,
-    members: ["TW", "JD"],
-    team: "Backend",
-    created: "3 weeks ago"
-  },
-  {
-    id: 4,
-    name: "Social Media Campaign",
-    description: "Q2 social media marketing campaign for product launch",
-    status: "Completed",
-    progress: 100,
-    members: ["AS", "JW"],
-    team: "Marketing",
-    created: "1 week ago"
-  },
-  {
-    id: 5,
-    name: "Data Migration",
-    description: "Migrate customer data to the new cloud storage solution",
-    status: "In Progress",
-    progress: 40,
-    members: ["RM", "TW", "JD"],
-    team: "DevOps",
-    created: "1 month ago"
-  },
-  {
-    id: 6,
-    name: "Security Audit",
-    description: "Perform comprehensive security assessment of all systems",
-    status: "Planning",
-    progress: 15,
-    members: ["JD", "RM"],
-    team: "Security",
-    created: "2 days ago"
-  }
-];
-
-interface Project {
-  id: number;
+interface Client {
+  id: string;
   name: string;
-  description: string;
-  status: string;
-  progress: number;
-  members: string[];
-  team: string;
-  created: string;
+  company: string;
+  email: string;
+  phone: string;
+  status: 'lead' | 'prospect' | 'client' | 'inactive';
+  value: number;
+  lastContact: string;
+  projects: number;
+  industry: string;
+  source: string;
+  assignedTo: string;
+  tags: string[];
+  notes: string;
 }
 
-// Helper function for getting status color
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'In Progress':
-      return 'bg-blue-100 text-blue-800';
-    case 'Planning':
-      return 'bg-amber-100 text-amber-800';
-    case 'On Hold':
-      return 'bg-gray-100 text-gray-800';
-    case 'Completed':
-      return 'bg-green-100 text-green-800';
-    default:
-      return 'bg-slate-100 text-slate-800';
-  }
-};
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  clientId: string;
+  status: 'planning' | 'in-progress' | 'review' | 'completed' | 'on-hold' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  progress: number;
+  budget: number;
+  spent: number;
+  startDate: string;
+  endDate: string;
+  team: string[];
+  tasks: number;
+  completedTasks: number;
+  type: 'development' | 'design' | 'marketing' | 'consulting' | 'maintenance';
+  profitability: number;
+  riskLevel: 'low' | 'medium' | 'high';
+}
 
-const Projects = () => {
+interface Deal {
+  id: string;
+  title: string;
+  clientId: string;
+  value: number;
+  stage: 'lead' | 'qualified' | 'proposal' | 'negotiation' | 'closed-won' | 'closed-lost';
+  probability: number;
+  expectedCloseDate: string;
+  source: string;
+  assignedTo: string;
+  lastActivity: string;
+  notes: string;
+}
+
+const ProjectsCRM: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  
-  // Filter projects based on search query and active filter
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = 
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      project.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
-    const matchesFilter = 
-      !activeFilter || 
-      project.status === activeFilter || 
-      project.team === activeFilter;
-    
-    return matchesSearch && matchesFilter;
-  });
-  
-  const handleProjectCreate = (project: Project) => {
-    setProjects(prev => [project, ...prev]);
-  };
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
 
-  const handleDeleteProject = () => {
-    if (selectedProjectId) {
-      setProjects(prev => prev.filter(p => p.id !== selectedProjectId));
-      toast.success("Project deleted successfully");
-      setDeleteDialogOpen(false);
-      setSelectedProjectId(null);
+  // Mock data - in real app, this would come from API
+  const [clients] = useState<Client[]>([
+    {
+      id: '1',
+      name: 'John Smith',
+      company: 'TechCorp Inc.',
+      email: 'john@techcorp.com',
+      phone: '+1 (555) 123-4567',
+      status: 'client',
+      value: 125000,
+      lastContact: '2 days ago',
+      projects: 3,
+      industry: 'Technology',
+      source: 'Referral',
+      assignedTo: 'Sarah Wilson',
+      tags: ['enterprise', 'high-value'],
+      notes: 'Key decision maker for technology initiatives'
+    },
+    {
+      id: '2',
+      name: 'Emily Chen',
+      company: 'StartupXYZ',
+      email: 'emily@startupxyz.com',
+      phone: '+1 (555) 987-6543',
+      status: 'prospect',
+      value: 45000,
+      lastContact: '1 week ago',
+      projects: 1,
+      industry: 'Fintech',
+      source: 'Website',
+      assignedTo: 'Mike Johnson',
+      tags: ['startup', 'growth'],
+      notes: 'Interested in MVP development'
+    },
+    {
+      id: '3',
+      name: 'David Rodriguez',
+      company: 'Global Solutions',
+      email: 'david@globalsolutions.com',
+      phone: '+1 (555) 456-7890',
+      status: 'lead',
+      value: 85000,
+      lastContact: '3 days ago',
+      projects: 0,
+      industry: 'Consulting',
+      source: 'LinkedIn',
+      assignedTo: 'Sarah Wilson',
+      tags: ['enterprise', 'consulting'],
+      notes: 'Evaluating digital transformation options'
+    }
+  ]);
+
+  const [projects] = useState<Project[]>([
+    {
+      id: '1',
+      name: 'E-commerce Platform',
+      description: 'Complete e-commerce solution with payment integration',
+      clientId: '1',
+      status: 'in-progress',
+      priority: 'high',
+      progress: 75,
+      budget: 85000,
+      spent: 63750,
+      startDate: '2024-01-15',
+      endDate: '2024-03-30',
+      team: ['dev-1', 'dev-2', 'designer-1'],
+      tasks: 45,
+      completedTasks: 34,
+      type: 'development',
+      profitability: 35,
+      riskLevel: 'low'
+    },
+    {
+      id: '2',
+      name: 'Mobile App MVP',
+      description: 'iOS and Android app for fintech startup',
+      clientId: '2',
+      status: 'planning',
+      priority: 'medium',
+      progress: 15,
+      budget: 45000,
+      spent: 6750,
+      startDate: '2024-02-01',
+      endDate: '2024-05-15',
+      team: ['dev-3', 'designer-2'],
+      tasks: 28,
+      completedTasks: 4,
+      type: 'development',
+      profitability: 42,
+      riskLevel: 'medium'
+    },
+    {
+      id: '3',
+      name: 'Brand Identity Design',
+      description: 'Complete brand redesign and marketing materials',
+      clientId: '3',
+      status: 'review',
+      priority: 'medium',
+      progress: 90,
+      budget: 25000,
+      spent: 22500,
+      startDate: '2024-01-01',
+      endDate: '2024-02-28',
+      team: ['designer-1', 'designer-3'],
+      tasks: 18,
+      completedTasks: 16,
+      type: 'design',
+      profitability: 28,
+      riskLevel: 'low'
+    }
+  ]);
+
+  const [deals] = useState<Deal[]>([
+    {
+      id: '1',
+      title: 'Enterprise CRM System',
+      clientId: '1',
+      value: 150000,
+      stage: 'proposal',
+      probability: 75,
+      expectedCloseDate: '2024-03-15',
+      source: 'Referral',
+      assignedTo: 'Sarah Wilson',
+      lastActivity: '2 days ago',
+      notes: 'Proposal submitted, waiting for feedback'
+    },
+    {
+      id: '2',
+      title: 'Mobile App Development',
+      clientId: '2',
+      value: 65000,
+      stage: 'negotiation',
+      probability: 85,
+      expectedCloseDate: '2024-02-28',
+      source: 'Website',
+      assignedTo: 'Mike Johnson',
+      lastActivity: '1 day ago',
+      notes: 'Finalizing contract terms'
+    },
+    {
+      id: '3',
+      title: 'Digital Marketing Campaign',
+      clientId: '3',
+      value: 35000,
+      stage: 'qualified',
+      probability: 60,
+      expectedCloseDate: '2024-04-10',
+      source: 'LinkedIn',
+      assignedTo: 'Sarah Wilson',
+      lastActivity: '5 days ago',
+      notes: 'Scheduled demo for next week'
+    }
+  ]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'lead': return 'bg-yellow-100 text-yellow-800';
+      case 'prospect': return 'bg-blue-100 text-blue-800';
+      case 'client': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-gray-100 text-gray-800';
+      case 'planning': return 'bg-purple-100 text-purple-800';
+      case 'in-progress': return 'bg-blue-100 text-blue-800';
+      case 'review': return 'bg-orange-100 text-orange-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'on-hold': return 'bg-gray-100 text-gray-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
-  
-  const confirmDelete = (id: number) => {
-    setSelectedProjectId(id);
-    setDeleteDialogOpen(true);
-  };
-  
-  const handleFilter = (filter: string) => {
-    if (activeFilter === filter) {
-      setActiveFilter(null);
-      toast.info("Filter cleared");
-    } else {
-      setActiveFilter(filter);
-      toast.info(`Filtered by ${filter}`);
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'low': return 'bg-green-100 text-green-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'high': return 'bg-orange-100 text-orange-800';
+      case 'urgent': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Get unique statuses and teams for filters
-  const projectStatuses = [...new Set(projects.map(project => project.status))];
-  const projectTeams = [...new Set(projects.map(project => project.team))];
+  const getStageColor = (stage: string) => {
+    switch (stage) {
+      case 'lead': return 'bg-gray-100 text-gray-800';
+      case 'qualified': return 'bg-blue-100 text-blue-800';
+      case 'proposal': return 'bg-purple-100 text-purple-800';
+      case 'negotiation': return 'bg-orange-100 text-orange-800';
+      case 'closed-won': return 'bg-green-100 text-green-800';
+      case 'closed-lost': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleCreateClient = () => {
+    toast.success('Client creation dialog would open');
+  };
+
+  const handleCreateProject = () => {
+    toast.success('Project creation dialog would open');
+  };
+
+  const handleCreateDeal = () => {
+    toast.success('Deal creation dialog would open');
+  };
+
+  const totalRevenue = projects.reduce((sum, project) => sum + project.budget, 0);
+  const totalProfit = projects.reduce((sum, project) => sum + (project.budget * project.profitability / 100), 0);
+  const activeProjects = projects.filter(p => p.status === 'in-progress').length;
+  const totalClients = clients.length;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-        <p className="text-muted-foreground">
-          Manage and track all your workspace projects.
-        </p>
-      </div>
-      
-      {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search projects..."
-            className="pl-8 w-full"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center">
+            <Building2 className="mr-3 h-7 w-7 text-primary" />
+            Project CRM
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Comprehensive client relationship and project management system
+          </p>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="mr-2 h-4 w-4" />
-                Filter
-                {activeFilter && <Badge className="ml-2 bg-primary">&times;</Badge>}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => setActiveFilter(null)}
-                className={!activeFilter ? "bg-accent" : ""}
-              >
-                All Projects
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                By Status
-              </div>
-              {projectStatuses.map(status => (
-                <DropdownMenuItem 
-                  key={status}
-                  onClick={() => handleFilter(status)}
-                  className={activeFilter === status ? "bg-accent" : ""}
-                >
-                  <Badge variant="outline" className={`mr-2 ${getStatusColor(status)}`}>
-                    {status}
-                  </Badge>
-                  {status}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                By Team
-              </div>
-              {projectTeams.map(team => (
-                <DropdownMenuItem 
-                  key={team}
-                  onClick={() => handleFilter(team)}
-                  className={activeFilter === team ? "bg-accent" : ""}
-                >
-                  {team}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          <div className="border rounded-md flex">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'} 
-              size="sm"
-              className="rounded-r-none"
-              onClick={() => setViewMode('grid')}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant={viewMode === 'list' ? 'default' : 'ghost'} 
-              size="sm"
-              className="rounded-l-none"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
+        <div className="flex gap-2">
+          <Button variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Quick Add
+          </Button>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="clients">Clients</TabsTrigger>
+          <TabsTrigger value="projects">Projects</TabsTrigger>
+          <TabsTrigger value="deals">Sales Pipeline</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6">
+          {/* KPI Cards */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                    <p className="text-2xl font-bold">${totalRevenue.toLocaleString()}</p>
+                    <p className="text-xs text-green-600">+12% from last month</p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Active Projects</p>
+                    <p className="text-2xl font-bold">{activeProjects}</p>
+                    <p className="text-xs text-blue-600">3 starting this week</p>
+                  </div>
+                  <Target className="h-8 w-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Clients</p>
+                    <p className="text-2xl font-bold">{totalClients}</p>
+                    <p className="text-xs text-purple-600">2 new this week</p>
+                  </div>
+                  <Users className="h-8 w-8 text-purple-600" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Profit Margin</p>
+                    <p className="text-2xl font-bold">{Math.round((totalProfit / totalRevenue) * 100)}%</p>
+                    <p className="text-xs text-orange-600">+3% improvement</p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          
-          <CreateProjectDialog onProjectCreate={handleProjectCreate} />
-        </div>
-      </div>
-      
-      {/* Projects grid */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.length > 0 ? (
-            filteredProjects.map(project => (
-              <ProjectCard 
-                key={project.id} 
-                project={project} 
-                onDelete={() => confirmDelete(project.id)}
-              />
-            ))
-          ) : (
-            <div className="col-span-full flex items-center justify-center h-60 bg-slate-50 rounded-lg border border-dashed">
-              <div className="text-center p-6">
-                <h3 className="font-medium mb-2">No projects found</h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                  {activeFilter 
-                    ? 'Try changing your filters or search term'
-                    : 'Get started by creating your first project'}
-                </p>
-                <CreateProjectDialog onProjectCreate={handleProjectCreate} />
+
+          {/* Recent Activity & Quick Actions */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Activity className="mr-2 h-5 w-5" />
+                  Recent Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <div className="flex-1">
+                    <p className="text-sm">Project milestone completed</p>
+                    <p className="text-xs text-muted-foreground">E-commerce Platform - 2 hours ago</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <div className="flex-1">
+                    <p className="text-sm">New client onboarded</p>
+                    <p className="text-xs text-muted-foreground">TechCorp Inc. - 1 day ago</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <div className="flex-1">
+                    <p className="text-sm">Deal closed successfully</p>
+                    <p className="text-xs text-muted-foreground">$65,000 Mobile App Development - 2 days ago</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Calendar className="h-4 w-4 text-orange-600" />
+                  <div className="flex-1">
+                    <p className="text-sm">Meeting scheduled</p>
+                    <p className="text-xs text-muted-foreground">Demo with Global Solutions - Tomorrow 2 PM</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Zap className="mr-2 h-5 w-5" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button className="w-full justify-start" onClick={handleCreateClient}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add New Client
+                </Button>
+                <Button className="w-full justify-start" variant="outline" onClick={handleCreateProject}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Project
+                </Button>
+                <Button className="w-full justify-start" variant="outline" onClick={handleCreateDeal}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Deal
+                </Button>
+                <Button className="w-full justify-start" variant="outline">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Schedule Meeting
+                </Button>
+                <Button className="w-full justify-start" variant="outline">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Generate Report
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Project Status Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Status Overview</CardTitle>
+              <CardDescription>Current status of all active projects</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {projects.map((project) => (
+                  <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div>
+                        <h4 className="font-medium">{project.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {clients.find(c => c.id === project.clientId)?.company}
+                        </p>
+                      </div>
+                      <Badge className={getStatusColor(project.status)}>
+                        {project.status}
+                      </Badge>
+                      <Badge className={getPriorityColor(project.priority)}>
+                        {project.priority}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{project.progress}%</p>
+                        <Progress value={project.progress} className="w-24 h-2" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">${project.budget.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Budget</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clients" className="space-y-6">
+          {/* Search and Filters */}
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search clients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {filteredProjects.length > 0 ? (
-            filteredProjects.map(project => (
-              <ProjectListItem 
-                key={project.id} 
-                project={project}
-                onDelete={() => confirmDelete(project.id)}
-              />
-            ))
-          ) : (
-            <div className="flex items-center justify-center h-60 bg-slate-50 rounded-lg border border-dashed">
-              <div className="text-center p-6">
-                <h3 className="font-medium mb-2">No projects found</h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                  {activeFilter 
-                    ? 'Try changing your filters or search term'
-                    : 'Get started by creating your first project'}
-                </p>
-                <CreateProjectDialog onProjectCreate={handleProjectCreate} />
+            <div className="flex gap-2">
+              <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clients</SelectItem>
+                  <SelectItem value="lead">Leads</SelectItem>
+                  <SelectItem value="prospect">Prospects</SelectItem>
+                  <SelectItem value="client">Active Clients</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline">
+                <Filter className="w-4 h-4 mr-2" />
+                More Filters
+              </Button>
+              <Button onClick={handleCreateClient}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Client
+              </Button>
+            </div>
+          </div>
+
+          {/* Clients Grid */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {clients.map((client) => (
+              <Card key={client.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">{client.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground">{client.company}</p>
+                    </div>
+                    <Badge className={getStatusColor(client.status)}>
+                      {client.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      <span>{client.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <span>{client.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                      <span>{client.industry}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <p className="font-medium">${client.value.toLocaleString()}</p>
+                      <p className="text-muted-foreground">Total Value</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{client.projects}</p>
+                      <p className="text-muted-foreground">Projects</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {client.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1">
+                      <Eye className="w-4 h-4 mr-1" />
+                      View
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="projects" className="space-y-6">
+          {/* Project Controls */}
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search projects..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             </div>
+            <div className="flex gap-2">
+              <div className="border rounded-md flex">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-r-none"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-l-none"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button variant="outline">
+                <Filter className="w-4 h-4 mr-2" />
+                Filter
+              </Button>
+              <Button onClick={handleCreateProject}>
+                <Plus className="w-4 h-4 mr-2" />
+                New Project
+              </Button>
+            </div>
+          </div>
+
+          {/* Projects Display */}
+          {viewMode === 'grid' ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => (
+                <Card key={project.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{project.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {clients.find(c => c.id === project.clientId)?.company}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Badge className={getStatusColor(project.status)}>
+                          {project.status}
+                        </Badge>
+                        <Badge className={getPriorityColor(project.priority)}>
+                          {project.priority}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {project.description}
+                    </p>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Progress</span>
+                        <span>{project.progress}%</span>
+                      </div>
+                      <Progress value={project.progress} className="h-2" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium">${project.budget.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Budget</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">{project.completedTasks}/{project.tasks}</p>
+                        <p className="text-muted-foreground">Tasks</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1">
+                        <Eye className="w-4 h-4 mr-1" />
+                        View
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <Edit className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Project</th>
+                        <th className="text-left p-4 font-medium">Client</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-left p-4 font-medium">Progress</th>
+                        <th className="text-left p-4 font-medium">Budget</th>
+                        <th className="text-left p-4 font-medium">Due Date</th>
+                        <th className="text-left p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projects.map((project) => (
+                        <tr key={project.id} className="border-b">
+                          <td className="p-4">
+                            <div>
+                              <p className="font-medium">{project.name}</p>
+                              <p className="text-sm text-muted-foreground">{project.type}</p>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            {clients.find(c => c.id === project.clientId)?.company}
+                          </td>
+                          <td className="p-4">
+                            <Badge className={getStatusColor(project.status)}>
+                              {project.status}
+                            </Badge>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Progress value={project.progress} className="w-16 h-2" />
+                              <span className="text-sm">{project.progress}%</span>
+                            </div>
+                          </td>
+                          <td className="p-4">${project.budget.toLocaleString()}</td>
+                          <td className="p-4">{project.endDate}</td>
+                          <td className="p-4">
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="ghost">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost">
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      )}
-      
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this project? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteProject}>
-              Delete Project
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </TabsContent>
+
+        <TabsContent value="deals" className="space-y-6">
+          {/* Sales Pipeline */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Sales Pipeline</CardTitle>
+              <CardDescription>Track deals through your sales process</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-6">
+                {['lead', 'qualified', 'proposal', 'negotiation', 'closed-won', 'closed-lost'].map((stage) => (
+                  <div key={stage} className="space-y-3">
+                    <div className="text-center">
+                      <h4 className="font-medium capitalize">{stage.replace('-', ' ')}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        ${deals.filter(d => d.stage === stage).reduce((sum, d) => sum + d.value, 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {deals.filter(d => d.stage === stage).map((deal) => (
+                        <Card key={deal.id} className="p-3 cursor-pointer hover:shadow-md transition-shadow">
+                          <div className="space-y-2">
+                            <h5 className="font-medium text-sm">{deal.title}</h5>
+                            <p className="text-xs text-muted-foreground">
+                              {clients.find(c => c.id === deal.clientId)?.company}
+                            </p>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium">${deal.value.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground">{deal.probability}%</span>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Deal Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Deal Management</CardTitle>
+              <CardDescription>Detailed view of all deals</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {deals.map((deal) => (
+                  <div key={deal.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div>
+                        <h4 className="font-medium">{deal.title}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {clients.find(c => c.id === deal.clientId)?.company}
+                        </p>
+                      </div>
+                      <Badge className={getStageColor(deal.stage)}>
+                        {deal.stage.replace('-', ' ')}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-sm font-medium">${deal.value.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{deal.expectedCloseDate}</p>
+                        <p className="text-xs text-muted-foreground">Expected close</p>
+                      </div>
+                      <Button size="sm" variant="outline">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          {/* Analytics Dashboard */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue Analytics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span>Total Revenue</span>
+                    <span className="font-bold">${totalRevenue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Total Profit</span>
+                    <span className="font-bold text-green-600">${totalProfit.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Profit Margin</span>
+                    <span className="font-bold">{Math.round((totalProfit / totalRevenue) * 100)}%</span>
+                  </div>
+                  <Progress value={(totalProfit / totalRevenue) * 100} className="h-2" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Performance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span>On Time Delivery</span>
+                    <span className="font-bold text-green-600">87%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Budget Adherence</span>
+                    <span className="font-bold text-blue-600">92%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Client Satisfaction</span>
+                    <span className="font-bold text-purple-600">4.8/5</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Team Utilization</span>
+                    <span className="font-bold">78%</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Sales Funnel Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {['lead', 'qualified', 'proposal', 'negotiation', 'closed-won'].map((stage, index) => {
+                  const stageDeals = deals.filter(d => d.stage === stage);
+                  const stageValue = stageDeals.reduce((sum, d) => sum + d.value, 0);
+                  const totalValue = deals.reduce((sum, d) => sum + d.value, 0);
+                  const percentage = (stageValue / totalValue) * 100;
+                  
+                  return (
+                    <div key={stage} className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="capitalize">{stage.replace('-', ' ')}</span>
+                        <span>${stageValue.toLocaleString()} ({stageDeals.length} deals)</span>
+                      </div>
+                      <Progress value={percentage} className="h-2" />
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>CRM Settings</CardTitle>
+                <CardDescription>Configure your CRM preferences</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-assign leads</Label>
+                    <p className="text-sm text-muted-foreground">Automatically assign new leads to team members</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Email notifications</Label>
+                    <p className="text-sm text-muted-foreground">Send email alerts for important events</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Activity tracking</Label>
+                    <p className="text-sm text-muted-foreground">Track user activities and interactions</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Data Management</CardTitle>
+                <CardDescription>Manage your CRM data</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button className="w-full" variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export All Data
+                </Button>
+                <Button className="w-full" variant="outline">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Data
+                </Button>
+                <Button className="w-full" variant="outline">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Generate Report
+                </Button>
+                <Separator />
+                <Button className="w-full" variant="destructive">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All Data
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
 
-interface ProjectProps {
-  project: {
-    id: number;
-    name: string;
-    description: string;
-    status: string;
-    progress: number;
-    members: string[];
-    team: string;
-    created: string;
-  };
-  onDelete: () => void;
-}
-
-const ProjectCard = ({ project, onDelete }: ProjectProps) => {
-  const [showDetails, setShowDetails] = useState(false);
-  
-  const viewProject = () => {
-    setShowDetails(true);
-  };
-  
-  return (
-    <>
-      <Card className="overflow-hidden">
-        <div className="h-2 bg-primary" />
-        <CardContent className="p-6">
-          <div className="flex justify-between items-start">
-            <h3 className="font-semibold text-lg">{project.name}</h3>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={viewProject}>View Details</DropdownMenuItem>
-                <DropdownMenuItem>Edit Project</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600" onClick={onDelete}>
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          
-          <div className="mt-2">
-            <Badge variant="outline" className={getStatusColor(project.status)}>
-              {project.status}
-            </Badge>
-          </div>
-          
-          <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
-            {project.description}
-          </p>
-          
-          <div className="mt-4 space-y-2">
-            <div className="text-xs text-muted-foreground flex justify-between">
-              <span>Progress</span>
-              <span>{project.progress}%</span>
-            </div>
-            <Progress value={project.progress} className="h-1.5" />
-          </div>
-        </CardContent>
-        
-        <CardFooter className="bg-slate-50 px-6 py-3 flex items-center justify-between">
-          <div className="flex -space-x-2">
-            {project.members.map((member, idx) => (
-              <Avatar key={idx} className="h-7 w-7 border-2 border-background">
-                <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                  {member}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {project.team} · {project.created}
-          </div>
-        </CardFooter>
-      </Card>
-      
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">{project.name}</DialogTitle>
-            <DialogDescription>
-              <Badge variant="outline" className={`mt-2 ${getStatusColor(project.status)}`}>
-                {project.status}
-              </Badge>
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-1">Description</h4>
-              <p>{project.description}</p>
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-muted-foreground">Progress</h4>
-              <div className="text-xs text-muted-foreground flex justify-between">
-                <span>Completion</span>
-                <span>{project.progress}%</span>
-              </div>
-              <Progress value={project.progress} className="h-2" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Team</h4>
-                <p>{project.team}</p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Created</h4>
-                <p>{project.created}</p>
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-2">Team Members</h4>
-              <div className="flex gap-2">
-                {project.members.map((member, idx) => (
-                  <Avatar key={idx} className="h-10 w-10 border-2 border-background">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {member}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowDetails(false)}>
-              Close
-            </Button>
-            <Button>Edit Project</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-};
-
-const ProjectListItem = ({ project, onDelete }: ProjectProps) => {
-  const [showDetails, setShowDetails] = useState(false);
-  
-  return (
-    <>
-      <div className="border rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4">
-        <div className="flex-1">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold">{project.name}</h3>
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                {project.description}
-              </p>
-            </div>
-            <Badge variant="outline" className={getStatusColor(project.status)}>
-              {project.status}
-            </Badge>
-          </div>
-          
-          <div className="mt-3 flex flex-wrap gap-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Team:</span>
-              <span className="font-medium text-foreground">{project.team}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Created:</span>
-              <span className="font-medium text-foreground">{project.created}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">
-                {project.members.map((member, idx) => (
-                  <Avatar key={idx} className="h-6 w-6 border-2 border-background">
-                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                      {member}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex flex-col md:flex-row items-center gap-3 md:min-w-[240px]">
-          <div className="w-full md:w-36 flex items-center gap-2">
-            <Progress value={project.progress} className="h-2 flex-1" />
-            <span className="text-xs font-medium">{project.progress}%</span>
-          </div>
-          
-          <div className="flex items-center gap-2 self-end md:self-center">
-            <Button variant="outline" size="sm" onClick={() => setShowDetails(true)}>
-              View
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>Edit Project</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600" onClick={onDelete}>
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-      
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">{project.name}</DialogTitle>
-            <DialogDescription>
-              <Badge variant="outline" className={`mt-2 ${getStatusColor(project.status)}`}>
-                {project.status}
-              </Badge>
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-1">Description</h4>
-              <p>{project.description}</p>
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-muted-foreground">Progress</h4>
-              <div className="text-xs text-muted-foreground flex justify-between">
-                <span>Completion</span>
-                <span>{project.progress}%</span>
-              </div>
-              <Progress value={project.progress} className="h-2" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Team</h4>
-                <p>{project.team}</p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Created</h4>
-                <p>{project.created}</p>
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-2">Team Members</h4>
-              <div className="flex gap-2">
-                {project.members.map((member, idx) => (
-                  <Avatar key={idx} className="h-10 w-10 border-2 border-background">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {member}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowDetails(false)}>
-              Close
-            </Button>
-            <Button>Edit Project</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-};
-
-export default Projects;
+export default ProjectsCRM;

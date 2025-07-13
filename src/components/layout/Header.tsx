@@ -1,27 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Search, 
-  PlusCircle, 
-  Bell, 
-  User,
-  Menu,
-  LogOut,
-  Briefcase,
-  CheckSquare,
-  StickyNote
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
+import {
+    Bell,
+    Briefcase,
+    CheckSquare,
+    LogOut,
+    Menu,
+    PlusCircle,
+    Search,
+    StickyNote,
+    User
+} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -184,14 +184,19 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
             <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel className="flex items-center justify-between">
                 Notifications
-                {notifications.length > 0 && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => toast.info("Marked all as read (mock)")}>
-                    Mark all as read
+                <div className="flex items-center gap-2">
+                  {notifications.length > 0 && (
+                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => toast.info("Marked all as read (mock)")}>
+                      Mark all as read
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/notifications')}>
+                    View All
                   </Button>
-                )}
+                </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.length > 0 ? notifications.map(notification => (
+              {notifications.length > 0 ? notifications.slice(0, 3).map(notification => (
                 <DropdownMenuItem key={notification.id} className="flex flex-col items-start py-2 cursor-pointer hover:bg-slate-50" onClick={() => toast.info(`Notification: ${notification.title}`)}>
                   <div className="font-medium text-sm">{notification.title}</div>
                   <div className="text-muted-foreground text-xs">{notification.description}</div>
@@ -200,14 +205,18 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
               )) : (
                 <DropdownMenuItem disabled className="text-center text-sm text-muted-foreground py-4">No new notifications</DropdownMenuItem>
               )}
-              {notifications.length > 0 && (
+              {notifications.length > 3 && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => toast.info("Viewing all notifications (mock)")}>
-                    View all notifications
+                  <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => navigate('/notifications')}>
+                    View all notifications ({notifications.length})
                   </DropdownMenuItem>
                 </>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => navigate('/notifications')}>
+                Open Notifications Center
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           
