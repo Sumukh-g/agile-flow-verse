@@ -1,0 +1,206 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  sku       String   @default("basic") // basic, pro, enterprise
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users     User[]
+  projects  Project[]
+  features  TenantFeature[]
+  auditLogs AuditLog[]
+  outbox    Outbox[]
+
+  @@map("tenants")
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  category    String   @default("basic") // basic, pro, enterprise
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenantFeatures TenantFeature[]
+
+  @@map("feature_flags")
+}
+
+model TenantFeature {
+  id        String   @id @default(cuid())
+  tenantId  String
+  featureKey String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  featureFlag FeatureFlag @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@map("tenant_features")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roleAssignments RoleAssignment[]
+  projects       Project[]
+  tasks          Task[]
+  timesheets     Timesheet[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String[] // Array of permission strings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assignments RoleAssignment[]
+
+  @@map("roles")
+}
+
+model RoleAssignment {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+  tenantId String
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, tenantId])
+  @@map("role_assignments")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active") // active, completed, on-hold, cancelled
+  priority    String   @default("medium") // low, medium, high, urgent
+  progress    Int      @default(0)
+  budget      Float?
+  spent       Float    @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+  tenantId    String
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator  User     @relation(fields: [createdBy], references: [id])
+  tasks    Task[]
+  outbox   Outbox[]
+
+  @@map("projects")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("todo") // todo, in-progress, review, done
+  priority    String   @default("medium") // low, medium, high, urgent
+  dueDate     DateTime?
+  estimatedHours Float?
+  actualHours Float    @default(0)
+  projectId   String
+  assigneeId  String?
+  tenantId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?      @relation(fields: [assigneeId], references: [id])
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  timesheets Timesheet[]
+
+  @@map("tasks")
+}
+
+model Timesheet {
+  id        String   @id @default(cuid())
+  date      DateTime
+  hours     Float
+  description String?
+  taskId    String
+  userId    String
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  outbox Outbox[]
+
+  @@map("timesheets")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  userId    String
+  tenantId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Outbox {
+  id        String   @id @default(cuid())
+  aggregate String   // The aggregate type (e.g., "Timesheet", "Project")
+  payload   Json     // The event payload
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  @@map("outbox")
+} 
