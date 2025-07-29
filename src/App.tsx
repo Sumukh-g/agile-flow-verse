@@ -28,6 +28,7 @@ import BestInClassExtrasPage from "@/pages/BestInClassExtrasPage";
 import CalendarHub from "@/pages/CalendarHub";
 import DeveloperPage from "@/pages/DeveloperPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 // Auth context and components
 interface User {
@@ -146,6 +147,7 @@ const App = () => (
               <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/developer" element={<DeveloperPage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/extras" element={<BestInClassExtrasPage />} />
             </Route>
             

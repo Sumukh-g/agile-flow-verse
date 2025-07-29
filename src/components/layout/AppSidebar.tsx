@@ -16,7 +16,6 @@ import {
     useSidebar,
 } from "@/components/ui/sidebar";
 import {
-    Bell,
     Briefcase,
     Calendar,
     Check,
@@ -32,6 +31,7 @@ import {
     PanelRight,
     Pencil,
     Plus,
+    Settings,
     Shield,
     Star,
     StickyNote,
@@ -85,7 +85,6 @@ export const AppSidebar = () => {
     { title: 'Calendar', icon: Calendar, path: '/calendar' },
     { title: 'Pages', icon: FileText, path: '/pages' },
     { title: 'Notes', icon: StickyNote, path: '/notes' },
-    { title: 'Notifications', icon: Bell, path: '/notifications' },
     { title: 'Extras', icon: Star, path: '/extras' }
   ];
 
@@ -94,7 +93,8 @@ export const AppSidebar = () => {
     { title: 'Automations', icon: Zap, path: '/automations' },
     { title: 'Integrations', icon: Layers, path: '/integrations' },
     { title: 'Developer', icon: Code, path: '/developer' },
-    { title: 'Admin', icon: Shield, path: '/admin' }
+    { title: 'Admin', icon: Shield, path: '/admin' },
+    { title: 'Settings', icon: Settings, path: '/settings' }
   ];
 
   // Custom sections

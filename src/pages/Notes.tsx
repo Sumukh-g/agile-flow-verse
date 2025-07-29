@@ -1,59 +1,62 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import { format } from 'date-fns';
 import {
-    Archive,
-    Bold,
-    Code,
-    Copy,
-    Download,
-    FileText,
-    Filter,
-    Hash,
-    Heading2,
-    Image as ImageIcon,
-    Italic,
-    Link,
-    List, ListOrdered,
-    MoreHorizontal,
-    Paperclip,
-    Pin,
-    Plus,
-    Quote,
-    Save,
-    Search,
-    Share, Star,
-    Table,
-    Trash2,
-    Underline,
-    Users
-} from "lucide-react";
-import { useEffect, useState } from 'react';
-import { toast } from "sonner";
+  Activity,
+  AlertCircle,
+  Brain,
+  Calendar,
+  Database,
+  FileText,
+  Filter,
+  FormInput,
+  Grid3X3,
+  List,
+  Palette,
+  Plus,
+  Presentation,
+  Search,
+  Trello,
+  Workflow
+} from 'lucide-react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
+// Lazy load components for better performance
+const RichTextEditor = lazy(() => import('@/components/notes/RichTextEditor'));
+const NoteSidebar = lazy(() => import('@/components/notes/NoteSidebar'));
+const NoteToolbar = lazy(() => import('@/components/notes/NoteToolbar'));
+const NoteGallery = lazy(() => import('@/components/notes/NoteGallery'));
+const NoteList = lazy(() => import('@/components/notes/NoteList'));
+const NoteTemplates = lazy(() => import('@/components/notes/NoteTemplates'));
+const NoteCollaboration = lazy(() => import('@/components/notes/NoteCollaboration'));
+const NoteAnalytics = lazy(() => import('@/components/notes/NoteAnalytics'));
+const NoteAI = lazy(() => import('@/components/notes/NoteAI'));
+const NoteDatabase = lazy(() => import('@/components/notes/NoteDatabase'));
+const NoteCalendar = lazy(() => import('@/components/notes/NoteCalendar'));
+const NoteKanban = lazy(() => import('@/components/notes/NoteKanban'));
+const NoteTimeline = lazy(() => import('@/components/notes/NoteTimeline'));
+const NoteMindmap = lazy(() => import('@/components/notes/NoteMindmap'));
+const NoteWhiteboard = lazy(() => import('@/components/notes/NoteWhiteboard'));
+const NotePresentation = lazy(() => import('@/components/notes/NotePresentation'));
+const NoteForms = lazy(() => import('@/components/notes/NoteForms'));
+const NoteWorkflows = lazy(() => import('@/components/notes/NoteWorkflows'));
+const NoteIntegrations = lazy(() => import('@/components/notes/NoteIntegrations'));
+
+// Types
 interface Note {
   id: string;
   title: string;
   content: string;
+  type: 'text' | 'database' | 'calendar' | 'kanban' | 'timeline' | 'mindmap' | 'whiteboard' | 'presentation' | 'form' | 'workflow';
   createdAt: Date;
   updatedAt: Date;
   tags: string[];
@@ -66,708 +69,519 @@ interface Note {
   isPublic: boolean;
   wordCount: number;
   readingTime: number;
-  attachments: string[];
+  attachments: Attachment[];
   reminders: Date[];
   version: number;
   lastEditedBy: string;
+  parentId?: string;
+  children?: string[];
+  properties: Record<string, any>;
+  permissions: Permission[];
+  aiGenerated: boolean;
+  views: View[];
+  currentView: string;
+  databaseSchema?: DatabaseSchema;
+  workflowSteps?: WorkflowStep[];
+  formFields?: FormField[];
+  presentationSlides?: Slide[];
+  whiteboardElements?: WhiteboardElement[];
+  mindmapNodes?: MindmapNode[];
+  timelineEvents?: TimelineEvent[];
+  kanbanColumns?: KanbanColumn[];
+  calendarEvents?: CalendarEvent[];
 }
 
-interface NoteTemplate {
+interface Attachment {
   id: string;
   name: string;
-  description: string;
+  type: 'image' | 'video' | 'audio' | 'document' | 'code' | 'table' | 'link' | 'bookmark';
+  url: string;
+  size: number;
+  uploadedAt: Date;
+  uploadedBy: string;
+}
+
+interface Permission {
+  userId: string;
+  role: 'owner' | 'editor' | 'viewer' | 'commenter';
+  grantedAt: Date;
+}
+
+interface View {
+  id: string;
+  name: string;
+  type: 'list' | 'grid' | 'calendar' | 'kanban' | 'timeline' | 'gallery' | 'table' | 'board';
+  filters: Filter[];
+  sorts: Sort[];
+  columns: Column[];
+}
+
+interface Filter {
+  field: string;
+  operator: 'equals' | 'contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+  value: any;
+}
+
+interface Sort {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+interface Column {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'person' | 'file' | 'checkbox' | 'url' | 'email' | 'phone' | 'formula' | 'rollup' | 'created_time' | 'created_by' | 'last_edited_time' | 'last_edited_by';
+  width?: number;
+  visible: boolean;
+}
+
+interface DatabaseSchema {
+  properties: Record<string, PropertyDefinition>;
+  relations: Relation[];
+}
+
+interface PropertyDefinition {
+  name: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'person' | 'file' | 'checkbox' | 'url' | 'email' | 'phone' | 'formula' | 'rollup' | 'created_time' | 'created_by' | 'last_edited_time' | 'last_edited_by';
+  options?: any[];
+  formula?: string;
+  rollup?: RollupConfig;
+}
+
+interface Relation {
+  id: string;
+  name: string;
+  type: 'one_to_one' | 'one_to_many' | 'many_to_many';
+  sourceProperty: string;
+  targetDatabase: string;
+  targetProperty: string;
+}
+
+interface RollupConfig {
+  relationProperty: string;
+  targetProperty: string;
+  function: 'count' | 'sum' | 'average' | 'min' | 'max' | 'show_original';
+}
+
+interface WorkflowStep {
+  id: string;
+  name: string;
+  type: 'trigger' | 'action' | 'condition' | 'delay' | 'notification';
+  config: Record<string, any>;
+  nextSteps: string[];
+}
+
+interface FormField {
+  id: string;
+  name: string;
+  type: 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'multi_select' | 'checkbox' | 'radio' | 'file' | 'rating' | 'slider';
+  required: boolean;
+  options?: any[];
+  validation?: ValidationRule[];
+}
+
+interface ValidationRule {
+  type: 'required' | 'min_length' | 'max_length' | 'pattern' | 'min_value' | 'max_value' | 'custom';
+  value: any;
+  message: string;
+}
+
+interface Slide {
+  id: string;
+  title: string;
   content: string;
-  tags: string[];
-  category: string;
-  icon: string;
+  background: string;
+  transitions: Transition[];
 }
 
-interface Category {
+interface Transition {
+  type: 'fade' | 'slide' | 'zoom' | 'flip';
+  duration: number;
+}
+
+interface WhiteboardElement {
+  id: string;
+  type: 'text' | 'shape' | 'line' | 'image' | 'sticky' | 'connector';
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  content: any;
+  style: Record<string, any>;
+}
+
+interface MindmapNode {
+  id: string;
+  text: string;
+  position: { x: number; y: number };
+  children: string[];
+  style: Record<string, any>;
+}
+
+interface TimelineEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: Date;
+  category: string;
+  color: string;
+}
+
+interface KanbanColumn {
   id: string;
   name: string;
+  items: KanbanItem[];
   color: string;
-  icon: string;
-  count: number;
 }
 
-const INITIAL_CATEGORIES: Category[] = [
-  { id: 'personal', name: 'Personal', color: 'bg-blue-100 text-blue-800', icon: '👤', count: 3 },
-  { id: 'work', name: 'Work', color: 'bg-green-100 text-green-800', icon: '💼', count: 5 },
-  { id: 'ideas', name: 'Ideas', color: 'bg-yellow-100 text-yellow-800', icon: '💡', count: 2 },
-  { id: 'projects', name: 'Projects', color: 'bg-purple-100 text-purple-800', icon: '🚀', count: 4 },
-  { id: 'meetings', name: 'Meetings', color: 'bg-red-100 text-red-800', icon: '📅', count: 6 },
-];
+interface KanbanItem {
+  id: string;
+  title: string;
+  description: string;
+  assignee: string;
+  dueDate: Date;
+  priority: 'low' | 'medium' | 'high';
+  tags: string[];
+}
 
-const INITIAL_NOTES: Note[] = [
-  {
-    id: '1',
-    title: 'Project Ideas',
-    content: 'Here are some project ideas for the next quarter:\n- Mobile app redesign\n- API integration with third-party services\n- Performance optimization',
-    createdAt: new Date('2023-05-01'),
-    updatedAt: new Date('2023-05-10'),
-    tags: ['Ideas', 'Planning'],
-    pinned: true,
-    starred: true
-  },
-  {
-    id: '2',
-    title: 'Meeting Notes',
-    content: 'Discussion points from today\'s meeting:\n1. Budget review\n2. Timeline adjustments\n3. Resource allocation',
-    createdAt: new Date('2023-05-05'),
-    updatedAt: new Date('2023-05-05'),
-    tags: ['Meetings', 'Important'],
-    pinned: false,
-    starred: false
-  }
-];
+interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string;
+  startDate: Date;
+  endDate: Date;
+  allDay: boolean;
+  location: string;
+  attendees: string[];
+  color: string;
+}
 
-const NOTE_TEMPLATES: NoteTemplate[] = [
-  {
-    id: 'template1',
-    name: 'Meeting Notes',
-    description: 'Template for capturing meeting discussions',
-    content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n1. \n2. \n3. \n\n## Discussion\n\n## Action Items\n- [ ] \n- [ ] \n- [ ] \n\n## Next Steps\n\n',
-    tags: ['Meetings']
-  },
-  {
-    id: 'template2',
-    name: 'Project Brief',
-    description: 'Template for new project specifications',
-    content: '# Project Brief\n\n**Project Name:** \n**Start Date:** \n**End Date:** \n\n## Objectives\n\n## Scope\n\n## Deliverables\n\n## Stakeholders\n\n## Budget\n\n## Timeline\n\n',
-    tags: ['Project', 'Planning']
-  },
-  {
-    id: 'template3',
-    name: 'Weekly Report',
-    description: 'Template for weekly status updates',
-    content: '# Weekly Report\n\n**Week of:** \n\n## Accomplishments\n\n## In Progress\n\n## Blockers\n\n## Next Week Plans\n\n',
-    tags: ['Reports', 'Weekly']
-  }
-];
-
-const Notes = () => {
-  const [notes, setNotes] = useState<Note[]>(INITIAL_NOTES);
+const Notes: React.FC = () => {
+  // State management with proper memoization
+  const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'gallery'>('list');
   const [searchQuery, setSearchQuery] = useState('');
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNoteContent, setNewNoteContent] = useState('');
-  const [newNoteTag, setNewNoteTag] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<'updated' | 'created' | 'title' | 'category'>('updated');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showArchived, setShowArchived] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [editorState, setEditorState] = useState({
-    isBold: false,
-    isItalic: false,
-    isUnderline: false
-  });
+  const [showAI, setShowAI] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showCollaboration, setShowCollaboration] = useState(false);
+  const [showDatabase, setShowDatabase] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showKanban, setShowKanban] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showMindmap, setShowMindmap] = useState(false);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [showPresentation, setShowPresentation] = useState(false);
+  const [showForms, setShowForms] = useState(false);
+  const [showWorkflows, setShowWorkflows] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Memoized filtered notes
+  const filteredNotes = useMemo(() => {
+    return notes
+      .filter(note => {
+        if (!showArchived && note.archived) return false;
+        
+        const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                             note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+        const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
+        
+        const matchesTags = selectedTags.length === 0 || 
+                           selectedTags.some(tag => note.tags.includes(tag));
+        
+        return matchesSearch && matchesCategory && matchesTags;
+      })
+      .sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortBy) {
+          case 'title':
+            comparison = a.title.localeCompare(b.title);
+            break;
+          case 'created':
+            comparison = a.createdAt.getTime() - b.createdAt.getTime();
+            break;
+          case 'category':
+            comparison = a.category.localeCompare(b.category);
+            break;
+          case 'updated':
+          default:
+            comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
+            break;
+        }
+        
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+  }, [notes, searchQuery, selectedCategory, selectedTags, sortBy, sortOrder, showArchived]);
+
+  // Load notes from localStorage on mount
   useEffect(() => {
-    const savedNotes = localStorage.getItem('notes');
-    if (savedNotes) {
+    const loadNotes = () => {
       try {
-        const parsedNotes = JSON.parse(savedNotes);
-        const processedNotes = parsedNotes.map((note: any) => ({
-          ...note,
-          createdAt: new Date(note.createdAt),
-          updatedAt: new Date(note.updatedAt),
-          reminders: note.reminders?.map((r: string) => new Date(r)) || []
-        }));
-        setNotes(processedNotes);
+        const savedNotes = localStorage.getItem('notes');
+        if (savedNotes) {
+          const parsedNotes = JSON.parse(savedNotes);
+          const processedNotes = parsedNotes.map((note: any) => ({
+            ...note,
+            createdAt: new Date(note.createdAt),
+            updatedAt: new Date(note.updatedAt),
+            reminders: note.reminders?.map((r: string) => new Date(r)) || []
+          }));
+          setNotes(processedNotes);
+        }
       } catch (error) {
-        console.error('Error parsing notes from localStorage:', error);
+        setError('Failed to load notes');
+        console.error('Error loading notes:', error);
       }
-    }
+    };
+
+    loadNotes();
   }, []);
 
+  // Save notes to localStorage when they change
   useEffect(() => {
     localStorage.setItem('notes', JSON.stringify(notes));
-    updateCategoryCounts();
   }, [notes]);
 
-  const updateCategoryCounts = () => {
-    const counts = notes.reduce((acc, note) => {
-      if (!note.archived || showArchived) {
-        acc[note.category] = (acc[note.category] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
-
-    setCategories(prev => prev.map(cat => ({
-      ...cat,
-      count: counts[cat.id] || 0
-    })));
-  };
-
-  const calculateReadingTime = (content: string): number => {
-    const wordsPerMinute = 200;
-    const wordCount = content.split(/\s+/).length;
-    return Math.ceil(wordCount / wordsPerMinute);
-  };
-
-  const calculateWordCount = (content: string): number => {
-    return content.split(/\s+/).filter(word => word.length > 0).length;
-  };
-
-  const filteredNotes = notes
-    .filter(note => {
-      if (!showArchived && note.archived) return false;
-      
-      const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      const matchesCategory = selectedCategory === 'all' || note.category === selectedCategory;
-      
-      const matchesTags = selectedTags.length === 0 || 
-                         selectedTags.some(tag => note.tags.includes(tag));
-      
-      let matchesTab = true;
-      if (activeTab === 'pinned') matchesTab = note.pinned;
-      else if (activeTab === 'starred') matchesTab = note.starred;
-      else if (activeTab === 'shared') matchesTab = note.isPublic;
-      else if (activeTab === 'archived') matchesTab = note.archived;
-      
-      return matchesSearch && matchesCategory && matchesTags && matchesTab;
-    })
-    .sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case 'title':
-          comparison = a.title.localeCompare(b.title);
-          break;
-        case 'created':
-          comparison = a.createdAt.getTime() - b.createdAt.getTime();
-          break;
-        case 'category':
-          comparison = a.category.localeCompare(b.category);
-          break;
-        case 'updated':
-        default:
-          comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
-          break;
-      }
-      
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
-
-  const handleSelectNote = (note: Note) => {
-    setActiveNote(note);
-    setIsEditing(false);
-  };
-
-  const handleEditNote = () => {
-    if (!activeNote) return;
-    setNewNoteTitle(activeNote.title);
-    setNewNoteContent(activeNote.content);
-    setNewNoteCategory(activeNote.category);
-    setNewNoteColor(activeNote.color);
-    setIsEditing(true);
-  };
-
-  const handleSaveEdit = () => {
-    if (!activeNote) return;
-    
-    const wordCount = calculateWordCount(newNoteContent);
-    const readingTime = calculateReadingTime(newNoteContent);
-    
-    const updatedNotes = notes.map(note => 
-      note.id === activeNote.id 
-        ? { 
-            ...note, 
-            title: newNoteTitle, 
-            content: newNoteContent,
-            category: newNoteCategory,
-            color: newNoteColor,
-            updatedAt: new Date(),
-            wordCount,
-            readingTime,
-            version: note.version + 1,
-            lastEditedBy: 'current.user'
-          }
-        : note
-    );
-    
-    setNotes(updatedNotes);
-    setActiveNote({
-      ...activeNote,
-      title: newNoteTitle,
-      content: newNoteContent,
-      category: newNoteCategory,
-      color: newNoteColor,
-      updatedAt: new Date(),
-      wordCount,
-      readingTime,
-      version: activeNote.version + 1,
-      lastEditedBy: 'current.user'
-    });
-    setIsEditing(false);
-    toast.success('Note updated successfully');
-  };
-
-  const handleCreateNote = () => {
-    const wordCount = calculateWordCount(newNoteContent);
-    const readingTime = calculateReadingTime(newNoteContent);
-    
+  // Handlers
+  const handleCreateNote = useCallback((type: Note['type'] = 'text') => {
     const newNote: Note = {
-      id: Date.now().toString(),
-      title: newNoteTitle || 'Untitled Note',
-      content: newNoteContent || '',
+      id: `note_${Date.now()}`,
+      title: 'Untitled Note',
+      content: '',
+      type,
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
       pinned: false,
       starred: false,
       archived: false,
-      category: newNoteCategory,
-      color: newNoteColor,
+      category: 'Personal',
+      color: 'bg-blue-100',
       collaborators: [],
       isPublic: false,
-      wordCount,
-      readingTime,
+      wordCount: 0,
+      readingTime: 0,
       attachments: [],
       reminders: [],
       version: 1,
-      lastEditedBy: 'current.user'
+      lastEditedBy: 'Current User',
+      properties: {},
+      permissions: [{ userId: 'current', role: 'owner', grantedAt: new Date() }],
+      aiGenerated: false,
+      views: [
+        {
+          id: 'default',
+          name: 'Default',
+          type: 'list',
+          filters: [],
+          sorts: [],
+          columns: []
+        }
+      ],
+      currentView: 'default'
     };
-    
-    setNotes([newNote, ...notes]);
-    setNewNoteTitle('');
-    setNewNoteContent('');
-    setNewNoteCategory('personal');
-    setNewNoteColor('bg-white');
-    setIsCreateDialogOpen(false);
+
+    setNotes(prev => [newNote, ...prev]);
+    setActiveNote(newNote);
     toast.success('Note created successfully');
-  };
+  }, []);
 
-  const handleCreateFromTemplate = (template: NoteTemplate) => {
-    const wordCount = calculateWordCount(template.content);
-    const readingTime = calculateReadingTime(template.content);
-    
-    const newNote: Note = {
-      id: Date.now().toString(),
-      title: template.name,
-      content: template.content,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      tags: [...template.tags],
-      pinned: false,
-      starred: false,
-      archived: false,
-      category: template.category,
-      color: 'bg-white',
-      collaborators: [],
-      isPublic: false,
-      wordCount,
-      readingTime,
-      attachments: [],
-      reminders: [],
-      version: 1,
-      lastEditedBy: 'current.user'
-    };
-    
-    setNotes([newNote, ...notes]);
-    setShowTemplates(false);
-    toast.success(`Note created from ${template.name} template`);
-  };
-
-  const handleDeleteNote = (noteId: string) => {
+  const handleDeleteNote = useCallback((noteId: string) => {
     setNotes(prev => prev.filter(note => note.id !== noteId));
     if (activeNote?.id === noteId) {
       setActiveNote(null);
     }
     toast.success('Note deleted');
-  };
+  }, [activeNote]);
 
-  const handleTogglePin = (noteId: string) => {
+  const handleUpdateNote = useCallback((noteId: string, updates: Partial<Note>) => {
+    setNotes(prev => prev.map(note => 
+      note.id === noteId 
+        ? { ...note, ...updates, updatedAt: new Date(), version: note.version + 1 }
+        : note
+    ));
+    
+    if (activeNote?.id === noteId) {
+      setActiveNote(prev => prev ? { ...prev, ...updates, updatedAt: new Date(), version: prev.version + 1 } : null);
+    }
+  }, [activeNote]);
+
+  const handleTogglePin = useCallback((noteId: string) => {
     setNotes(prev => prev.map(note => 
       note.id === noteId ? { ...note, pinned: !note.pinned } : note
     ));
-    
-    const note = notes.find(n => n.id === noteId);
-    const action = note?.pinned ? 'unpinned' : 'pinned';
-    toast.success(`Note ${action}`);
-  };
+    toast.success('Note pin status updated');
+  }, []);
 
-  const handleToggleStar = (noteId: string) => {
+  const handleToggleStar = useCallback((noteId: string) => {
     setNotes(prev => prev.map(note => 
       note.id === noteId ? { ...note, starred: !note.starred } : note
     ));
-    
-    const note = notes.find(n => n.id === noteId);
-    const action = note?.starred ? 'removed from favorites' : 'added to favorites';
-    toast.success(`Note ${action}`);
-  };
+    toast.success('Note star status updated');
+  }, []);
 
-  const handleToggleArchive = (noteId: string) => {
+  const handleToggleArchive = useCallback((noteId: string) => {
     setNotes(prev => prev.map(note => 
       note.id === noteId ? { ...note, archived: !note.archived } : note
     ));
-    
+    toast.success('Note archive status updated');
+  }, []);
+
+  const handleShareNote = useCallback((noteId: string) => {
     const note = notes.find(n => n.id === noteId);
-    const action = note?.archived ? 'unarchived' : 'archived';
-    toast.success(`Note ${action}`);
-  };
-
-  const handleAddTag = (noteId: string, tag: string) => {
-    if (!tag.trim()) return;
-    
-    setNotes(prev => prev.map(note => 
-      note.id === noteId 
-        ? { ...note, tags: [...new Set([...note.tags, tag.trim()])] }
-        : note
-    ));
-    toast.success('Tag added');
-  };
-
-  const handleRemoveTag = (noteId: string, tagToRemove: string) => {
-    setNotes(prev => prev.map(note => 
-      note.id === noteId 
-        ? { ...note, tags: note.tags.filter(tag => tag !== tagToRemove) }
-        : note
-    ));
-    toast.success('Tag removed');
-  };
-
-  const handleDuplicateNote = (noteId: string) => {
-    const originalNote = notes.find(n => n.id === noteId);
-    if (!originalNote) return;
-    
-    const duplicatedNote: Note = {
-      ...originalNote,
-      id: Date.now().toString(),
-      title: `${originalNote.title} (Copy)`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      version: 1,
-      lastEditedBy: 'current.user'
-    };
-    
-    setNotes([duplicatedNote, ...notes]);
-    toast.success('Note duplicated');
-  };
-
-  const handleExportNote = (noteId: string) => {
-    const note = notes.find(n => n.id === noteId);
-    if (!note) return;
-    
-    const exportData = {
-      title: note.title,
-      content: note.content,
-      tags: note.tags,
-      category: note.category,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt
-    };
-    
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${note.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    toast.success('Note exported');
-  };
-
-  const handleShareNote = (noteId: string) => {
-    const note = notes.find(n => n.id === noteId);
-    if (!note) return;
-    
-    setNotes(prev => prev.map(n => 
-      n.id === noteId ? { ...n, isPublic: !n.isPublic } : n
-    ));
-    
-    const action = note.isPublic ? 'made private' : 'shared publicly';
-    toast.success(`Note ${action}`);
-  };
-
-  const formatText = (format: string) => {
-    if (!editorRef.current) return;
-    
-    const textarea = editorRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end);
-    
-    let formattedText = '';
-    
-    switch (format) {
-      case 'bold':
-        formattedText = `**${selectedText}**`;
-        break;
-      case 'italic':
-        formattedText = `*${selectedText}*`;
-        break;
-      case 'underline':
-        formattedText = `<u>${selectedText}</u>`;
-        break;
-      case 'heading':
-        formattedText = `## ${selectedText}`;
-        break;
-      case 'list':
-        formattedText = `- ${selectedText}`;
-        break;
-      case 'orderedList':
-        formattedText = `1. ${selectedText}`;
-        break;
-      case 'quote':
-        formattedText = `> ${selectedText}`;
-        break;
-      case 'code':
-        formattedText = `\`${selectedText}\``;
-        break;
-      default:
-        return;
+    if (note) {
+      const shareUrl = `${window.location.origin}/notes/${noteId}`;
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('Share link copied to clipboard');
     }
-    
-    const newContent = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
-    setNewNoteContent(newContent);
-    
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + formattedText.length, start + formattedText.length);
-    }, 0);
-  };
+  }, [notes]);
 
-  const insertTable = () => {
-    const tableMarkdown = '\n| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| Row 1    | Data     | Data     |\n| Row 2    | Data     | Data     |\n\n';
-    setNewNoteContent(prev => prev + tableMarkdown);
-  };
+  const handleExportNote = useCallback((noteId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      const dataStr = JSON.stringify(note, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${note.title}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success('Note exported successfully');
+    }
+  }, [notes]);
 
-  const getAllTags = () => {
-    const allTags = notes.flatMap(note => note.tags);
-    return [...new Set(allTags)].sort();
-  };
+  const handleDuplicateNote = useCallback((noteId: string) => {
+    const originalNote = notes.find(n => n.id === noteId);
+    if (originalNote) {
+      const duplicatedNote: Note = {
+        ...originalNote,
+        id: `note_${Date.now()}`,
+        title: `${originalNote.title} (Copy)`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        version: 1
+      };
+      setNotes(prev => [duplicatedNote, ...prev]);
+      toast.success('Note duplicated successfully');
+    }
+  }, [notes]);
 
-  const getColorOptions = () => [
-    { value: 'bg-white', label: 'White', color: 'bg-white' },
-    { value: 'bg-red-50', label: 'Red', color: 'bg-red-50' },
-    { value: 'bg-orange-50', label: 'Orange', color: 'bg-orange-50' },
-    { value: 'bg-yellow-50', label: 'Yellow', color: 'bg-yellow-50' },
-    { value: 'bg-green-50', label: 'Green', color: 'bg-green-50' },
-    { value: 'bg-blue-50', label: 'Blue', color: 'bg-blue-50' },
-    { value: 'bg-indigo-50', label: 'Indigo', color: 'bg-indigo-50' },
-    { value: 'bg-purple-50', label: 'Purple', color: 'bg-purple-50' },
-    { value: 'bg-pink-50', label: 'Pink', color: 'bg-pink-50' }
-  ];
+  // Loading component
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
+
+  // Error component
+  const ErrorMessage = ({ message }: { message: string }) => (
+    <div className="flex items-center justify-center p-8 text-red-600">
+      <AlertCircle className="w-5 h-5 mr-2" />
+      {message}
+    </div>
+  );
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <div className="border-b bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold">Notes</h1>
-            <div className="flex gap-2">
-              <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-                <DialogTrigger asChild>
+            <div className="flex items-center space-x-2">
+              <Button onClick={() => handleCreateNote('text')} size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                New Note
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <FileText className="h-4 w-4 mr-1" />
-                    Templates
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create
                   </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Note Templates</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                    {NOTE_TEMPLATES.map((template) => (
-                      <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xl">{template.icon}</span>
-                            <div>
-                              <CardTitle className="text-lg">{template.name}</CardTitle>
-                              <p className="text-sm text-muted-foreground">{template.description}</p>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {template.tags.map((tag, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">{tag}</Badge>
-                            ))}
-                          </div>
-                          <Button 
-                            onClick={() => handleCreateFromTemplate(template)}
-                            className="w-full"
-                            size="sm"
-                          >
-                            Use Template
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </DialogContent>
-              </Dialog>
-              
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    New
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Create New Note</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Title</Label>
-                      <Input 
-                        id="title" 
-                        placeholder="Enter note title" 
-                        value={newNoteTitle}
-                        onChange={(e) => setNewNoteTitle(e.target.value)}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="category">Category</Label>
-                        <Select value={newNoteCategory} onValueChange={setNewNoteCategory}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{category.icon}</span>
-                                  <span>{category.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="color">Color</Label>
-                        <Select value={newNoteColor} onValueChange={setNewNoteColor}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getColorOptions().map((color) => (
-                              <SelectItem key={color.value} value={color.value}>
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-4 h-4 rounded border ${color.color}`} />
-                                  <span>{color.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="content">Content</Label>
-                      <Textarea 
-                        id="content" 
-                        placeholder="Start writing your note..."
-                        value={newNoteContent}
-                        onChange={(e) => setNewNoteContent(e.target.value)}
-                        className="min-h-[200px]"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreateNote}>Create Note</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => handleCreateNote('text')}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Text Note
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('database')}>
+                    <Database className="w-4 h-4 mr-2" />
+                    Database
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('calendar')}>
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Calendar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('kanban')}>
+                    <Trello className="w-4 h-4 mr-2" />
+                    Kanban Board
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('timeline')}>
+                    <Activity className="w-4 h-4 mr-2" />
+                    Timeline
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('mindmap')}>
+                    <Brain className="w-4 h-4 mr-2" />
+                    Mind Map
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('whiteboard')}>
+                    <Palette className="w-4 h-4 mr-2" />
+                    Whiteboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('presentation')}>
+                    <Presentation className="w-4 h-4 mr-2" />
+                    Presentation
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('form')}>
+                    <FormInput className="w-4 h-4 mr-2" />
+                    Form
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateNote('workflow')}>
+                    <Workflow className="w-4 h-4 mr-2" />
+                    Workflow
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="search"
-              placeholder="Search notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
-
-        {/* Filters and Controls */}
-        <div className="p-4 border-b border-gray-200 space-y-4">
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-              <TabsTrigger value="pinned" className="text-xs">Pinned</TabsTrigger>
-              <TabsTrigger value="starred" className="text-xs">Starred</TabsTrigger>
-              <TabsTrigger value="shared" className="text-xs">Shared</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          {/* Categories */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Categories</Label>
-            <div className="space-y-1">
-              <button
-                onClick={() => setSelectedCategory('all')}
-                className={`w-full text-left px-2 py-1 rounded text-sm transition-colors ${
-                  selectedCategory === 'all' ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'
-                }`}
-              >
-                All Categories ({notes.filter(n => !n.archived || showArchived).length})
-              </button>
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`w-full text-left px-2 py-1 rounded text-sm transition-colors flex items-center justify-between ${
-                    selectedCategory === category.id ? category.color : 'hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span>{category.icon}</span>
-                    <span>{category.name}</span>
-                  </div>
-                  <span className="text-xs opacity-70">({category.count})</span>
-                </button>
-              ))}
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 w-64"
+              />
             </div>
-          </div>
-          
-          {/* View Controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-              >
-                <Grid2X2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-              >
-                <Rows3 className="h-4 w-4" />
-              </Button>
-            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+            >
+              {viewMode === 'list' ? <List className="w-4 h-4" /> : <Grid3X3 className="w-4 h-4" />}
+            </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <Filter className="h-4 w-4" />
+                <Button variant="outline" size="sm">
+                  <Filter className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent>
                 <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
                   <DropdownMenuRadioItem value="updated">Last Updated</DropdownMenuRadioItem>
@@ -775,306 +589,131 @@ const Notes = () => {
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="category">Category</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuRadioGroup value={sortOrder} onValueChange={(value) => setSortOrder(value as any)}>
-                  <DropdownMenuRadioItem value="desc">Descending</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="asc">Ascending</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={showArchived}
-                  onCheckedChange={setShowArchived}
-                >
-                  Show Archived
-                </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
+      </div>
 
-        {/* Notes List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {filteredNotes.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No notes found</p>
-              <p className="text-sm">
-                {searchQuery ? 'Try a different search term' : 'Create your first note to get started'}
-              </p>
-            </div>
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <Suspense fallback={<LoadingSpinner />}>
+          <NoteSidebar
+            notes={filteredNotes}
+            activeNote={activeNote}
+            onNoteSelect={setActiveNote}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onTogglePin={handleTogglePin}
+            onToggleStar={handleToggleStar}
+            onToggleArchive={handleToggleArchive}
+            onDeleteNote={handleDeleteNote}
+            onShareNote={handleShareNote}
+            onExportNote={handleExportNote}
+            onDuplicateNote={handleDuplicateNote}
+          />
+        </Suspense>
+
+        {/* Editor Area */}
+        <div className="flex-1 flex flex-col">
+          {activeNote ? (
+            <>
+              {/* Toolbar */}
+              <Suspense fallback={<LoadingSpinner />}>
+                <NoteToolbar
+                  note={activeNote}
+                  onUpdateNote={handleUpdateNote}
+                  onTogglePin={handleTogglePin}
+                  onToggleStar={handleToggleStar}
+                  onToggleArchive={handleToggleArchive}
+                  onShareNote={handleShareNote}
+                  onExportNote={handleExportNote}
+                  onDuplicateNote={handleDuplicateNote}
+                  onDeleteNote={handleDeleteNote}
+                />
+              </Suspense>
+
+              {/* Editor */}
+              <div className="flex-1 overflow-auto">
+                <Suspense fallback={<LoadingSpinner />}>
+                  {activeNote.type === 'text' && (
+                    <RichTextEditor
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'database' && (
+                    <NoteDatabase
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'calendar' && (
+                    <NoteCalendar
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'kanban' && (
+                    <NoteKanban
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'timeline' && (
+                    <NoteTimeline
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'mindmap' && (
+                    <NoteMindmap
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'whiteboard' && (
+                    <NoteWhiteboard
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'presentation' && (
+                    <NotePresentation
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'form' && (
+                    <NoteForms
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                  {activeNote.type === 'workflow' && (
+                    <NoteWorkflows
+                      note={activeNote}
+                      onUpdateNote={handleUpdateNote}
+                    />
+                  )}
+                </Suspense>
+              </div>
+            </>
           ) : (
-            filteredNotes.map((note) => (
-              <Card 
-                key={note.id} 
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  activeNote?.id === note.id ? 'ring-2 ring-blue-500' : ''
-                } ${note.color}`}
-                onClick={() => handleSelectNote(note)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        {note.pinned && <Pin className="h-3 w-3 text-orange-500" />}
-                        {note.starred && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
-                        {note.isPublic && <Users className="h-3 w-3 text-green-500" />}
-                        {note.archived && <Archive className="h-3 w-3 text-gray-500" />}
-                      </div>
-                      <CardTitle className="text-sm font-medium truncate">{note.title}</CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {format(note.updatedAt, 'MMM d, yyyy')}
-                      </p>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <MoreHorizontal className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditNote(); }}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateNote(note.id); }}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicate
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleTogglePin(note.id); }}>
-                          <Pin className="h-4 w-4 mr-2" />
-                          {note.pinned ? 'Unpin' : 'Pin'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleStar(note.id); }}>
-                          <Star className="h-4 w-4 mr-2" />
-                          {note.starred ? 'Remove from favorites' : 'Add to favorites'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareNote(note.id); }}>
-                          <Share className="h-4 w-4 mr-2" />
-                          {note.isPublic ? 'Make Private' : 'Share'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExportNote(note.id); }}>
-                          <Download className="h-4 w-4 mr-2" />
-                          Export
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleArchive(note.id); }}>
-                          <Archive className="h-4 w-4 mr-2" />
-                          {note.archived ? 'Unarchive' : 'Archive'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                    {note.content.substring(0, 100)}...
-                  </p>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {note.tags.slice(0, 3).map((tag, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">{tag}</Badge>
-                    ))}
-                    {note.tags.length > 3 && (
-                      <Badge variant="outline" className="text-xs">+{note.tags.length - 3}</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{note.wordCount} words</span>
-                    <span>{note.readingTime} min read</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <FileText className="w-16 h-16 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No note selected</h3>
+                <p className="text-sm">Select a note from the sidebar or create a new one</p>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {activeNote ? (
-          <>
-            {/* Note Header */}
-            <div className="bg-white border-b border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex-1">
-                  <h1 className="text-2xl font-bold mb-2">{activeNote.title}</h1>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>Created {format(activeNote.createdAt, 'MMM d, yyyy')}</span>
-                    <span>Updated {format(activeNote.updatedAt, 'MMM d, yyyy')}</span>
-                    <span>{activeNote.wordCount} words</span>
-                    <span>{activeNote.readingTime} min read</span>
-                    <span>v{activeNote.version}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleEditNote}>
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleDuplicateNote(activeNote.id)}>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExportNote(activeNote.id)}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleShareNote(activeNote.id)}>
-                        <Share className="h-4 w-4 mr-2" />
-                        {activeNote.isPublic ? 'Make Private' : 'Share'}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleToggleArchive(activeNote.id)}>
-                        <Archive className="h-4 w-4 mr-2" />
-                        {activeNote.archived ? 'Unarchive' : 'Archive'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteNote(activeNote.id)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-              
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2">
-                {activeNote.tags.map((tag, idx) => (
-                  <Badge key={idx} variant="outline" className="flex items-center gap-1">
-                    <Hash className="h-3 w-3" />
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Note Content */}
-            <div className="flex-1 overflow-y-auto">
-              {isEditing ? (
-                <div className="h-full flex flex-col">
-                  {/* Editor Toolbar */}
-                  <div className="bg-white border-b border-gray-200 p-2">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Button variant="ghost" size="sm" onClick={() => formatText('bold')}>
-                        <Bold className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => formatText('italic')}>
-                        <Italic className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => formatText('underline')}>
-                        <Underline className="h-4 w-4" />
-                      </Button>
-                      <Separator orientation="vertical" className="h-6" />
-                      <Button variant="ghost" size="sm" onClick={() => formatText('heading')}>
-                        <Heading2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => formatText('quote')}>
-                        <Quote className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => formatText('code')}>
-                        <Code className="h-4 w-4" />
-                      </Button>
-                      <Separator orientation="vertical" className="h-6" />
-                      <Button variant="ghost" size="sm" onClick={() => formatText('list')}>
-                        <List className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => formatText('orderedList')}>
-                        <ListOrdered className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={insertTable}>
-                        <Table className="h-4 w-4" />
-                      </Button>
-                      <Separator orientation="vertical" className="h-6" />
-                      <Button variant="ghost" size="sm">
-                        <ImageIcon className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Paperclip className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Link className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {/* Editor */}
-                  <div className="flex-1 p-4">
-                    <div className="space-y-4">
-                      <Input
-                        value={newNoteTitle}
-                        onChange={(e) => setNewNoteTitle(e.target.value)}
-                        className="text-2xl font-bold border-none shadow-none p-0 focus-visible:ring-0"
-                        placeholder="Note title..."
-                      />
-                      <Textarea
-                        ref={editorRef}
-                        value={newNoteContent}
-                        onChange={(e) => setNewNoteContent(e.target.value)}
-                        className="min-h-[500px] border-none shadow-none resize-none focus-visible:ring-0"
-                        placeholder="Start writing..."
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Editor Footer */}
-                  <div className="bg-white border-t border-gray-200 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{calculateWordCount(newNoteContent)} words</span>
-                        <span>{calculateReadingTime(newNoteContent)} min read</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => setIsEditing(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleSaveEdit}>
-                          <Save className="h-4 w-4 mr-1" />
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 max-w-4xl mx-auto">
-                  <div className="prose prose-lg max-w-none">
-                    <pre className="whitespace-pre-wrap font-sans">{activeNote.content}</pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <FileText className="h-24 w-24 mx-auto mb-6 text-gray-300" />
-              <h2 className="text-2xl font-semibold text-gray-600 mb-2">Select a note to view</h2>
-              <p className="text-gray-500 mb-6">Choose a note from the sidebar or create a new one</p>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Note
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Error Display */}
+      {error && <ErrorMessage message={error} />}
     </div>
   );
 };
