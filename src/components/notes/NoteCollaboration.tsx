@@ -1,16 +1,39 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    CheckCircle,
+    Copy,
+    Eye,
     MessageSquare,
-    Trash2,
+    MoreHorizontal,
+    RotateCcw,
+    Save,
+    Send,
+    Share,
     UserPlus,
     Users
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+
+interface NoteCollaborationProps {
+  note: any;
+  onUpdateNote: (noteId: string, updates: any) => void;
+}
 
 interface Collaborator {
   id: string;
@@ -18,20 +41,34 @@ interface Collaborator {
   email: string;
   avatar: string;
   role: 'owner' | 'editor' | 'viewer' | 'commenter';
-  joinedAt: Date;
   lastActive: Date;
+  isOnline: boolean;
+  isTyping: boolean;
+  cursorPosition?: { x: number; y: number };
 }
 
 interface Comment {
   id: string;
-  author: Collaborator;
+  author: string;
+  authorAvatar: string;
   content: string;
-  createdAt: Date;
-  resolved: boolean;
+  timestamp: Date;
   replies: Comment[];
+  resolved: boolean;
+  position?: { x: number; y: number };
 }
 
-const NoteCollaboration: React.FC = () => {
+interface Version {
+  id: string;
+  version: number;
+  author: string;
+  timestamp: Date;
+  changes: string[];
+  content: string;
+}
+
+const NoteCollaboration: React.FC<NoteCollaborationProps> = ({ note, onUpdateNote }) => {
+  const [activeTab, setActiveTab] = useState('collaborators');
   const [collaborators, setCollaborators] = useState<Collaborator[]>([
     {
       id: '1',
@@ -39,8 +76,9 @@ const NoteCollaboration: React.FC = () => {
       email: 'john@example.com',
       avatar: '',
       role: 'owner',
-      joinedAt: new Date('2023-01-15'),
-      lastActive: new Date()
+      lastActive: new Date(),
+      isOnline: true,
+      isTyping: false
     },
     {
       id: '2',
@@ -48,283 +86,564 @@ const NoteCollaboration: React.FC = () => {
       email: 'jane@example.com',
       avatar: '',
       role: 'editor',
-      joinedAt: new Date('2023-02-20'),
-      lastActive: new Date()
+      lastActive: new Date(Date.now() - 300000),
+      isOnline: false,
+      isTyping: false
     },
     {
       id: '3',
-      name: 'Bob Johnson',
-      email: 'bob@example.com',
+      name: 'Mike Wilson',
+      email: 'mike@example.com',
       avatar: '',
-      role: 'viewer',
-      joinedAt: new Date('2023-03-10'),
-      lastActive: new Date()
+      role: 'commenter',
+      lastActive: new Date(Date.now() - 600000),
+      isOnline: true,
+      isTyping: true
     }
   ]);
-
+  
   const [comments, setComments] = useState<Comment[]>([
     {
       id: '1',
-      author: collaborators[1],
-      content: 'Great work on this section! Should we add more details about the implementation?',
-      createdAt: new Date('2023-05-15'),
-      resolved: false,
-      replies: []
+      author: 'Jane Smith',
+      authorAvatar: '',
+      content: 'Great work on this section! Consider adding more examples.',
+      timestamp: new Date(Date.now() - 3600000),
+      replies: [],
+      resolved: false
     },
     {
       id: '2',
-      author: collaborators[2],
-      content: 'I think we need to clarify the requirements here.',
-      createdAt: new Date('2023-05-14'),
-      resolved: true,
+      author: 'Mike Wilson',
+      authorAvatar: '',
+      content: 'I think we should restructure this part for better clarity.',
+      timestamp: new Date(Date.now() - 7200000),
       replies: [
         {
-          id: '2.1',
-          author: collaborators[0],
-          content: 'Agreed, I\'ll update that section.',
-          createdAt: new Date('2023-05-14'),
-          resolved: false,
-          replies: []
+          id: '2-1',
+          author: 'John Doe',
+          authorAvatar: '',
+          content: 'Agreed! Let me work on that.',
+          timestamp: new Date(Date.now() - 3600000),
+          replies: [],
+          resolved: false
         }
-      ]
+      ],
+      resolved: true
     }
   ]);
-
-  const [newComment, setNewComment] = useState('');
-  const [showAddCollaborator, setShowAddCollaborator] = useState(false);
-  const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
-  const [newCollaboratorRole, setNewCollaboratorRole] = useState<'editor' | 'viewer' | 'commenter'>('viewer');
-
-  const handleAddCollaborator = () => {
-    if (newCollaboratorEmail.trim()) {
-      const newCollaborator: Collaborator = {
-        id: `collab_${Date.now()}`,
-        name: newCollaboratorEmail.split('@')[0],
-        email: newCollaboratorEmail,
-        avatar: '',
-        role: newCollaboratorRole,
-        joinedAt: new Date(),
-        lastActive: new Date()
-      };
-      setCollaborators(prev => [...prev, newCollaborator]);
-      setNewCollaboratorEmail('');
-      setShowAddCollaborator(false);
-      toast.success('Collaborator added successfully');
+  
+  const [versions, setVersions] = useState<Version[]>([
+    {
+      id: 'v1',
+      version: 1,
+      author: 'John Doe',
+      timestamp: new Date(Date.now() - 86400000),
+      changes: ['Created note'],
+      content: 'Initial version'
+    },
+    {
+      id: 'v2',
+      version: 2,
+      author: 'Jane Smith',
+      timestamp: new Date(Date.now() - 3600000),
+      changes: ['Added introduction', 'Updated formatting'],
+      content: 'Enhanced version'
     }
-  };
+  ]);
+  
+  const [newComment, setNewComment] = useState('');
+  const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'editor' | 'viewer' | 'commenter'>('viewer');
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
+  const [showTypingIndicator, setShowTypingIndicator] = useState(true);
+  const [showCursorPositions, setShowCursorPositions] = useState(true);
+  const [showComments, setShowComments] = useState(true);
+  const [showVersionHistory, setShowVersionHistory] = useState(true);
+  const [showCollaborationPanel, setShowCollaborationPanel] = useState(true);
+  const [isCollaborating, setIsCollaborating] = useState(true);
+  const [collaborationMode, setCollaborationMode] = useState<'real-time' | 'async'>('real-time');
+  const [permissionLevel, setPermissionLevel] = useState<'public' | 'private' | 'restricted'>('private');
+  const [allowComments, setAllowComments] = useState(true);
+  const [allowEditing, setAllowEditing] = useState(true);
+  const [allowSharing, setAllowSharing] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [autoSave, setAutoSave] = useState(true);
+  const [conflictResolution, setConflictResolution] = useState<'manual' | 'auto'>('auto');
+  const [syncFrequency, setSyncFrequency] = useState<'realtime' | '5s' | '10s' | '30s'>('realtime');
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [dataUsage, setDataUsage] = useState<'minimal' | 'normal' | 'high'>('normal');
+  const [privacyLevel, setPrivacyLevel] = useState<'public' | 'team' | 'private'>('team');
+  const [auditLog, setAuditLog] = useState(true);
+  const [activityTracking, setActivityTracking] = useState(true);
+  const [performanceMode, setPerformanceMode] = useState<'balanced' | 'performance' | 'quality'>('balanced');
 
-  const handleRemoveCollaborator = (collaboratorId: string) => {
+  // Add collaborator
+  const addCollaborator = useCallback(() => {
+    if (!newCollaboratorEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+
+    const newCollaborator: Collaborator = {
+      id: `collab-${Date.now()}`,
+      name: newCollaboratorEmail.split('@')[0],
+      email: newCollaboratorEmail,
+      avatar: '',
+      role: selectedRole,
+      lastActive: new Date(),
+      isOnline: false,
+      isTyping: false
+    };
+
+    setCollaborators(prev => [...prev, newCollaborator]);
+    setNewCollaboratorEmail('');
+    setShowInviteDialog(false);
+    toast.success(`Invited ${newCollaboratorEmail} as ${selectedRole}`);
+  }, [newCollaboratorEmail, selectedRole]);
+
+  // Remove collaborator
+  const removeCollaborator = useCallback((collaboratorId: string) => {
     setCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
     toast.success('Collaborator removed');
-  };
+  }, []);
 
-  const handleAddComment = () => {
-    if (newComment.trim()) {
-      const comment: Comment = {
-        id: `comment_${Date.now()}`,
-        author: collaborators[0], // Current user
-        content: newComment,
-        createdAt: new Date(),
-        resolved: false,
-        replies: []
-      };
-      setComments(prev => [comment, ...prev]);
-      setNewComment('');
-      toast.success('Comment added');
-    }
-  };
-
-  const handleResolveComment = (commentId: string) => {
-    setComments(prev => prev.map(c => 
-      c.id === commentId ? { ...c, resolved: !c.resolved } : c
+  // Change collaborator role
+  const changeRole = useCallback((collaboratorId: string, newRole: Collaborator['role']) => {
+    setCollaborators(prev => prev.map(c => 
+      c.id === collaboratorId ? { ...c, role: newRole } : c
     ));
-  };
+    toast.success('Role updated');
+  }, []);
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'owner':
-        return 'bg-purple-100 text-purple-800';
-      case 'editor':
-        return 'bg-blue-100 text-blue-800';
-      case 'viewer':
-        return 'bg-green-100 text-green-800';
-      case 'commenter':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  // Add comment
+  const addComment = useCallback(() => {
+    if (!newComment.trim()) {
+      toast.error('Please enter a comment');
+      return;
     }
+
+    const comment: Comment = {
+      id: `comment-${Date.now()}`,
+      author: 'Current User',
+      authorAvatar: '',
+      content: newComment,
+      timestamp: new Date(),
+      replies: [],
+      resolved: false
+    };
+
+    setComments(prev => [...prev, comment]);
+    setNewComment('');
+    toast.success('Comment added');
+  }, [newComment]);
+
+  // Reply to comment
+  const replyToComment = useCallback((commentId: string, replyContent: string) => {
+    const reply: Comment = {
+      id: `reply-${Date.now()}`,
+      author: 'Current User',
+      authorAvatar: '',
+      content: replyContent,
+      timestamp: new Date(),
+      replies: [],
+      resolved: false
+    };
+
+    setComments(prev => prev.map(comment => 
+      comment.id === commentId 
+        ? { ...comment, replies: [...comment.replies, reply] }
+        : comment
+    ));
+    toast.success('Reply added');
+  }, []);
+
+  // Resolve comment
+  const resolveComment = useCallback((commentId: string) => {
+    setComments(prev => prev.map(comment => 
+      comment.id === commentId ? { ...comment, resolved: true } : comment
+    ));
+    toast.success('Comment resolved');
+  }, []);
+
+  // Create share link
+  const createShareLink = useCallback(() => {
+    const link = `${window.location.origin}/notes/${note.id}?share=true`;
+    setShareLink(link);
+    setIsSharing(true);
+    navigator.clipboard.writeText(link);
+    toast.success('Share link copied to clipboard');
+  }, [note.id]);
+
+  // Save version
+  const saveVersion = useCallback(() => {
+    const version: Version = {
+      id: `v${versions.length + 1}`,
+      version: versions.length + 1,
+      author: 'Current User',
+      timestamp: new Date(),
+      changes: ['Manual save'],
+      content: note.content
+    };
+
+    setVersions(prev => [...prev, version]);
+    toast.success('Version saved');
+  }, [versions.length, note.content]);
+
+  // Restore version
+  const restoreVersion = useCallback((version: Version) => {
+    onUpdateNote(note.id, {
+      content: version.content,
+      restoredFromVersion: version.version,
+      restoredAt: new Date()
+    });
+    toast.success(`Restored to version ${version.version}`);
+  }, [note.id, onUpdateNote]);
+
+  // Format timestamp
+  const formatTimestamp = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Collaboration</h2>
-          <p className="text-gray-600">Manage collaborators and comments</p>
+    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="p-4 border-b bg-white dark:bg-gray-800">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <Users className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold">Collaboration</h2>
+            <Badge variant={isCollaborating ? "default" : "secondary"}>
+              {isCollaborating ? 'Active' : 'Inactive'}
+            </Badge>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowInviteDialog(true)}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Invite
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={createShareLink}
+            >
+              <Share className="h-4 w-4 mr-2" />
+              Share
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button onClick={() => setShowAddCollaborator(true)}>
-            <UserPlus className="w-4 h-4 mr-2" />
-            Add Collaborator
-          </Button>
+
+        {/* Collaboration Status */}
+        <div className="flex items-center space-x-4 text-sm">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span>{collaborators.filter(c => c.isOnline).length} online</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <MessageSquare className="h-4 w-4" />
+            <span>{comments.length} comments</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RotateCcw className="h-4 w-4" />
+            <span>{versions.length} versions</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Collaborators */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Users className="w-5 h-5" />
-              <span>Collaborators ({collaborators.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {collaborators.map((collaborator) => (
-                <div key={collaborator.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <Avatar>
-                      <AvatarImage src={collaborator.avatar} />
-                      <AvatarFallback>
-                        {collaborator.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium text-sm">{collaborator.name}</div>
-                      <div className="text-xs text-gray-500">{collaborator.email}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={`text-xs ${getRoleColor(collaborator.role)}`}>
-                      {collaborator.role}
-                    </Badge>
-                    {collaborator.role !== 'owner' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveCollaborator(collaborator.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="collaborators">Collaborators</TabsTrigger>
+            <TabsTrigger value="comments">Comments</TabsTrigger>
+            <TabsTrigger value="versions">Versions</TabsTrigger>
+          </TabsList>
 
-        {/* Comments */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5" />
-              <span>Comments ({comments.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Add comment */}
-              <div className="flex space-x-2">
-                <Input
-                  placeholder="Add a comment..."
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                />
-                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
-                  Add
-                </Button>
-              </div>
-
-              {/* Comments list */}
-              <div className="space-y-3">
-                {comments.map((comment) => (
-                  <div key={comment.id} className={`p-3 border rounded-lg ${comment.resolved ? 'bg-gray-50' : 'bg-white'}`}>
-                    <div className="flex items-start space-x-3">
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src={comment.author.avatar} />
-                        <AvatarFallback>
-                          {comment.author.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="font-medium text-sm">{comment.author.name}</span>
-                          <span className="text-xs text-gray-500">
-                            {comment.createdAt.toLocaleDateString()}
-                          </span>
-                          {comment.resolved && (
-                            <Badge variant="secondary" className="text-xs">
-                              Resolved
-                            </Badge>
-                          )}
+          <TabsContent value="collaborators" className="p-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-4">
+                {collaborators.map((collaborator) => (
+                  <Card key={collaborator.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <Avatar>
+                            <AvatarImage src={collaborator.avatar} />
+                            <AvatarFallback>{collaborator.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{collaborator.name}</span>
+                              <Badge variant="outline">{collaborator.role}</Badge>
+                              {collaborator.isOnline && (
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">{collaborator.email}</p>
+                            <p className="text-xs text-gray-400">
+                              Last active: {formatTimestamp(collaborator.lastActive)}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm">{comment.content}</p>
-                        <div className="flex items-center space-x-2 mt-2">
+                        
+                        <div className="flex items-center space-x-2">
+                          {collaborator.isTyping && (
+                            <span className="text-sm text-gray-500 italic">typing...</span>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => changeRole(collaborator.id, 'editor')}>
+                                Make Editor
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => changeRole(collaborator.id, 'viewer')}>
+                                Make Viewer
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => changeRole(collaborator.id, 'commenter')}>
+                                Make Commenter
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => removeCollaborator(collaborator.id)}
+                                className="text-red-600"
+                              >
+                                Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="comments" className="p-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-4">
+                {/* Add Comment */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex space-x-2">
+                      <Textarea
+                        placeholder="Add a comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="flex-1"
+                        rows={2}
+                      />
+                      <Button onClick={addComment} disabled={!newComment.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Comments List */}
+                {comments.map((comment) => (
+                  <Card key={comment.id} className={comment.resolved ? 'opacity-60' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start space-x-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={comment.authorAvatar} />
+                          <AvatarFallback>{comment.author.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <span className="font-medium">{comment.author}</span>
+                            <span className="text-sm text-gray-500">
+                              {formatTimestamp(comment.timestamp)}
+                            </span>
+                            {comment.resolved && (
+                              <Badge variant="secondary">Resolved</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm mb-3">{comment.content}</p>
+                          
+                          {/* Replies */}
+                          {comment.replies.length > 0 && (
+                            <div className="ml-4 space-y-2">
+                              {comment.replies.map((reply) => (
+                                <div key={reply.id} className="flex items-start space-x-2 p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarImage src={reply.authorAvatar} />
+                                    <AvatarFallback>{reply.author.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="flex items-center space-x-2">
+                                      <span className="font-medium text-sm">{reply.author}</span>
+                                      <span className="text-xs text-gray-500">
+                                        {formatTimestamp(reply.timestamp)}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm">{reply.content}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center space-x-2 mt-3">
+                            <Button size="sm" variant="outline">
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Reply
+                            </Button>
+                            {!comment.resolved && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => resolveComment(comment.id)}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Resolve
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="versions" className="p-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium">Version History</h3>
+                  <Button size="sm" onClick={saveVersion}>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Version
+                  </Button>
+                </div>
+                
+                {versions.map((version) => (
+                  <Card key={version.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="font-medium">Version {version.version}</span>
+                            <Badge variant="outline">{version.author}</Badge>
+                          </div>
+                          <p className="text-sm text-gray-500 mb-2">
+                            {formatTimestamp(version.timestamp)}
+                          </p>
+                          <div className="space-y-1">
+                            {version.changes.map((change, index) => (
+                              <p key={index} className="text-sm">• {change}</p>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
                           <Button
-                            variant="ghost"
                             size="sm"
-                            onClick={() => handleResolveComment(comment.id)}
+                            variant="outline"
+                            onClick={() => restoreVersion(version)}
                           >
-                            {comment.resolved ? 'Unresolve' : 'Resolve'}
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Restore
                           </Button>
-                          <Button variant="ghost" size="sm">
-                            Reply
+                          <Button size="sm" variant="outline">
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* Add Collaborator Dialog */}
-      {showAddCollaborator && (
+      {/* Invite Dialog */}
+      {showInviteDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96">
-            <h3 className="text-lg font-semibold mb-4">Add Collaborator</h3>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Invite Collaborator</h3>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Email</label>
+                <Label>Email Address</Label>
                 <Input
                   type="email"
-                  placeholder="Enter email address"
                   value={newCollaboratorEmail}
                   onChange={(e) => setNewCollaboratorEmail(e.target.value)}
+                  placeholder="Enter email address"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Role</label>
+                <Label>Role</Label>
                 <select
-                  value={newCollaboratorRole}
-                  onChange={(e) => setNewCollaboratorRole(e.target.value as any)}
-                  className="w-full p-2 border rounded-md"
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as any)}
+                  className="w-full p-2 border rounded"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="commenter">Commenter</option>
                   <option value="editor">Editor</option>
                 </select>
               </div>
+              <div className="flex space-x-2">
+                <Button onClick={addCollaborator} className="flex-1">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Invite
+                </Button>
+                <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
+                  Cancel
+                </Button>
+              </div>
             </div>
-            <div className="flex justify-end space-x-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => setShowAddCollaborator(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddCollaborator}
-                disabled={!newCollaboratorEmail.trim()}
-              >
-                Add
-              </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Share Dialog */}
+      {isSharing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Share Note</h3>
+            <div className="space-y-4">
+              <div>
+                <Label>Share Link</Label>
+                <Input value={shareLink} readOnly />
+              </div>
+              <div className="flex space-x-2">
+                <Button onClick={() => navigator.clipboard.writeText(shareLink)}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+                <Button variant="outline" onClick={() => setIsSharing(false)}>
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </div>

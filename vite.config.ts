@@ -1,19 +1,50 @@
-import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { visualizer } from "rollup-plugin-visualizer";
+import { defineConfig, splitVendorChunkPlugin } from "vite";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
-    port: 8080,
+    host: "localhost",
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/v1': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/docs': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
+    splitVendorChunkPlugin(),
+    visualizer({
+      filename: "dist/stats.html",
+      gzipSize: true,
+      template: "treemap",
+    }),
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react")) return "react";
+            if (id.includes("@tiptap")) return "tiptap";
+            if (id.includes("lucide-react")) return "icons";
+            return "vendor";
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

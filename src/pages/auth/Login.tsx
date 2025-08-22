@@ -1,26 +1,37 @@
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated, setUser } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -50,36 +61,44 @@ const Login: React.FC = () => {
     setLoading(true);
     
     try {
-      // Simulate API request
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Use Keycloak login
+      await login();
       
-      // In a real app, this would validate credentials with a server
-      // For demo purposes, we'll create a user object
-      const user = {
+      toast.success("Redirecting to login...");
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error("Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    
+    try {
+      // For demo purposes, create a mock user and bypass Keycloak
+      const mockUser = {
         id: Date.now().toString(),
         name: 'Demo User',
-        email: formData.email,
-        isAuthenticated: true
+        email: 'demo@example.com',
+        roles: ['user']
       };
       
-      // Store user in localStorage
-      localStorage.setItem('user', JSON.stringify(user));
+      // Store mock user in localStorage
+      localStorage.setItem('user', JSON.stringify(mockUser));
+      localStorage.setItem('tenantId', 'dev');
       
-      toast.success("Login successful! Redirecting...");
+      // Update the auth context
+      setUser(mockUser);
       
-      // Check if user has completed setup
-      const userSetup = localStorage.getItem('userSetup');
+      toast.success("Demo login successful! Redirecting...");
       
-      // Redirect based on setup status
       setTimeout(() => {
-        if (userSetup) {
-          navigate('/dashboard');
-        } else {
-          navigate('/setup');
-        }
+        navigate('/dashboard');
       }, 1000);
     } catch (error) {
-      toast.error("Invalid email or password. Please try again.");
+      toast.error("Demo login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -98,61 +117,69 @@ const Login: React.FC = () => {
             Sign in to your account to continue
           </p>
         </div>
-        
+
         <Card>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4 pt-6">
+          <CardHeader>
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription>
+              Enter your credentials to access your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  name="email" 
-                  type="email" 
-                  placeholder="john@example.com" 
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  autoComplete="email"
                   required
                 />
               </div>
-              
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link to="/forgot-password" className="text-xs text-primary underline">
-                    Forgot password?
-                  </Link>
-                </div>
-                <Input 
-                  id="password" 
-                  name="password" 
-                  type="password" 
-                  placeholder="Enter your password" 
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  autoComplete="current-password"
                   required
                 />
               </div>
-            </CardContent>
-            
-            <CardFooter className="flex flex-col">
               <Button 
                 type="submit" 
                 className="w-full" 
                 disabled={loading}
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Signing in..." : "Sign in"}
               </Button>
-              
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link to="/signup" className="underline text-primary">
-                  Sign up for free
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
+            </form>
+            
+            <div className="mt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleDemoLogin}
+                disabled={loading}
+              >
+                {loading ? "Signing in..." : "Demo Login (Skip Keycloak)"}
+              </Button>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-2">
+            <div className="text-sm text-center text-muted-foreground">
+              Don't have an account?{" "}
+              <Link to="/signup" className="text-primary hover:underline">
+                Sign up
+              </Link>
+            </div>
+          </CardFooter>
         </Card>
       </div>
     </div>

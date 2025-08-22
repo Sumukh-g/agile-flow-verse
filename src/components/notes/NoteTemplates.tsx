@@ -1,316 +1,657 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+    Calendar,
+    CheckCircle,
+    Clock,
     Copy,
-    Download,
-    MoreHorizontal,
+    FileText,
     Plus,
-    Share2,
-    Sparkles,
-    Trash2
+    Save,
+    Search,
+    Target,
+    XCircle
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  content: string;
-  tags: string[];
-  usageCount: number;
-  createdAt: Date;
-  isPublic: boolean;
-  author: string;
-  aiGenerated: boolean;
+interface NoteTemplatesProps {
+  note: any;
+  onUpdateNote: (noteId: string, updates: any) => void;
 }
 
-const NoteTemplates: React.FC = () => {
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: '1',
-      name: 'Meeting Notes',
-      description: 'Template for capturing meeting discussions and action items',
-      category: 'Work',
-      content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n1. \n2. \n3. \n\n## Discussion\n\n## Action Items\n- [ ] \n- [ ] \n- [ ] \n\n## Next Steps\n\n',
-      tags: ['Meetings', 'Work'],
-      usageCount: 45,
-      createdAt: new Date('2023-01-15'),
-      isPublic: true,
-      author: 'System',
-      aiGenerated: false
-    },
-    {
-      id: '2',
-      name: 'Project Brief',
-      description: 'Template for new project specifications and planning',
-      category: 'Work',
-      content: '# Project Brief\n\n**Project Name:** \n**Start Date:** \n**End Date:** \n\n## Objectives\n\n## Scope\n\n## Deliverables\n\n## Stakeholders\n\n## Budget\n\n## Timeline\n\n',
-      tags: ['Project', 'Planning'],
-      usageCount: 32,
-      createdAt: new Date('2023-02-20'),
-      isPublic: true,
-      author: 'System',
-      aiGenerated: false
-    },
-    {
-      id: '3',
-      name: 'Weekly Report',
-      description: 'Template for weekly status updates and progress tracking',
-      category: 'Work',
-      content: '# Weekly Report\n\n**Week of:** \n\n## Accomplishments\n\n## In Progress\n\n## Blockers\n\n## Next Week Plans\n\n',
-      tags: ['Reports', 'Weekly'],
-      usageCount: 28,
-      createdAt: new Date('2023-03-10'),
-      isPublic: true,
-      author: 'System',
-      aiGenerated: false
-    },
-    {
-      id: '4',
-      name: 'Brainstorming Session',
-      description: 'AI-generated template for creative brainstorming sessions',
-      category: 'Ideas',
-      content: '# Brainstorming Session\n\n**Topic:** \n**Date:** \n**Participants:** \n\n## Problem Statement\n\n## Ideas\n\n### Category 1\n- \n- \n- \n\n### Category 2\n- \n- \n- \n\n## Top Ideas\n1. \n2. \n3. \n\n## Next Steps\n\n',
-      tags: ['Ideas', 'Creative'],
-      usageCount: 15,
-      createdAt: new Date('2023-04-05'),
-      isPublic: true,
-      author: 'AI Assistant',
-      aiGenerated: true
-    }
-  ]);
-
-  const [selectedCategory, setSelectedCategory] = useState('all');
+const NoteTemplates: React.FC<NoteTemplatesProps> = ({ note, onUpdateNote }) => {
+  const [activeTab, setActiveTab] = useState('general');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAI, setShowAI] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [customTemplate, setCustomTemplate] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  const filteredTemplates = templates.filter(template => {
-    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesCategory = selectedCategory === 'all' || template.category === selectedCategory;
-    
-    return matchesSearch && matchesCategory;
-  });
+  // Template categories
+  const templateCategories = {
+    general: [
+      {
+        id: 'meeting-notes',
+        name: 'Meeting Notes',
+        description: 'Structured template for meeting documentation',
+        icon: FileText,
+        content: `# Meeting Notes
 
-  const handleUseTemplate = (template: Template) => {
-    // This would typically create a new note from the template
-    toast.success(`Template "${template.name}" applied successfully`);
+## Meeting Details
+- **Date:** ${new Date().toLocaleDateString()}
+- **Time:** ${new Date().toLocaleTimeString()}
+- **Location:** 
+- **Attendees:** 
+
+## Agenda
+1. 
+2. 
+3. 
+
+## Discussion Points
+### Topic 1
+- 
+
+### Topic 2
+- 
+
+## Action Items
+- [ ] 
+- [ ] 
+- [ ] 
+
+## Next Steps
+- 
+
+## Notes
+- 
+
+---
+*Generated on ${new Date().toLocaleDateString()}*`
+      },
+      {
+        id: 'project-plan',
+        name: 'Project Plan',
+        description: 'Comprehensive project planning template',
+        icon: Target,
+        content: `# Project Plan
+
+## Project Overview
+- **Project Name:** 
+- **Start Date:** 
+- **End Date:** 
+- **Project Manager:** 
+- **Stakeholders:** 
+
+## Project Goals
+1. 
+2. 
+3. 
+
+## Scope
+### In Scope
+- 
+
+### Out of Scope
+- 
+
+## Timeline
+### Phase 1: Planning
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Phase 2: Development
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Phase 3: Testing
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Phase 4: Deployment
+- [ ] 
+- [ ] 
+- [ ] 
+
+## Resources
+- **Team Members:** 
+- **Budget:** 
+- **Tools:** 
+
+## Risks & Mitigation
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|------------|
+|      |        |             |            |
+
+## Success Metrics
+- 
+- 
+- 
+
+---
+*Created on ${new Date().toLocaleDateString()}*`
+      },
+      {
+        id: 'task-list',
+        name: 'Task List',
+        description: 'Simple task management template',
+        icon: CheckCircle,
+        content: `# Task List
+
+## Priority Tasks
+### High Priority
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Medium Priority
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Low Priority
+- [ ] 
+- [ ] 
+- [ ] 
+
+## Completed Tasks
+- [x] 
+- [x] 
+
+## Notes
+- 
+
+---
+*Last updated: ${new Date().toLocaleDateString()}*`
+      }
+    ],
+    planning: [
+      {
+        id: 'daily-planner',
+        name: 'Daily Planner',
+        description: 'Daily schedule and task management',
+        icon: Calendar,
+        content: `# Daily Planner - ${new Date().toLocaleDateString()}
+
+## Today's Goals
+1. 
+2. 
+3. 
+
+## Schedule
+| Time | Activity | Status |
+|------|----------|--------|
+| 9:00 AM | | |
+| 10:00 AM | | |
+| 11:00 AM | | |
+| 12:00 PM | Lunch | |
+| 1:00 PM | | |
+| 2:00 PM | | |
+| 3:00 PM | | |
+| 4:00 PM | | |
+| 5:00 PM | | |
+
+## Tasks
+### Morning
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Afternoon
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Evening
+- [ ] 
+- [ ] 
+- [ ] 
+
+## Notes & Ideas
+- 
+
+## Tomorrow's Preparation
+- [ ] 
+- [ ] 
+
+---
+*Daily planner for ${new Date().toLocaleDateString()}*`
+      },
+      {
+        id: 'weekly-planner',
+        name: 'Weekly Planner',
+        description: 'Weekly planning and goal setting',
+        icon: Calendar,
+        content: `# Weekly Planner - Week of ${new Date().toLocaleDateString()}
+
+## Weekly Goals
+1. 
+2. 
+3. 
+
+## Daily Breakdown
+
+### Monday
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Tuesday
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Wednesday
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Thursday
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Friday
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+### Weekend
+**Focus:** 
+**Tasks:**
+- [ ] 
+- [ ] 
+- [ ] 
+
+## Weekly Review
+### Accomplishments
+- 
+
+### Challenges
+- 
+
+### Next Week's Focus
+- 
+
+---
+*Weekly planner for ${new Date().toLocaleDateString()}*`
+      },
+      {
+        id: 'monthly-planner',
+        name: 'Monthly Planner',
+        description: 'Monthly goal setting and planning',
+        icon: Calendar,
+        content: `# Monthly Planner - ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+
+## Monthly Goals
+### Primary Goals
+1. 
+2. 
+3. 
+
+### Secondary Goals
+1. 
+2. 
+3. 
+
+## Key Events & Deadlines
+| Date | Event | Notes |
+|------|-------|-------|
+| | | |
+| | | |
+| | | |
+
+## Weekly Focus Areas
+### Week 1
+- Focus: 
+- Key Tasks:
+  - [ ] 
+  - [ ] 
+
+### Week 2
+- Focus: 
+- Key Tasks:
+  - [ ] 
+  - [ ] 
+
+### Week 3
+- Focus: 
+- Key Tasks:
+  - [ ] 
+  - [ ] 
+
+### Week 4
+- Focus: 
+- Key Tasks:
+  - [ ] 
+  - [ ] 
+
+## Habit Tracking
+| Habit | Week 1 | Week 2 | Week 3 | Week 4 |
+|-------|--------|--------|--------|--------|
+| | | | | |
+| | | | | |
+
+## Monthly Review
+### Achievements
+- 
+
+### Lessons Learned
+- 
+
+### Next Month's Focus
+- 
+
+---
+*Monthly planner for ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}*`
+      }
+    ],
+    pomodoro: [
+      {
+        id: 'pomodoro-session',
+        name: 'Pomodoro Session',
+        description: 'Pomodoro technique session tracker',
+        icon: Clock,
+        content: `# Pomodoro Session - ${new Date().toLocaleDateString()}
+
+## Session Goal
+**Focus:** 
+
+## Pomodoro Blocks
+### Block 1 (25 min)
+- [ ] Start: 
+- [ ] End: 
+- [ ] Break: 
+- [ ] Notes: 
+
+### Block 2 (25 min)
+- [ ] Start: 
+- [ ] End: 
+- [ ] Break: 
+- [ ] Notes: 
+
+### Block 3 (25 min)
+- [ ] Start: 
+- [ ] End: 
+- [ ] Break: 
+- [ ] Notes: 
+
+### Block 4 (25 min)
+- [ ] Start: 
+- [ ] End: 
+- [ ] Long Break: 
+- [ ] Notes: 
+
+## Session Summary
+- **Total Focus Time:** 100 minutes
+- **Completed Tasks:** 
+- **Distractions:** 
+- **Productivity Level:** 
+
+## Next Session
+- **Focus Area:** 
+- **Prepared Tasks:** 
+
+---
+*Pomodoro session on ${new Date().toLocaleDateString()}*`
+      }
+    ],
+    habits: [
+      {
+        id: 'habit-tracker',
+        name: 'Habit Tracker',
+        description: 'Daily habit tracking template',
+        icon: Target,
+        content: `# Habit Tracker - ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+
+## Habits to Track
+| Habit | Mon | Tue | Wed | Thu | Fri | Sat | Sun | Weekly Goal |
+|-------|-----|-----|-----|-----|-----|-----|-----|-------------|
+| Exercise | □ | □ | □ | □ | □ | □ | □ | 5 days |
+| Read | □ | □ | □ | □ | □ | □ | □ | 7 days |
+| Meditate | □ | □ | □ | □ | □ | □ | □ | 7 days |
+| Drink Water | □ | □ | □ | □ | □ | □ | □ | 7 days |
+| Sleep 8h | □ | □ | □ | □ | □ | □ | □ | 6 days |
+
+## Weekly Progress
+### Week 1
+- Exercise: /5
+- Read: /7
+- Meditate: /7
+- Drink Water: /7
+- Sleep 8h: /6
+
+### Week 2
+- Exercise: /5
+- Read: /7
+- Meditate: /7
+- Drink Water: /7
+- Sleep 8h: /6
+
+### Week 3
+- Exercise: /5
+- Read: /7
+- Meditate: /7
+- Drink Water: /7
+- Sleep 8h: /6
+
+### Week 4
+- Exercise: /5
+- Read: /7
+- Meditate: /7
+- Drink Water: /7
+- Sleep 8h: /6
+
+## Monthly Summary
+- **Best Habit:** 
+- **Needs Improvement:** 
+- **Next Month's Focus:** 
+
+---
+*Habit tracker for ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}*`
+      }
+    ]
   };
 
-  const handleDuplicateTemplate = (template: Template) => {
-    const newTemplate: Template = {
-      ...template,
-      id: `template_${Date.now()}`,
-      name: `${template.name} (Copy)`,
-      usageCount: 0,
-      createdAt: new Date(),
-      author: 'Current User'
-    };
-    setTemplates(prev => [newTemplate, ...prev]);
-    toast.success('Template duplicated successfully');
-  };
+  // Apply template
+  const applyTemplate = useCallback((template: any) => {
+    setSelectedTemplate(template);
+    setShowPreview(true);
+  }, []);
 
-  const handleDeleteTemplate = (templateId: string) => {
-    setTemplates(prev => prev.filter(t => t.id !== templateId));
-    toast.success('Template deleted successfully');
-  };
+  // Use template
+  const useTemplate = useCallback((template: any) => {
+    onUpdateNote(note.id, {
+      content: template.content,
+      title: `${template.name} - ${new Date().toLocaleDateString()}`,
+      templateUsed: template.id,
+      templateAppliedAt: new Date()
+    });
+    toast.success(`Applied ${template.name} template`);
+    setShowPreview(false);
+    setSelectedTemplate(null);
+  }, [note.id, onUpdateNote]);
 
-  const generateAITemplate = async (prompt: string) => {
-    setIsGenerating(true);
-    try {
-      // Simulate AI generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const newTemplate: Template = {
-        id: `template_${Date.now()}`,
-        name: `AI Generated Template`,
-        description: `AI-generated template based on: "${prompt}"`,
-        category: 'AI Generated',
-        content: `# AI Generated Template\n\n**Generated from:** ${prompt}\n\n## Content\n\nThis is a simulated AI-generated template that would typically include relevant structure and content based on the user's prompt.\n\n## Sections\n\n### Section 1\n- \n- \n- \n\n### Section 2\n- \n- \n- \n\n## Summary\n\n`,
-        tags: ['AI Generated', 'Custom'],
-        usageCount: 0,
-        createdAt: new Date(),
-        isPublic: false,
-        author: 'AI Assistant',
-        aiGenerated: true
-      };
-      
-      setTemplates(prev => [newTemplate, ...prev]);
-      setAiPrompt('');
-      setShowAI(false);
-      toast.success('AI template generated successfully');
-    } catch (error) {
-      toast.error('Failed to generate AI template');
-    } finally {
-      setIsGenerating(false);
+  // Create custom template
+  const createCustomTemplate = useCallback(() => {
+    if (!templateName.trim() || !customTemplate.trim()) {
+      toast.error('Please provide both template name and content');
+      return;
     }
-  };
 
-  const categories = ['all', 'Work', 'Personal', 'Ideas', 'AI Generated'];
+    const newTemplate = {
+      id: `custom-${Date.now()}`,
+      name: templateName,
+      description: 'Custom template',
+      icon: FileText,
+      content: customTemplate,
+      isCustom: true
+    };
+
+    // Here you would save the custom template
+    toast.success('Custom template created');
+    setTemplateName('');
+    setCustomTemplate('');
+    setIsCreating(false);
+  }, [templateName, customTemplate]);
+
+  // Filter templates
+  const filteredTemplates = useMemo(() => {
+    const category = templateCategories[activeTab as keyof typeof templateCategories] || [];
+    if (!searchQuery) return category;
+    
+    return category.filter(template =>
+      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [activeTab, searchQuery]);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Templates</h2>
-          <p className="text-gray-600">Use pre-built templates or create your own</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button onClick={() => setShowAI(true)}>
-            <Sparkles className="w-4 h-4 mr-2" />
-            Generate with AI
-          </Button>
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
+    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="p-4 border-b bg-white dark:bg-gray-800">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Note Templates</h2>
+          <Button onClick={() => setIsCreating(!isCreating)}>
+            <Plus className="h-4 w-4 mr-2" />
             Create Template
           </Button>
         </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center space-x-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+        
+        <div className="flex items-center space-x-2">
+          <Search className="h-4 w-4 text-gray-400" />
           <Input
             placeholder="Search templates..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 w-64"
+            className="flex-1"
           />
         </div>
-        
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="p-2 border rounded-md"
-        >
-          {categories.map(category => (
-            <option key={category} value={category}>
-              {category === 'all' ? 'All Categories' : category}
-            </option>
-          ))}
-        </select>
       </div>
 
-      {/* Templates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTemplates.map((template) => (
-          <Card key={template.id} className="hover:shadow-lg transition-all">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-lg">{template.name}</CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">{template.description}</p>
-                </div>
-                {template.aiGenerated && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Sparkles className="w-3 h-3 mr-1" />
-                    AI
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-3">
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1">
-                  {template.tags.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                
-                {/* Stats */}
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>Used {template.usageCount} times</span>
-                  <span>{template.author}</span>
-                </div>
-                
-                {/* Actions */}
-                <div className="flex items-center space-x-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleUseTemplate(template)}
-                    className="flex-1"
-                  >
-                    Use Template
-                  </Button>
-                  
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Share2 className="w-4 h-4 mr-2" />
-                        Share
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Download className="w-4 h-4 mr-2" />
-                        Export
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteTemplate(template.id)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* AI Generation Dialog */}
-      {showAI && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96">
-            <h3 className="text-lg font-semibold mb-4">Generate Template with AI</h3>
-            <textarea
-              placeholder="Describe the template you want to generate..."
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              className="w-full p-3 border rounded-md mb-4"
-              rows={4}
-            />
-            <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowAI(false)}
-              >
+      {/* Create Custom Template */}
+      {isCreating && (
+        <div className="p-4 border-b bg-white dark:bg-gray-800">
+          <h3 className="font-medium mb-4">Create Custom Template</h3>
+          <div className="space-y-4">
+            <div>
+              <Label>Template Name</Label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Enter template name"
+              />
+            </div>
+            <div>
+              <Label>Template Content</Label>
+              <textarea
+                value={customTemplate}
+                onChange={(e) => setCustomTemplate(e.target.value)}
+                placeholder="Enter template content..."
+                className="w-full h-32 p-2 border rounded resize-none"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button onClick={createCustomTemplate}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Template
+              </Button>
+              <Button variant="outline" onClick={() => setIsCreating(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={() => generateAITemplate(aiPrompt)}
-                disabled={!aiPrompt.trim() || isGenerating}
-              >
-                {isGenerating ? 'Generating...' : 'Generate'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="planning">Planning</TabsTrigger>
+            <TabsTrigger value="pomodoro">Pomodoro</TabsTrigger>
+            <TabsTrigger value="habits">Habits</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTemplates.map((template) => (
+                <Card
+                  key={template.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => applyTemplate(template)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center space-x-2">
+                      <template.icon className="h-5 w-5 text-blue-600" />
+                      <CardTitle className="text-base">{template.name}</CardTitle>
+                    </div>
+                    <p className="text-sm text-gray-600">{template.description}</p>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        useTemplate(template);
+                      }}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Use Template
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Template Preview */}
+      {showPreview && selectedTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-[800px] h-[600px] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">{selectedTemplate.name}</h3>
+              <Button variant="outline" onClick={() => setShowPreview(false)}>
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="flex-1 overflow-auto mb-4">
+              <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded">
+                {selectedTemplate.content}
+              </pre>
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button onClick={() => useTemplate(selectedTemplate)}>
+                <Copy className="h-4 w-4 mr-2" />
+                Use This Template
+              </Button>
+              <Button variant="outline" onClick={() => setShowPreview(false)}>
+                Cancel
               </Button>
             </div>
           </div>

@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-api",
+    "rootDir": ".",
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/api/main.ts",
+    "src/api/app.module.ts",
+    "src/api/common/**/*.ts",
+    "src/api/prisma/**/*.ts",
+    "src/api/auth/**/*.ts",
+    "src/api/health/**/*.ts",
+    "src/api/projects/**/*.ts",
+    "src/api/tasks/**/*.ts",
+    "src/api/notes/**/*.ts",
+    "src/api/comments/**/*.ts",
+    "src/api/outbox/**/*.ts",
+    "src/api/ai/**/*.ts"
+  ]
+} 

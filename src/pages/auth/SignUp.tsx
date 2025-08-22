@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 
 const SignUp: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, setUser } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,6 +24,13 @@ const SignUp: React.FC = () => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -66,25 +75,59 @@ const SignUp: React.FC = () => {
     setLoading(true);
     
     try {
-      // Simulate API request
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Store user in local storage for demo purposes
-      localStorage.setItem('user', JSON.stringify({
+      // For demo purposes, create a mock user
+      const mockUser = {
         id: Date.now().toString(),
         name: formData.name,
         email: formData.email,
-        isAuthenticated: true
-      }));
+        roles: ['user']
+      };
       
-      toast.success("Account created successfully! Redirecting to setup...");
+      // Store user in localStorage
+      localStorage.setItem('user', JSON.stringify(mockUser));
+      localStorage.setItem('tenantId', 'dev');
       
-      // Redirect to setup page after signup
+      // Update the auth context
+      setUser(mockUser);
+      
+      toast.success("Account created successfully! Redirecting to dashboard...");
+      
+      // Redirect to dashboard after signup
       setTimeout(() => {
-        navigate('/setup');
+        navigate('/dashboard');
       }, 1000);
     } catch (error) {
       toast.error("An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoSignup = async () => {
+    setLoading(true);
+    
+    try {
+      // Create a demo user
+      const mockUser = {
+        id: Date.now().toString(),
+        name: 'Demo User',
+        email: 'demo@example.com',
+        roles: ['user']
+      };
+      
+      localStorage.setItem('user', JSON.stringify(mockUser));
+      localStorage.setItem('tenantId', 'dev');
+      
+      // Update the auth context
+      setUser(mockUser);
+      
+      toast.success("Demo account created! Redirecting to dashboard...");
+      
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    } catch (error) {
+      toast.error("Demo signup failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -100,89 +143,96 @@ const SignUp: React.FC = () => {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Enter your information to get started
+            Enter your details to get started
           </p>
         </div>
-        
+
         <Card>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4 pt-6">
+          <CardHeader>
+            <CardTitle>Sign up</CardTitle>
+            <CardDescription>
+              Create your account to start managing projects
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name" 
-                  name="name" 
-                  placeholder="John Doe" 
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="Enter your full name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  autoComplete="name"
                   required
                 />
               </div>
-              
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  name="email" 
-                  type="email" 
-                  placeholder="john@example.com" 
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  autoComplete="email"
                   required
                 />
               </div>
-              
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input 
-                  id="password" 
-                  name="password" 
-                  type="password" 
-                  placeholder="Create a password" 
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Create a password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  autoComplete="new-password"
                   required
                 />
-                <p className="text-xs text-muted-foreground">
-                  Password must be at least 8 characters long
-                </p>
               </div>
-              
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input 
-                  id="confirmPassword" 
-                  name="confirmPassword" 
-                  type="password" 
-                  placeholder="Confirm your password" 
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  autoComplete="new-password"
                   required
                 />
               </div>
-            </CardContent>
-            
-            <CardFooter className="flex flex-col">
               <Button 
                 type="submit" 
                 className="w-full" 
                 disabled={loading}
               >
-                {loading ? "Creating account..." : "Sign Up"}
+                {loading ? "Creating account..." : "Create account"}
               </Button>
-              
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link to="/login" className="underline text-primary">
-                  Sign in instead
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
+            </form>
+            
+            <div className="mt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleDemoSignup}
+                disabled={loading}
+              >
+                {loading ? "Creating account..." : "Demo Signup (Skip Registration)"}
+              </Button>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-2">
+            <div className="text-sm text-center text-muted-foreground">
+              Already have an account?{" "}
+              <Link to="/login" className="text-primary hover:underline">
+                Sign in
+              </Link>
+            </div>
+          </CardFooter>
         </Card>
       </div>
     </div>

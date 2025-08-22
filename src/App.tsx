@@ -2,119 +2,54 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import React, { Suspense } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Layout from "@/components/layout/Layout";
-import BoardsPage from "@/pages/Boards";
-import CustomDashboard from "@/pages/CustomDashboard";
-import Dashboard from "@/pages/Dashboard";
-import LandingPage from "@/pages/LandingPage";
-import NotFound from "@/pages/NotFound";
-import Notes from "@/pages/Notes";
-import NotificationsCenter from "@/pages/NotificationsCenter";
-import PagesDirectory from "@/pages/PagesDirectory";
-import ProjectDashboard from "@/pages/ProjectDashboard";
-import Projects from "@/pages/Projects";
-import Setup from "@/pages/Setup";
-import Tasks from "@/pages/Tasks";
-import Login from "@/pages/auth/Login";
-import SignUp from "@/pages/auth/SignUp";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthProvider } from "@/lib/auth-context";
 
-// Import new pages
-import AdminPage from "@/pages/AdminPage";
-import AutomationsPage from "@/pages/AutomationsPage";
-import BestInClassExtrasPage from "@/pages/BestInClassExtrasPage";
-import CalendarHub from "@/pages/CalendarHub";
-import DeveloperPage from "@/pages/DeveloperPage";
-import IntegrationsPage from "@/pages/IntegrationsPage";
-import SettingsPage from "@/pages/SettingsPage";
+// Lazy load all pages for better code splitting
+const BoardsPage = React.lazy(() => import("@/pages/Boards"));
+const CustomDashboard = React.lazy(() => import("@/pages/CustomDashboard"));
+const Dashboard = React.lazy(() => import("@/pages/Dashboard"));
+const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
+const NotFound = React.lazy(() => import("@/pages/NotFound"));
+const Notes = React.lazy(() => import("@/pages/Notes"));
+const NotificationsCenter = React.lazy(() => import("@/pages/NotificationsCenter"));
+const PagesDirectory = React.lazy(() => import("@/pages/PagesDirectory"));
+const ProjectDashboard = React.lazy(() => import("@/pages/ProjectDashboard"));
+const Projects = React.lazy(() => import("@/pages/Projects"));
+const Setup = React.lazy(() => import("@/pages/Setup"));
+const Tasks = React.lazy(() => import("@/pages/Tasks"));
+const Login = React.lazy(() => import("@/pages/auth/Login"));
+const SignUp = React.lazy(() => import("@/pages/auth/SignUp"));
 
-// Auth context and components
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
+// Lazy load new pages
+const AdminPage = React.lazy(() => import("@/pages/AdminPage"));
+const AutomationsPage = React.lazy(() => import("@/pages/AutomationsPage"));
+const BestInClassExtrasPage = React.lazy(() => import("@/pages/BestInClassExtrasPage"));
+const CalendarHub = React.lazy(() => import("@/pages/CalendarHub"));
+const DeveloperPage = React.lazy(() => import("@/pages/DeveloperPage"));
+const IntegrationsPage = React.lazy(() => import("@/pages/IntegrationsPage"));
+const SettingsPage = React.lazy(() => import("@/pages/SettingsPage"));
 
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
-  loading: boolean;
-}
+// Loading component for Suspense fallback
+const PageLoading = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+);
 
-const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
-
-const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Check if user is logged in (simulate checking localStorage/sessionStorage)
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    // Simulate API call
-    const mockUser = { id: '1', email, name: email.split('@')[0] };
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
-  };
-
-  const signup = async (email: string, password: string, name: string) => {
-    // Simulate API call
-    const mockUser = { id: '1', email, name };
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// Project redirect component
-const ProjectRedirect = () => {
-  const { projectId } = useParams();
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    if (projectId) {
-      navigate(`/projects/${projectId}/dashboard`, { replace: true });
-    }
-  }, [projectId, navigate]);
-  
-  return null;
-};
-
-const RequireAuth = ({ children }: { children: React.ReactNode }) => {
-  const location = useLocation();
-  
-  // For demo purposes, we'll assume the user is always authenticated
-  // In a real app, you'd check authentication status here
-  const isAuthenticated = true;
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  
-  return <>{children}</>;
-};
-
-const queryClient = new QueryClient();
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -125,34 +60,115 @@ const App = () => (
         <AuthProvider>
           <Routes>
             {/* Public routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
-            <Route path="/setup" element={<RequireAuth><Setup /></RequireAuth>} />
+            <Route path="/" element={
+              <Suspense fallback={<PageLoading />}>
+                <LandingPage />
+              </Suspense>
+            } />
+            <Route path="/login" element={
+              <Suspense fallback={<PageLoading />}>
+                <Login />
+              </Suspense>
+            } />
+            <Route path="/signup" element={
+              <Suspense fallback={<PageLoading />}>
+                <SignUp />
+              </Suspense>
+            } />
             
-            {/* Protected routes */}
-            <Route element={<RequireAuth><Layout /></RequireAuth>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:projectId" element={<ProjectRedirect />} />
-              <Route path="/projects/:projectId/dashboard" element={<ProjectDashboard />} />
-              <Route path="/tasks" element={<Tasks />} />
-              <Route path="/boards" element={<BoardsPage />} />
-              <Route path="/calendar" element={<CalendarHub />} />
-              <Route path="/pages" element={<PagesDirectory />} />
-              <Route path="/notes" element={<Notes />} />
-              <Route path="/notifications" element={<NotificationsCenter />} />
-              <Route path="/custom-dashboard" element={<CustomDashboard />} />
-              <Route path="/automations" element={<AutomationsPage />} />
-              <Route path="/integrations" element={<IntegrationsPage />} />
-              <Route path="/developer" element={<DeveloperPage />} />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/extras" element={<BestInClassExtrasPage />} />
+            {/* Protected routes with Layout */}
+            <Route element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }>
+              <Route path="/dashboard" element={
+                <Suspense fallback={<PageLoading />}>
+                  <Dashboard />
+                </Suspense>
+              } />
+              <Route path="/projects" element={
+                <Suspense fallback={<PageLoading />}>
+                  <Projects />
+                </Suspense>
+              } />
+              <Route path="/projects/:id" element={
+                <Suspense fallback={<PageLoading />}>
+                  <ProjectDashboard />
+                </Suspense>
+              } />
+              <Route path="/tasks" element={
+                <Suspense fallback={<PageLoading />}>
+                  <Tasks />
+                </Suspense>
+              } />
+              <Route path="/boards" element={
+                <Suspense fallback={<PageLoading />}>
+                  <BoardsPage />
+                </Suspense>
+              } />
+              <Route path="/notes" element={
+                <Suspense fallback={<PageLoading />}>
+                  <Notes />
+                </Suspense>
+              } />
+              <Route path="/calendar" element={
+                <Suspense fallback={<PageLoading />}>
+                  <CalendarHub />
+                </Suspense>
+              } />
+              <Route path="/notifications" element={
+                <Suspense fallback={<PageLoading />}>
+                  <NotificationsCenter />
+                </Suspense>
+              } />
+              <Route path="/pages" element={
+                <Suspense fallback={<PageLoading />}>
+                  <PagesDirectory />
+                </Suspense>
+              } />
+              <Route path="/settings" element={
+                <Suspense fallback={<PageLoading />}>
+                  <SettingsPage />
+                </Suspense>
+              } />
+              <Route path="/admin" element={
+                <Suspense fallback={<PageLoading />}>
+                  <AdminPage />
+                </Suspense>
+              } />
+              <Route path="/automations" element={
+                <Suspense fallback={<PageLoading />}>
+                  <AutomationsPage />
+                </Suspense>
+              } />
+              <Route path="/integrations" element={
+                <Suspense fallback={<PageLoading />}>
+                  <IntegrationsPage />
+                </Suspense>
+              } />
+              <Route path="/developer" element={
+                <Suspense fallback={<PageLoading />}>
+                  <DeveloperPage />
+                </Suspense>
+              } />
+              <Route path="/extras" element={
+                <Suspense fallback={<PageLoading />}>
+                  <BestInClassExtrasPage />
+                </Suspense>
+              } />
+              <Route path="/setup" element={
+                <Suspense fallback={<PageLoading />}>
+                  <Setup />
+                </Suspense>
+              } />
             </Route>
             
-            {/* Catch-all route */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={
+              <Suspense fallback={<PageLoading />}>
+                <NotFound />
+              </Suspense>
+            } />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

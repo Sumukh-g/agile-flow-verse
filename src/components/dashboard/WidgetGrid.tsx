@@ -1,7 +1,15 @@
 
 import React from 'react';
 import { Card } from "@/components/ui/card";
-import { DragDropContext, Draggable, Droppable, DropResult } from 'react-beautiful-dnd';
+// Optional DnD: react-beautiful-dnd is not compatible with React 19. Fallback gracefully.
+let DragDropContext: any, Draggable: any, Droppable: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const dnd = require('react-beautiful-dnd');
+  DragDropContext = dnd.DragDropContext;
+  Draggable = dnd.Draggable;
+  Droppable = dnd.Droppable;
+} catch {}
 import { Move, Trash } from 'lucide-react';
 import WidgetRenderer from './WidgetRenderer';
 import { Widget } from '@/types/dashboard';
@@ -9,21 +17,18 @@ import { Widget } from '@/types/dashboard';
 interface WidgetGridProps {
   widgets: Widget[];
   editMode: boolean;
-  onDragEnd: (result: DropResult) => void;
+  onDragEnd: (result: any) => void;
   onDeleteWidget: (widgetId: string) => void;
 }
 
-const WidgetGrid: React.FC<WidgetGridProps> = ({
-  widgets,
-  editMode,
-  onDragEnd,
-  onDeleteWidget,
-}) => {
-  if (editMode) {
+const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, editMode, onDragEnd, onDeleteWidget }) => {
+  const canDnd = Boolean(DragDropContext && Draggable && Droppable);
+
+  if (editMode && canDnd) {
     return (
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="dashboard-widgets" direction="horizontal">
-          {(provided) => (
+          {(provided: any) => (
             <div 
               className="grid grid-cols-4 gap-4 w-full" 
               {...provided.droppableProps}
@@ -31,11 +36,10 @@ const WidgetGrid: React.FC<WidgetGridProps> = ({
             >
               {widgets.map((widget, index) => (
                 <Draggable key={widget.id} draggableId={widget.id} index={index}>
-                  {(providedDraggable) => (
+                  {(providedDraggable: any) => (
                     <div
                       ref={providedDraggable.innerRef}
                       {...providedDraggable.draggableProps}
-                      // Tailwind JIT compiler needs full class names
                       className={`${
                         widget.width === 1 ? 'col-span-1' :
                         widget.width === 2 ? 'col-span-2' :
@@ -78,7 +82,6 @@ const WidgetGrid: React.FC<WidgetGridProps> = ({
       {widgets.map(widget => (
         <Card 
           key={widget.id} 
-          // Tailwind JIT compiler needs full class names
           className={`${
             widget.width === 1 ? 'col-span-1' :
             widget.width === 2 ? 'col-span-2' :

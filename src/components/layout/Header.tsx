@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
+import { useAuth } from '@/lib/auth-context';
 import {
     Bell,
     Briefcase,
@@ -20,7 +21,7 @@ import {
     StickyNote,
     User
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -31,7 +32,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
   const { setOpen, open } = useSidebar();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout } = useAuth();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,17 +49,8 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
     setOpen(!open);
   };
   
-  useEffect(() => {
-    // Check if user is logged in
-    const userString = localStorage.getItem('user');
-    if (userString) {
-      const userData = JSON.parse(userString);
-      setUser(userData);
-    }
-  }, []);
-  
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    logout();
     toast.success('Logged out successfully');
     navigate('/login');
   };
@@ -103,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
         >
           <Menu className="h-5 w-5" />
         </Button>
-
+        
         <Button
           variant="ghost"
           size="icon"
@@ -113,150 +105,103 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
-          <div className="bg-indigo-600 text-white p-1 rounded">PM</div>
-          <span className="hidden md:inline">ProjectMaster</span>
-        </Link>
+        <div className="flex-1 max-w-md">
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </form>
+        </div>
 
-        <form onSubmit={handleSearch} className="relative hidden md:flex flex-1 max-w-md mx-4">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search..."
-            className="pl-8 w-full bg-slate-50"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </form>
-
-        <div className="flex items-center ml-auto gap-1 md:gap-2">
-          {/* Mobile search button - consider making this open a modal or an input field */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="icon" className="text-slate-500 md:hidden">
-                 <Search className="h-5 w-5" />
-               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="p-2 md:hidden">
-              <form onSubmit={handleSearch} className="flex w-full">
-                 <Input
-                    type="search"
-                    placeholder="Search..."
-                    className="w-full bg-slate-50"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  <Button type="submit" size="sm" className="ml-2">Search</Button>
-              </form>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
+        <div className="flex items-center gap-2">
+          {/* Create Menu */}
           <DropdownMenu open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-slate-500">
-                <PlusCircle className="h-5 w-5" />
+              <Button variant="outline" size="sm">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Create
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Create New</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleCreateItem('task')}>
-                <CheckSquare className="mr-2 h-4 w-4" /> Task
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleCreateItem('project')}>
-                <Briefcase className="mr-2 h-4 w-4" /> Project
+                <Briefcase className="h-4 w-4 mr-2" />
+                Project
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCreateItem('task')}>
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Task
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleCreateItem('note')}>
-                <StickyNote className="mr-2 h-4 w-4" /> Note
+                <StickyNote className="h-4 w-4 mr-2" />
+                Note
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
+
+          {/* Notifications */}
           <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-slate-500 relative">
+              <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
                 {notifications.length > 0 && (
-                   <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
+                    {notifications.length}
+                  </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel className="flex items-center justify-between">
-                Notifications
-                <div className="flex items-center gap-2">
-                  {notifications.length > 0 && (
-                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => toast.info("Marked all as read (mock)")}>
-                      Mark all as read
-                    </Button>
-                  )}
-                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/notifications')}>
-                    View All
-                  </Button>
-                </div>
-              </DropdownMenuLabel>
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.length > 0 ? notifications.slice(0, 3).map(notification => (
-                <DropdownMenuItem key={notification.id} className="flex flex-col items-start py-2 cursor-pointer hover:bg-slate-50" onClick={() => toast.info(`Notification: ${notification.title}`)}>
-                  <div className="font-medium text-sm">{notification.title}</div>
-                  <div className="text-muted-foreground text-xs">{notification.description}</div>
+              {notifications.map((notification) => (
+                <DropdownMenuItem key={notification.id} className="flex flex-col items-start p-3">
+                  <div className="font-medium">{notification.title}</div>
+                  <div className="text-sm text-muted-foreground">{notification.description}</div>
                   <div className="text-xs text-muted-foreground mt-1">{notification.time}</div>
                 </DropdownMenuItem>
-              )) : (
-                <DropdownMenuItem disabled className="text-center text-sm text-muted-foreground py-4">No new notifications</DropdownMenuItem>
-              )}
-              {notifications.length > 3 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => navigate('/notifications')}>
-                    View all notifications ({notifications.length})
-                  </DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="justify-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => navigate('/notifications')}>
-                Open Notifications Center
-              </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          
+
+          {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                {user?.name ? (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium">
-                    {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2)}
-                  </div>
-                ) : (
-                  <User className="h-5 w-5" />
-                )}
+              <Button variant="ghost" size="icon">
+                <User className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {user ? (
-                <>
-                  <DropdownMenuLabel className="font-normal">
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-xs text-muted-foreground">{user.email}</div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>Dashboard</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/custom-dashboard')}>My Dashboard</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Navigating to Profile (mock)")}>Profile</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Navigating to Settings (mock)")}>Settings</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Navigating to Help (mock)")}>Help</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 hover:!bg-red-50 hover:!text-red-700">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={() => navigate('/login')}>Log in</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/signup')}>Sign up</DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{user?.email || 'user@example.com'}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/settings">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings">
+                  <User className="h-4 w-4 mr-2" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

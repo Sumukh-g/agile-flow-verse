@@ -1,37 +1,60 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
-    AlertCircle,
     Archive,
-    BarChart3,
-    Clock,
+    Bold,
+    Brain,
+    Code,
     Copy,
     Download,
-    FileText,
-    Globe,
-    Lightbulb,
+    Heading1,
+    Heading2,
+    Heading3,
+    Italic,
+    Link,
+    List,
+    ListOrdered,
     Lock,
-    MoreHorizontal,
+    Mic,
+    MicOff,
+    Paperclip,
     Pin,
-    Plus,
-    Share2,
+    Quote,
+    Save,
+    Share,
     Star,
+    Strikethrough,
+    Table,
+    Tag,
     Trash2,
-    Users
+    Underline,
+    Unlock,
+    Users,
+    Video
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  tags: string[];
+  pinned: boolean;
+  starred: boolean;
+  archived: boolean;
+  passwordProtected?: boolean;
+  aiGenerated?: boolean;
+  collaborators: string[];
+  version: number;
+  lastEditedBy: string;
+  updatedAt: Date;
+}
+
 interface NoteToolbarProps {
-  note: any;
+  note: Note;
   onUpdateNote: (noteId: string, updates: any) => void;
   onTogglePin: (noteId: string) => void;
   onToggleStar: (noteId: string) => void;
@@ -53,9 +76,19 @@ const NoteToolbar: React.FC<NoteToolbarProps> = ({
   onDuplicateNote,
   onDeleteNote
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
-  const [showComments, setShowComments] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isCollaborating, setIsCollaborating] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [password, setPassword] = useState('');
+  const [darkMode, setDarkMode] = useState(false);
+  const [compactMode, setCompactMode] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [showComments, setShowComments] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
@@ -68,8 +101,9 @@ const NoteToolbar: React.FC<NoteToolbarProps> = ({
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showPresentation, setShowPresentation] = useState(false);
   const [showForms, setShowForms] = useState(false);
-  const [showIntegrations2, setShowIntegrations2] = useState(false);
   const [showWorkflows2, setShowWorkflows2] = useState(false);
+  const [showIntegrations2, setShowIntegrations2] = useState(false);
+  const [showAnalytics2, setShowAnalytics2] = useState(false);
   const [showDatabase2, setShowDatabase2] = useState(false);
   const [showCalendar2, setShowCalendar2] = useState(false);
   const [showKanban2, setShowKanban2] = useState(false);
@@ -78,8 +112,9 @@ const NoteToolbar: React.FC<NoteToolbarProps> = ({
   const [showWhiteboard2, setShowWhiteboard2] = useState(false);
   const [showPresentation2, setShowPresentation2] = useState(false);
   const [showForms2, setShowForms2] = useState(false);
-  const [showIntegrations3, setShowIntegrations3] = useState(false);
   const [showWorkflows3, setShowWorkflows3] = useState(false);
+  const [showIntegrations3, setShowIntegrations3] = useState(false);
+  const [showAnalytics3, setShowAnalytics3] = useState(false);
   const [showDatabase3, setShowDatabase3] = useState(false);
   const [showCalendar3, setShowCalendar3] = useState(false);
   const [showKanban3, setShowKanban3] = useState(false);
@@ -88,8 +123,9 @@ const NoteToolbar: React.FC<NoteToolbarProps> = ({
   const [showWhiteboard3, setShowWhiteboard3] = useState(false);
   const [showPresentation3, setShowPresentation3] = useState(false);
   const [showForms3, setShowForms3] = useState(false);
-  const [showIntegrations4, setShowIntegrations4] = useState(false);
   const [showWorkflows4, setShowWorkflows4] = useState(false);
+  const [showIntegrations4, setShowIntegrations4] = useState(false);
+  const [showAnalytics4, setShowAnalytics4] = useState(false);
   const [showDatabase4, setShowDatabase4] = useState(false);
   const [showCalendar4, setShowCalendar4] = useState(false);
   const [showKanban4, setShowKanban4] = useState(false);
@@ -98,266 +134,447 @@ const NoteToolbar: React.FC<NoteToolbarProps> = ({
   const [showWhiteboard4, setShowWhiteboard4] = useState(false);
   const [showPresentation4, setShowPresentation4] = useState(false);
   const [showForms4, setShowForms4] = useState(false);
-  const [showIntegrations5, setShowIntegrations5] = useState(false);
-  const [showWorkflows5, setShowWorkflows5] = useState(false);
-  const [showDatabase5, setShowDatabase5] = useState(false);
-  const [showCalendar5, setShowCalendar5] = useState(false);
-  const [showKanban5, setShowKanban5] = useState(false);
-  const [showTimeline5, setShowTimeline5] = useState(false);
-  const [showMindmap5, setShowMindmap5] = useState(false);
-  const [showWhiteboard5, setShowWhiteboard5] = useState(false);
-  const [showPresentation5, setShowPresentation5] = useState(false);
-  const [showForms5, setShowForms5] = useState(false);
-  const [showIntegrations6, setShowIntegrations6] = useState(false);
-  const [showWorkflows6, setShowWorkflows6] = useState(false);
-  const [showDatabase6, setShowDatabase6] = useState(false);
-  const [showCalendar6, setShowCalendar6] = useState(false);
-  const [showKanban6, setShowKanban6] = useState(false);
-  const [showTimeline6, setShowTimeline6] = useState(false);
-  const [showMindmap6, setShowMindmap6] = useState(false);
-  const [showWhiteboard6, setShowWhiteboard6] = useState(false);
-  const [showPresentation6, setShowPresentation6] = useState(false);
-  const [showForms6, setShowForms6] = useState(false);
-  const [showIntegrations7, setShowIntegrations7] = useState(false);
-  const [showWorkflows7, setShowWorkflows7] = useState(false);
-  const [showDatabase7, setShowDatabase7] = useState(false);
-  const [showCalendar7, setShowCalendar7] = useState(false);
-  const [showKanban7, setShowKanban7] = useState(false);
-  const [showTimeline7, setShowTimeline7] = useState(false);
-  const [showMindmap7, setShowMindmap7] = useState(false);
-  const [showWhiteboard7, setShowWhiteboard7] = useState(false);
-  const [showPresentation7, setShowPresentation7] = useState(false);
-  const [showForms7, setShowForms7] = useState(false);
-  const [showIntegrations8, setShowIntegrations8] = useState(false);
-  const [showWorkflows8, setShowWorkflows8] = useState(false);
-  const [showDatabase8, setShowDatabase8] = useState(false);
-  const [showCalendar8, setShowCalendar8] = useState(false);
-  const [showKanban8, setShowKanban8] = useState(false);
-  const [showTimeline8, setShowTimeline8] = useState(false);
-  const [showMindmap8, setShowMindmap8] = useState(false);
-  const [showWhiteboard8, setShowWhiteboard8] = useState(false);
-  const [showPresentation8, setShowPresentation8] = useState(false);
-  const [showForms8, setShowForms8] = useState(false);
-  const [showIntegrations9, setShowIntegrations9] = useState(false);
-  const [showWorkflows9, setShowWorkflows9] = useState(false);
-  const [showDatabase9, setShowDatabase9] = useState(false);
-  const [showCalendar9, setShowCalendar9] = useState(false);
-  const [showKanban9, setShowKanban9] = useState(false);
-  const [showTimeline9, setShowTimeline9] = useState(false);
-  const [showMindmap9, setShowMindmap9] = useState(false);
-  const [showWhiteboard9, setShowWhiteboard9] = useState(false);
-  const [showPresentation9, setShowPresentation9] = useState(false);
-  const [showForms9, setShowForms9] = useState(false);
-  const [showIntegrations10, setShowIntegrations10] = useState(false);
-  const [showWorkflows10, setShowWorkflows10] = useState(false);
-  const [showDatabase10, setShowDatabase10] = useState(false);
-  const [showCalendar10, setShowCalendar10] = useState(false);
-  const [showKanban10, setShowKanban10] = useState(false);
-  const [showTimeline10, setShowTimeline10] = useState(false);
-  const [showMindmap10, setShowMindmap10] = useState(false);
-  const [showWhiteboard10, setShowWhiteboard10] = useState(false);
-  const [showPresentation10, setShowPresentation10] = useState(false);
-  const [showForms10, setShowForms10] = useState(false);
 
-  const handleTitleChange = (newTitle: string) => {
-    onUpdateNote(note.id, { title: newTitle });
-  };
+  // Audio recording functionality
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
 
-  const handleTogglePublic = () => {
-    onUpdateNote(note.id, { isPublic: !note.isPublic });
-    toast.success(note.isPublic ? 'Note made private' : 'Note made public');
-  };
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        // Add audio to note
+        onUpdateNote(note.id, { 
+          audioUrl: url,
+          audioRecordedAt: new Date()
+        });
+        toast.success('Audio recording saved');
+      };
 
-  const handleAddTag = (tag: string) => {
-    if (!note.tags.includes(tag)) {
-      onUpdateNote(note.id, { tags: [...note.tags, tag] });
-      toast.success('Tag added');
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      toast.error('Failed to start recording');
     }
-  };
+  }, [note.id, onUpdateNote]);
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    onUpdateNote(note.id, { tags: note.tags.filter((tag: string) => tag !== tagToRemove) });
-    toast.success('Tag removed');
-  };
+  const stopRecording = useCallback(() => {
+    setIsRecording(false);
+    // Stop recording logic would be here
+  }, []);
+
+  // AI assistance
+  const generateWithAI = useCallback(async (prompt: string) => {
+    try {
+      // Simulate AI generation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const aiContent = `AI generated content based on: "${prompt}"\n\nThis is a placeholder for AI-generated content. In a real implementation, this would call an AI API to generate relevant content based on the prompt.`;
+      
+      onUpdateNote(note.id, { 
+        content: note.content + '\n\n' + aiContent,
+        aiGenerated: true,
+        aiPrompt: prompt
+      });
+      
+      toast.success('AI content generated');
+    } catch (error) {
+      toast.error('Failed to generate AI content');
+    }
+  }, [note.id, note.content, onUpdateNote]);
+
+  // Password protection
+  const togglePasswordProtection = useCallback(() => {
+    if (note.passwordProtected) {
+      onUpdateNote(note.id, { passwordProtected: false, password: null });
+      toast.success('Password protection removed');
+    } else {
+      setShowPasswordDialog(true);
+    }
+  }, [note.id, note.passwordProtected, onUpdateNote]);
+
+  const setPasswordProtection = useCallback(() => {
+    if (password.trim()) {
+      onUpdateNote(note.id, { 
+        passwordProtected: true, 
+        password: password.trim() 
+      });
+      setPassword('');
+      setShowPasswordDialog(false);
+      toast.success('Password protection enabled');
+    }
+  }, [note.id, password, onUpdateNote]);
+
+  // Collaboration
+  const toggleCollaboration = useCallback(() => {
+    setIsCollaborating(!isCollaborating);
+    onUpdateNote(note.id, { 
+      isCollaborating: !isCollaborating,
+      collaborationStartedAt: new Date()
+    });
+    toast.success(isCollaborating ? 'Collaboration stopped' : 'Collaboration started');
+  }, [note.id, isCollaborating, onUpdateNote]);
+
+  // Version control
+  const saveVersion = useCallback(() => {
+    onUpdateNote(note.id, { 
+      version: note.version + 1,
+      lastSavedVersion: new Date()
+    });
+    toast.success('Version saved');
+  }, [note.id, note.version, onUpdateNote]);
+
+  const restoreVersion = useCallback((version: number) => {
+    onUpdateNote(note.id, { 
+      version: version,
+      restoredFromVersion: version,
+      restoredAt: new Date()
+    });
+    toast.success(`Restored to version ${version}`);
+  }, [note.id, onUpdateNote]);
 
   return (
-    <div className="border-b bg-white p-4">
-      <div className="flex items-center justify-between">
-        {/* Left side - Title and basic actions */}
-        <div className="flex items-center space-x-4 flex-1">
-          <div className="flex-1 max-w-md">
-            <Input
-              value={note.title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="text-lg font-semibold border-none focus:ring-0 p-0"
-              placeholder="Untitled Note"
-            />
-          </div>
-          
-          <div className="flex items-center space-x-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onTogglePin(note.id)}
-              className={note.pinned ? 'bg-yellow-100 text-yellow-800' : ''}
-            >
-              <Pin className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggleStar(note.id)}
-              className={note.starred ? 'bg-yellow-100 text-yellow-800' : ''}
-            >
-              <Star className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleTogglePublic}
-              className={note.isPublic ? 'bg-blue-100 text-blue-800' : ''}
-            >
-              {note.isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
-
-        {/* Right side - Advanced actions */}
+    <div className="border-b bg-white dark:bg-gray-800 p-4">
+      {/* Main Toolbar */}
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
+          {/* Text Formatting */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Format bold */}}
+            className="h-8 w-8 p-0"
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Format italic */}}
+            className="h-8 w-8 p-0"
+          >
+            <Italic className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Format underline */}}
+            className="h-8 w-8 p-0"
+          >
+            <Underline className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Format strikethrough */}}
+            className="h-8 w-8 p-0"
+          >
+            <Strikethrough className="h-4 w-4" />
+          </Button>
+          
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+          
+          {/* Headings */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add heading 1 */}}
+            className="h-8 w-8 p-0"
+          >
+            <Heading1 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add heading 2 */}}
+            className="h-8 w-8 p-0"
+          >
+            <Heading2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add heading 3 */}}
+            className="h-8 w-8 p-0"
+          >
+            <Heading3 className="h-4 w-4" />
+          </Button>
+          
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+          
+          {/* Lists */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add bullet list */}}
+            className="h-8 w-8 p-0"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add numbered list */}}
+            className="h-8 w-8 p-0"
+          >
+            <ListOrdered className="h-4 w-4" />
+          </Button>
+          
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+          
+          {/* Special Blocks */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add quote */}}
+            className="h-8 w-8 p-0"
+          >
+            <Quote className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add code block */}}
+            className="h-8 w-8 p-0"
+          >
+            <Code className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add table */}}
+            className="h-8 w-8 p-0"
+          >
+            <Table className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          {/* Media Controls */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add attachment */}}
+            className="h-8 w-8 p-0"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`h-8 w-8 p-0 ${isRecording ? 'bg-red-500 text-white' : ''}`}
+          >
+            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add video */}}
+            className="h-8 w-8 p-0"
+          >
+            <Video className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {/* Add link */}}
+            className="h-8 w-8 p-0"
+          >
+            <Link className="h-4 w-4" />
+          </Button>
+          
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+          
+          {/* AI Features */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAI(!showAI)}
+            className="h-8 w-8 p-0"
+          >
+            <Brain className="h-4 w-4" />
+          </Button>
+          
           {/* Collaboration */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <Users className="w-4 h-4 mr-2" />
-                Share
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => onShareNote(note.id)}>
-                <Share2 className="w-4 h-4 mr-2" />
-                Copy Link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowCollaboration(true)}>
-                <Users className="w-4 h-4 mr-2" />
-                Manage Access
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowComments(true)}>
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Comments
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Export */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => onExportNote(note.id)}>
-                <FileText className="w-4 h-4 mr-2" />
-                Export as JSON
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDuplicateNote(note.id)}>
-                <Copy className="w-4 h-4 mr-2" />
-                Duplicate Note
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* More actions */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setShowVersionHistory(true)}>
-                <Clock className="w-4 h-4 mr-2" />
-                Version History
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowAnalytics(true)}>
-                <BarChart3 className="w-4 h-4 mr-2" />
-                Analytics
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowTemplates(true)}>
-                <FileText className="w-4 h-4 mr-2" />
-                Templates
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onToggleArchive(note.id)}>
-                <Archive className="w-4 h-4 mr-2" />
-                {note.archived ? 'Unarchive' : 'Archive'}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => onDeleteNote(note.id)}
-                className="text-red-600"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleCollaboration}
+            className={`h-8 w-8 p-0 ${isCollaborating ? 'bg-green-500 text-white' : ''}`}
+          >
+            <Users className="h-4 w-4" />
+          </Button>
+          
+          {/* Version Control */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={saveVersion}
+            className="h-8 w-8 p-0"
+          >
+            <Save className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Tags */}
-      <div className="mt-3 flex items-center space-x-2">
-        <span className="text-sm text-gray-500">Tags:</span>
-        {note.tags.map((tag: string) => (
-          <Badge
-            key={tag}
-            variant="secondary"
-            className="text-xs cursor-pointer hover:bg-red-100"
-            onClick={() => handleRemoveTag(tag)}
-          >
-            {tag} ×
-          </Badge>
-        ))}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Plus className="w-4 h-4" />
+      {/* AI Panel */}
+      {showAI && (
+        <div className="border-t pt-4 mb-4">
+          <div className="flex items-center space-x-2 mb-2">
+            <Brain className="h-4 w-4" />
+            <span className="font-medium">AI Assistant</span>
+          </div>
+          <div className="flex space-x-2">
+            <Input
+              placeholder="Ask AI to help with your note..."
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  generateWithAI(e.currentTarget.value);
+                  e.currentTarget.value = '';
+                }
+              }}
+              className="flex-1"
+            />
+            <Button onClick={() => generateWithAI('Summarize this note')}>
+              Summarize
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => handleAddTag('Important')}>
-              <AlertCircle className="w-4 h-4 mr-2" />
-              Important
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAddTag('Work')}>
-              <Briefcase className="w-4 h-4 mr-2" />
-              Work
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAddTag('Personal')}>
-              <User className="w-4 h-4 mr-2" />
-              Personal
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAddTag('Ideas')}>
-              <Lightbulb className="w-4 h-4 mr-2" />
-              Ideas
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAddTag('To-Do')}>
-              <CheckSquare className="w-4 h-4 mr-2" />
-              To-Do
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <Button onClick={() => generateWithAI('Improve writing style')}>
+              Improve
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Note Actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onTogglePin(note.id)}
+          >
+            <Pin className="h-4 w-4 mr-2" />
+            {note.pinned ? 'Unpin' : 'Pin'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onToggleStar(note.id)}
+          >
+            <Star className="h-4 w-4 mr-2" />
+            {note.starred ? 'Unstar' : 'Star'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onShareNote(note.id)}
+          >
+            <Share className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onExportNote(note.id)}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDuplicateNote(note.id)}
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Duplicate
+          </Button>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={togglePasswordProtection}
+          >
+            {note.passwordProtected ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+            {note.passwordProtected ? 'Unlock' : 'Lock'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onToggleArchive(note.id)}
+          >
+            <Archive className="h-4 w-4 mr-2" />
+            {note.archived ? 'Unarchive' : 'Archive'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDeleteNote(note.id)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+        </div>
       </div>
 
-      {/* Note info */}
-      <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-        <span>Last edited {new Date(note.updatedAt).toLocaleDateString()}</span>
-        <span>{note.wordCount} words</span>
-        <span>{note.readingTime} min read</span>
-        {note.collaborators.length > 0 && (
-          <span>{note.collaborators.length} collaborators</span>
-        )}
+      {/* Note Info */}
+      <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+        <div className="flex items-center space-x-4">
+          <span>Version {note.version}</span>
+          <span>Last edited by {note.lastEditedBy}</span>
+          <span>Updated {note.updatedAt.toLocaleDateString()}</span>
+          {note.aiGenerated && (
+            <Badge variant="secondary">
+              <Brain className="h-3 w-3 mr-1" />
+              AI Generated
+            </Badge>
+          )}
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          {note.collaborators.length > 0 && (
+            <div className="flex items-center space-x-1">
+              <Users className="h-3 w-3" />
+              <span>{note.collaborators.length} collaborators</span>
+            </div>
+          )}
+          {note.tags.length > 0 && (
+            <div className="flex items-center space-x-1">
+              <Tag className="h-3 w-3" />
+              <span>{note.tags.length} tags</span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Password Protection Dialog */}
+      {showPasswordDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Set Password Protection</h3>
+            <Input
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mb-4"
+            />
+            <div className="flex space-x-2">
+              <Button onClick={() => setShowPasswordDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={setPasswordProtection}>
+                Set Password
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

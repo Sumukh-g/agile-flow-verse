@@ -14,16 +14,28 @@ model Tenant {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
-  sku       String   @default("basic") // basic, pro, enterprise
+  sku       String   @default("basic")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  users     User[]
-  projects  Project[]
-  features  TenantFeature[]
-  auditLogs AuditLog[]
-  outbox    Outbox[]
+  users            User[]
+  projects         Project[]
+  features         TenantFeature[]
+  auditLogs        AuditLog[]
+  outbox           Outbox[]
+  notes            Note[]
+  comments         Comment[]
+  roles            RoleAssignment[]
+  projectMember    ProjectMember[]
+  agents           Agent[]
+  agentRuns        AgentRun[]
+  // Added missing opposites
+  tasks            Task[]
+  taskAssignees    TaskAssignee[]
+  taskDependencies TaskDependency[]
+  attachments      Attachment[]
+  timesheets       Timesheet[]
 
   @@map("tenants")
 }
@@ -33,26 +45,24 @@ model FeatureFlag {
   key         String   @unique
   name        String
   description String?
-  category    String   @default("basic") // basic, pro, enterprise
+  category    String   @default("basic")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   tenantFeatures TenantFeature[]
 
   @@map("feature_flags")
 }
 
 model TenantFeature {
-  id        String   @id @default(cuid())
-  tenantId  String
+  id         String   @id @default(cuid())
+  tenantId   String
   featureKey String
-  enabled   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  enabled    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  // Relations
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   featureFlag FeatureFlag @relation(fields: [featureKey], references: [key], onDelete: Cascade)
 
   @@unique([tenantId, featureKey])
@@ -67,13 +77,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   roleAssignments RoleAssignment[]
-  projects       Project[]
-  tasks          Task[]
-  timesheets     Timesheet[]
-  auditLogs      AuditLog[]
+  projects        Project[]
+  timesheets      Timesheet[]
+  auditLogs       AuditLog[]
+  taskAssignees   TaskAssignee[]
+  projectMembers  ProjectMember[]
+  comments        Comment[]
 
   @@map("users")
 }
@@ -82,23 +93,21 @@ model Role {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
-  permissions String[] // Array of permission strings
+  permissions String[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   assignments RoleAssignment[]
 
   @@map("roles")
 }
 
 model RoleAssignment {
-  id     String @id @default(cuid())
-  userId String
-  roleId String
+  id       String @id @default(cuid())
+  userId   String
+  roleId   String
   tenantId String
 
-  // Relations
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -111,8 +120,8 @@ model Project {
   id          String   @id @default(cuid())
   name        String
   description String?
-  status      String   @default("active") // active, completed, on-hold, cancelled
-  priority    String   @default("medium") // low, medium, high, urgent
+  status      String   @default("active")
+  priority    String   @default("medium")
   progress    Int      @default(0)
   budget      Float?
   spent       Float    @default(0)
@@ -123,37 +132,134 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  creator  User     @relation(fields: [createdBy], references: [id])
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator  User    @relation(fields: [createdBy], references: [id])
   tasks    Task[]
-  outbox   Outbox[]
+  notes    Note[]
+  members  ProjectMember[]
 
   @@map("projects")
 }
 
-model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      String   @default("todo") // todo, in-progress, review, done
-  priority    String   @default("medium") // low, medium, high, urgent
-  dueDate     DateTime?
-  estimatedHours Float?
-  actualHours Float    @default(0)
-  projectId   String
-  assigneeId  String?
-  tenantId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model ProjectMember {
+  id        String   @id @default(cuid())
+  tenantId  String
+  projectId String
+  userId    String
+  role      String   @default("member")
+  createdAt DateTime @default(now())
 
-  // Relations
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee  User?      @relation(fields: [assigneeId], references: [id])
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  timesheets Timesheet[]
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, projectId, userId])
+  @@map("project_members")
+}
+
+model Task {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  status         String   @default("todo")
+  priority       String   @default("medium")
+  dueDate        DateTime?
+  estimatedHours Float?
+  actualHours    Float    @default(0)
+  projectId      String
+  tenantId       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  timesheets       Timesheet[]
+  assignees        TaskAssignee[]
+  dependenciesFrom TaskDependency[] @relation("fromTask")
+  dependenciesTo   TaskDependency[] @relation("toTask")
 
   @@map("tasks")
+}
+
+model TaskAssignee {
+  id       String @id @default(cuid())
+  tenantId String
+  taskId   String
+  userId   String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, taskId, userId])
+  @@map("task_assignees")
+}
+
+model TaskDependency {
+  id         String @id @default(cuid())
+  tenantId   String
+  fromTaskId String
+  toTaskId   String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  from   Task   @relation("fromTask", fields: [fromTaskId], references: [id], onDelete: Cascade)
+  to     Task   @relation("toTask", fields: [toTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fromTaskId, toTaskId])
+  @@map("task_dependencies")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   // JSON string
+  parentId  String?
+  projectId String
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // Vector embedding for enterprise search (1536 dims) via raw migration
+  embedding Unsupported("vector")?
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Note?   @relation("NoteChildren", fields: [parentId], references: [id])
+  children Note[]  @relation("NoteChildren")
+  comments Comment[]
+  attachments Attachment[]
+
+  @@map("notes")
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  noteId    String
+  filename  String
+  mimeType  String
+  sizeBytes Int
+  path      String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  noteId    String
+  content   String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [createdBy], references: [id])
+
+  @@map("comments")
 }
 
 model Timesheet {
@@ -167,11 +273,9 @@ model Timesheet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id])
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  outbox Outbox[]
 
   @@map("timesheets")
 }
@@ -184,7 +288,6 @@ model AuditLog {
   details   Json?
   createdAt DateTime @default(now())
 
-  // Relations
   user   User   @relation(fields: [userId], references: [id])
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
@@ -193,14 +296,43 @@ model AuditLog {
 
 model Outbox {
   id        String   @id @default(cuid())
-  aggregate String   // The aggregate type (e.g., "Timesheet", "Project")
-  payload   Json     // The event payload
+  aggregate String
+  payload   Json
   processed Boolean  @default(false)
   createdAt DateTime @default(now())
+  tenantId  String
 
-  // Relations
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId String
 
   @@map("outbox")
+}
+
+model Agent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  role      String   // Intake | Planner | Comms | Summarizer
+  tools     String[] // allowlist
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  runs   AgentRun[]
+
+  @@map("agents")
+}
+
+model AgentRun {
+  id        String   @id @default(cuid())
+  tenantId  String
+  agentId   String
+  toolCalls Int      @default(0)
+  input     Json
+  output    Json?
+  costCents Int      @default(0)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent  Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_runs")
 } 

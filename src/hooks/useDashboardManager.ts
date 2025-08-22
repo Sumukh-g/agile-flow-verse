@@ -1,9 +1,14 @@
 
+import { DEFAULT_DASHBOARD, WIDGET_TYPES } from '@/config/dashboardConfig';
+import { Dashboard, NewDashboardData, NewWidgetData, Widget } from '@/types/dashboard';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Dashboard, Widget, NewDashboardData, NewWidgetData } from '@/types/dashboard';
-import { DEFAULT_DASHBOARD, WIDGET_TYPES, DEFAULT_WIDGET_DATA } from '@/config/dashboardConfig';
-import { DropResult } from 'react-beautiful-dnd';
+
+// Minimal DropResult type to avoid hard dependency on react-beautiful-dnd in React 19
+type DropResult = {
+  source: { index: number };
+  destination: { index: number } | null;
+};
 
 export const useDashboardManager = () => {
   const [dashboards, setDashboards] = useState<Dashboard[]>([DEFAULT_DASHBOARD]);
@@ -55,7 +60,7 @@ export const useDashboardManager = () => {
       title: data.title,
       width: data.width,
       height: data.height,
-      data: {} // Default empty data, specific widgets might populate this differently
+      data: {}
     };
 
     setDashboards(prevDashboards => 
