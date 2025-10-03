@@ -25,6 +25,7 @@
     "src/api/notes/**/*.ts",
     "src/api/comments/**/*.ts",
     "src/api/outbox/**/*.ts",
-    "src/api/ai/**/*.ts"
+    "src/api/ai/**/*.ts",
+    "src/api/calendar/**/*.ts"
   ]
 } 

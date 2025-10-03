@@ -36,6 +36,9 @@ model Tenant {
   taskDependencies TaskDependency[]
   attachments      Attachment[]
   timesheets       Timesheet[]
+  calendarEvents   CalendarEvent[]
+  calendars        Calendar[]
+  events           Event[]
 
   @@map("tenants")
 }
@@ -85,6 +88,12 @@ model User {
   taskAssignees   TaskAssignee[]
   projectMembers  ProjectMember[]
   comments        Comment[]
+  calendarEvents  CalendarEvent[]
+  
+  // Calendar relations
+  ownedCalendars Calendar[] @relation("CalendarOwner")
+  createdEvents  Event[]    @relation("EventCreator")
+  updatedEvents  Event[]    @relation("EventUpdater")
 
   @@map("users")
 }
@@ -132,11 +141,12 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  creator  User    @relation(fields: [createdBy], references: [id])
-  tasks    Task[]
-  notes    Note[]
-  members  ProjectMember[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator        User            @relation(fields: [createdBy], references: [id])
+  tasks          Task[]
+  notes          Note[]
+  members        ProjectMember[]
+  calendarEvents CalendarEvent[]
 
   @@map("projects")
 }
@@ -335,4 +345,112 @@ model AgentRun {
   agent  Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@map("agent_runs")
+}
+
+model Calendar {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  color       String   @default("#3b82f6")
+  isDefault   Boolean  @default(false)
+  isShared    Boolean  @default(false)
+  ownerUserId String?
+  sectionId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner   User?    @relation("CalendarOwner", fields: [ownerUserId], references: [id])
+  events  Event[]
+
+  @@map("calendars")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  tenantId    String
+  calendarId  String
+  title       String
+  description String?
+  location    String?
+  allDay      Boolean  @default(false)
+  startAt     DateTime
+  endAt       DateTime
+  rrule       String?  // RRULE string for recurring events
+  exDates     String?  // JSON array of exception dates
+  timeZone    String   @default("UTC")
+  reminders   Json?    // JSON array of reminder settings
+  attendees   Json?    // JSON array of attendee objects
+  visibility  EventVisibility @default(default)
+  createdBy   String
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  calendar Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  creator  User     @relation("EventCreator", fields: [createdBy], references: [id])
+  updater  User?    @relation("EventUpdater", fields: [updatedBy], references: [id])
+  invites  EventInvite[]
+
+  @@index([tenantId, calendarId, startAt, endAt])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model EventInvite {
+  id       String        @id @default(cuid())
+  eventId  String
+  email    String
+  status   InviteStatus  @default(pending)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_invites")
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  description String?
+  date        DateTime
+  startTime   String?
+  endTime     String?
+  type        String   // 'meeting' | 'task' | 'reminder' | 'event' | 'deadline' | 'appointment'
+  priority    String?  // 'low' | 'medium' | 'high' | 'urgent'
+  location    String?
+  attendees   String[]
+  isOnline    Boolean  @default(false)
+  isRecurring Boolean  @default(false)
+  recurrence  String?  // 'daily' | 'weekly' | 'monthly' | 'yearly'
+  reminder    Int?     // minutes before
+  color       String?
+  completed   Boolean  @default(false)
+  notes       String?
+  projectId   String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [createdBy], references: [id])
+
+  @@map("calendar_events")
+}
+
+enum EventVisibility {
+  default
+  private
+  public
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  declined
 } 

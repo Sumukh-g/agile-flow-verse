@@ -1,14 +1,14 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   private async ensureProjectAccess(tenantId: string, userId: string, projectId: string) {
-    const isMember = await this.prisma.tx.projectMember.findFirst({ where: { tenantId, userId, projectId } });
+    const isMember = await this.prisma.projectMember.findFirst({ where: { tenantId, userId, projectId } });
     if (!isMember) {
-      const hasAdmin = await this.prisma.tx.roleAssignment.findFirst({
+      const hasAdmin = await this.prisma.roleAssignment.findFirst({
         where: { tenantId, userId, role: { permissions: { hasSome: ['tenant.admin', 'tenant.owner'] } } },
       });
       if (!hasAdmin) throw new ForbiddenException('Not authorized for this project');
@@ -18,7 +18,7 @@ export class TasksService {
   private async ensureNoCycles(taskId: string, deps: string[], tenantId: string) {
     // Simple DFS to prevent cycles in TaskDependency graph
     const adj = new Map<string, string[]>();
-    const edges = await this.prisma.tx.taskDependency.findMany({
+    const edges = await this.prisma.taskDependency.findMany({
       where: { tenantId },
       select: { fromTaskId: true, toTaskId: true },
     });
@@ -53,7 +53,7 @@ export class TasksService {
   async create(tenantId: string, userId: string, dto: any) {
     await this.ensureProjectAccess(tenantId, userId, dto.projectId);
 
-    const task = await this.prisma.tx.task.create({
+    const task = await this.prisma.task.create({
       data: {
         title: dto.title,
         description: dto.description,
@@ -69,7 +69,7 @@ export class TasksService {
 
     // Assignees
     if (Array.isArray(dto.assigneeIds) && dto.assigneeIds.length > 0) {
-      await this.prisma.tx.taskAssignee.createMany({
+      await this.prisma.taskAssignee.createMany({
         data: dto.assigneeIds.map((uid: string) => ({
           taskId: task.id,
           userId: uid,
@@ -82,7 +82,7 @@ export class TasksService {
     // Dependencies
     if (Array.isArray(dto.dependencyIds) && dto.dependencyIds.length > 0) {
       await this.ensureNoCycles(task.id, dto.dependencyIds, tenantId);
-      await this.prisma.tx.taskDependency.createMany({
+      await this.prisma.taskDependency.createMany({
         data: dto.dependencyIds.map((depId: string) => ({
           fromTaskId: task.id,
           toTaskId: depId,
@@ -93,7 +93,7 @@ export class TasksService {
     }
 
     // Outbox event
-    await this.prisma.tx.outbox.create({
+    await this.prisma.outbox.create({
       data: {
         tenantId,
         aggregate: 'Task',
@@ -104,38 +104,116 @@ export class TasksService {
     return task;
   }
 
-  async list(tenantId: string, projectId?: string, cursor?: any, limit = 25) {
+  async list(tenantId: string, projectId?: string, cursor?: any, limit = 25, sort = { createdAt: 'desc' as const }) {
     const take = Math.min(Math.max(limit, 1), 100);
-    const where: any = { tenantId, ...(projectId ? { projectId } : {}) };
-    const items = await this.prisma.tx.task.findMany({
+    const where = { 
+      tenantId,
+      ...(projectId ? { projectId } : {})
+    };
+    const orderBy = sort;
+    const items = await this.prisma.task.findMany({
       where,
       take: take + 1,
       ...(cursor ? { cursor: { id: cursor.id }, skip: 1 } : {}),
-      orderBy: { createdAt: 'desc' },
+      orderBy,
+      include: {
+        project: { select: { id: true, name: true } },
+        assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+        dependenciesTo: { include: { from: { select: { id: true, title: true } } } },
+      },
     });
     const nextCursor = items.length > take ? { id: items[take - 1].id } : null;
     return {
-      items: items.slice(0, take),
+      data: items.slice(0, take),
       nextCursor: nextCursor ? Buffer.from(JSON.stringify(nextCursor), 'utf8').toString('base64url') : null,
     };
   }
 
+  async get(tenantId: string, userId: string, id: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id, tenantId },
+      include: {
+        project: { select: { id: true, name: true } },
+        assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+        dependenciesTo: { include: { from: { select: { id: true, title: true } } } },
+      },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    await this.ensureProjectAccess(tenantId, userId, task.projectId);
+    return task;
+  }
+
   async update(tenantId: string, userId: string, id: string, dto: any) {
-    const existing = await this.prisma.tx.task.findFirst({ where: { id, tenantId } });
-    if (!existing) throw new NotFoundException('Task not found');
+    const task = await this.prisma.task.findFirst({ where: { id, tenantId } });
+    if (!task) throw new NotFoundException('Task not found');
+    await this.ensureProjectAccess(tenantId, userId, task.projectId);
 
-    await this.ensureProjectAccess(tenantId, userId, existing.projectId);
+    // Update dependencies if provided
+    if (Array.isArray(dto.dependencyIds)) {
+      await this.ensureNoCycles(id, dto.dependencyIds, tenantId);
+      await this.prisma.taskDependency.deleteMany({ where: { fromTaskId: id } });
+      if (dto.dependencyIds.length > 0) {
+        await this.prisma.taskDependency.createMany({
+          data: dto.dependencyIds.map((depId: string) => ({
+            fromTaskId: id,
+            toTaskId: depId,
+            tenantId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
-    const updated = await this.prisma.tx.task.update({ where: { id }, data: { ...dto } });
+    // Update assignees if provided
+    if (Array.isArray(dto.assigneeIds)) {
+      await this.prisma.taskAssignee.deleteMany({ where: { taskId: id } });
+      if (dto.assigneeIds.length > 0) {
+        await this.prisma.taskAssignee.createMany({
+          data: dto.assigneeIds.map((uid: string) => ({
+            taskId: id,
+            userId: uid,
+            tenantId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
-    await this.prisma.tx.outbox.create({
+    const updateData: any = { ...dto };
+    delete updateData.dependencyIds;
+    delete updateData.assigneeIds;
+    if (updateData.dueDate) updateData.dueDate = new Date(updateData.dueDate);
+
+    const updated = await this.prisma.task.update({ where: { id }, data: updateData });
+
+    // Outbox event
+    await this.prisma.outbox.create({
       data: {
         tenantId,
         aggregate: 'Task',
-        payload: { type: 'task.updated', taskId: id },
+        payload: { type: 'task.updated', taskId: id, projectId: task.projectId },
       },
     });
 
     return updated;
+  }
+
+  async remove(tenantId: string, userId: string, id: string) {
+    const task = await this.prisma.task.findFirst({ where: { id, tenantId } });
+    if (!task) throw new NotFoundException('Task not found');
+    await this.ensureProjectAccess(tenantId, userId, task.projectId);
+
+    await this.prisma.task.delete({ where: { id } });
+
+    // Outbox event
+    await this.prisma.outbox.create({
+      data: {
+        tenantId,
+        aggregate: 'Task',
+        payload: { type: 'task.deleted', taskId: id, projectId: task.projectId },
+      },
+    });
+
+    return { ok: true };
   }
 } 

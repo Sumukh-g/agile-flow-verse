@@ -30,6 +30,8 @@ const AdminPage = React.lazy(() => import("@/pages/AdminPage"));
 const AutomationsPage = React.lazy(() => import("@/pages/AutomationsPage"));
 const BestInClassExtrasPage = React.lazy(() => import("@/pages/BestInClassExtrasPage"));
 const CalendarHub = React.lazy(() => import("@/pages/CalendarHub"));
+const CalendarPage = React.lazy(() => import("@/pages/CalendarPage"));
+const CalendarTest = React.lazy(() => import("@/pages/CalendarTest"));
 const DeveloperPage = React.lazy(() => import("@/pages/DeveloperPage"));
 const IntegrationsPage = React.lazy(() => import("@/pages/IntegrationsPage"));
 const SettingsPage = React.lazy(() => import("@/pages/SettingsPage"));
@@ -51,14 +53,17 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
+const App = () => {
+  console.log('App component rendering...');
+  
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={
               <Suspense fallback={<PageLoading />}>
@@ -73,6 +78,18 @@ const App = () => (
             <Route path="/signup" element={
               <Suspense fallback={<PageLoading />}>
                 <SignUp />
+              </Suspense>
+            } />
+            
+            {/* Calendar routes - accessible without authentication for testing */}
+            <Route path="/calendar" element={
+              <Suspense fallback={<PageLoading />}>
+                <CalendarPage />
+              </Suspense>
+            } />
+            <Route path="/calendar-test" element={
+              <Suspense fallback={<PageLoading />}>
+                <CalendarTest />
               </Suspense>
             } />
             
@@ -110,11 +127,6 @@ const App = () => (
               <Route path="/notes" element={
                 <Suspense fallback={<PageLoading />}>
                   <Notes />
-                </Suspense>
-              } />
-              <Route path="/calendar" element={
-                <Suspense fallback={<PageLoading />}>
-                  <CalendarHub />
                 </Suspense>
               } />
               <Route path="/notifications" element={
@@ -169,11 +181,12 @@ const App = () => (
                 <NotFound />
               </Suspense>
             } />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+                      </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { CommentsModule } from './comments/comments.module';
 import { IdempotencyInterceptor } from './common/http/idempotency.interceptor';
 import { KafkaModule } from './common/kafka/kafka.module';
@@ -28,6 +29,7 @@ import { TasksModule } from './tasks/tasks.module';
     CommentsModule,
     OutboxModule,
     AiModule,
+    CalendarModule,
   ],
   providers: [
     IdempotencyInterceptor,

@@ -1,10 +1,8 @@
 
-import React from 'react';
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import React from 'react';
 import CreateTaskDialog from './CreateTaskDialog';
 
 interface Task {
@@ -15,6 +13,10 @@ interface Task {
   dueDate: string;
   assignee: string;
   tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  projectId?: string;
+  projectName?: string;
 }
 
 interface TaskTimelineViewProps {
@@ -108,40 +110,43 @@ const TaskTimelineView: React.FC<TaskTimelineViewProps> = ({ tasks, onTaskCreate
             <div className="p-3 border-r flex items-center gap-2">
               <Avatar className="h-6 w-6">
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {assignee}
+                  {assignee.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span>
-                {assignee === 'JD' ? 'John Doe' : 
-                 assignee === 'AS' ? 'Alice Smith' :
-                 assignee === 'RM' ? 'Robert Miller' :
-                 assignee === 'JW' ? 'Jane Wilson' : 
-                 assignee === 'TW' ? 'Thomas Wright' : assignee}
-              </span>
+              <span>{assignee}</span>
             </div>
             <div className="relative h-16">
               {tasksByAssignee[assignee].map(task => {
-                // Position tasks randomly for this demo
-                // In a real app, you'd calculate position based on task dates
-                const startPos = Math.floor(Math.random() * 10) + 1;
-                const width = Math.floor(Math.random() * 3) + 1;
+                // Calculate position based on task creation date
+                const taskDate = new Date(task.createdAt);
+                const startDate = days[0];
+                const endDate = days[days.length - 1];
+                
+                // Calculate position within the timeline
+                const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                const taskDaysFromStart = Math.ceil((taskDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                
+                // Ensure task is within visible range
+                const startPos = Math.max(0, Math.min(taskDaysFromStart, totalDays - 1));
+                const width = Math.max(1, Math.min(3, Math.floor(Math.random() * 3) + 1)); // Random width for visual variety
                 
                 return (
                   <div 
                     key={task.id}
-                    className={`absolute top-2 h-12 overflow-hidden rounded border ${
-                      task.priority === 'High' ? 'bg-red-100 border-red-200' :
-                      task.priority === 'Medium' ? 'bg-amber-100 border-amber-200' :
+                    className={`absolute top-2 h-12 overflow-hidden rounded border cursor-pointer hover:shadow-md transition-shadow ${
+                      task.priority === 'HIGH' ? 'bg-red-100 border-red-200' :
+                      task.priority === 'MEDIUM' ? 'bg-amber-100 border-amber-200' :
                       'bg-green-100 border-green-200'
                     }`}
                     style={{
-                      left: `${(startPos / 14) * 100}%`,
-                      width: `${(width / 14) * 100}%`
+                      left: `${(startPos / totalDays) * 100}%`,
+                      width: `${(width / totalDays) * 100}%`
                     }}
+                    title={`${task.title} - ${task.status} - Created: ${new Date(task.createdAt).toLocaleDateString()}`}
                   >
                     <div className="p-1 text-xs font-medium truncate">{task.title}</div>
                     <div className="px-1 text-xs text-muted-foreground truncate">
-                      {task.status} • {task.dueDate}
+                      {task.status} • {new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </div>
                   </div>
                 );

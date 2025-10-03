@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
-import { SidebarProvider } from "@/components/ui/sidebar";
-import Header from './Header';
-import AppSidebar from './AppSidebar';
 import StickyNote from '@/components/global/StickyNote';
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import AppSidebar from './AppSidebar';
+import Header from './Header';
 
 const Layout = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  console.log('Layout component rendering...');
 
   const toggleMobileSidebar = () => {
     console.log('Toggling mobile sidebar. Current state:', mobileSidebarOpen, 'New state:', !mobileSidebarOpen);

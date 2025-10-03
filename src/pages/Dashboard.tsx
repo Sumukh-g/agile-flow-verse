@@ -28,12 +28,18 @@ interface UserSetupData {
 }
 
 const Dashboard = () => {
+  console.log('Dashboard component rendering...');
+  
   const { user } = useAuth();
   const [userSetupData, setUserSetupData] = useState<UserSetupData | null>(null);
   
   // Use API hooks to fetch real data
-  const { data: projects = [], isLoading: projectsLoading } = useProjects();
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: projects, isLoading: projectsLoading } = useProjects();
+  const { data: tasks, isLoading: tasksLoading } = useTasks();
+  
+  // Ensure projects and tasks are arrays
+  const projectsArray = Array.isArray(projects) ? projects : [];
+  const tasksArray = Array.isArray(tasks) ? tasks : [];
   
   // Use mutation hooks for creating data
   const createProject = useCreateProject();
@@ -52,11 +58,11 @@ const Dashboard = () => {
   }, []);
 
   // Calculate dashboard stats
-  const totalProjects = projects.length;
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'DONE').length;
-  const pendingTasks = tasks.filter(t => t.status === 'TODO').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'IN_PROGRESS').length;
+  const totalProjects = projectsArray.length;
+  const totalTasks = tasksArray.length;
+  const completedTasks = tasksArray.filter(t => t.status === 'DONE').length;
+  const pendingTasks = tasksArray.filter(t => t.status === 'TODO').length;
+  const inProgressTasks = tasksArray.filter(t => t.status === 'IN_PROGRESS').length;
 
   const createTestData = async () => {
     try {
@@ -233,13 +239,13 @@ const Dashboard = () => {
         <CardContent>
           {projectsLoading ? (
             <div className="text-center py-4">Loading projects...</div>
-          ) : projects.length === 0 ? (
+          ) : projectsArray.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground">
               No projects yet. Create your first project to get started!
             </div>
           ) : (
             <div className="space-y-4">
-              {projects.slice(0, 5).map((project) => (
+              {projectsArray.slice(0, 5).map((project) => (
                 <div key={project.id} className="flex items-center space-x-4">
                   <div className="flex-1">
                     <h4 className="text-sm font-medium">{project.name}</h4>
@@ -266,13 +272,13 @@ const Dashboard = () => {
         <CardContent>
           {tasksLoading ? (
             <div className="text-center py-4">Loading tasks...</div>
-          ) : tasks.length === 0 ? (
+          ) : tasksArray.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground">
               No tasks yet. Create your first task to get started!
             </div>
           ) : (
             <div className="space-y-4">
-              {tasks.slice(0, 5).map((task) => (
+              {tasksArray.slice(0, 5).map((task) => (
                 <div key={task.id} className="flex items-center space-x-4">
                   <div className="flex-1">
                     <h4 className="text-sm font-medium">{task.title}</h4>

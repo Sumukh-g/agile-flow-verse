@@ -1,15 +1,16 @@
 
-import React, { useState } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useDeleteTask, useUpdateTask } from '@/hooks/useTasks';
 import { CalendarIcon, Clock, FileText, LinkIcon, Paperclip, Send } from "lucide-react";
+import React, { useState } from 'react';
 import { toast } from "sonner";
 
 interface Task {
@@ -40,6 +41,9 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
   const [commentText, setCommentText] = useState('');
   const [taskTitle, setTaskTitle] = useState(task?.title || '');
   const [taskDescription, setTaskDescription] = useState(task?.description || '');
+
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
 
   // Mock comments data
   const [comments, setComments] = useState([
@@ -107,15 +111,34 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
     toast.success("Subtask added");
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (task) {
-      const updatedTask = {
-        ...task,
-        title: taskTitle,
-        description: taskDescription
-      };
-      onTaskUpdate(updatedTask);
-      toast.success("Task updated successfully");
+      try {
+        await updateTaskMutation.mutateAsync({
+          id: task.id,
+          data: {
+            title: taskTitle,
+            description: taskDescription
+          }
+        });
+        toast.success("Task updated successfully");
+      } catch (error) {
+        toast.error("Failed to update task");
+        console.error('Error updating task:', error);
+      }
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (task) {
+      try {
+        await deleteTaskMutation.mutateAsync(task.id);
+        toast.success("Task deleted successfully");
+        onClose();
+      } catch (error) {
+        toast.error("Failed to delete task");
+        console.error('Error deleting task:', error);
+      }
     }
   };
 
@@ -373,11 +396,23 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
         <div className="mt-6">
           <Separator className="my-4" />
           <div className="flex justify-between">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveChanges}>
-              Save Changes
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleDeleteTask}
+                disabled={deleteTaskMutation.isPending}
+              >
+                {deleteTaskMutation.isPending ? 'Deleting...' : 'Delete Task'}
+              </Button>
+            </div>
+            <Button 
+              onClick={handleSaveChanges}
+              disabled={updateTaskMutation.isPending}
+            >
+              {updateTaskMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </div>

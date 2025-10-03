@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { CreateProjectDto, useCreateProject } from '@/hooks/useProjects';
+import React, { useState } from 'react';
 import { toast } from "sonner";
 
 interface Project {
@@ -20,10 +21,11 @@ interface Project {
 }
 
 interface CreateProjectDialogProps {
-  onProjectCreate: (project: Project) => void;
+  onProjectCreate?: (project: Project) => void;
 }
 
 const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ onProjectCreate }) => {
+  const createProjectMutation = useCreateProject();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -40,7 +42,7 @@ const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ onProjectCrea
     { id: 'TW', name: 'Thomas Wright' }
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name.trim()) {
@@ -48,21 +50,25 @@ const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ onProjectCrea
       return;
     }
 
-    const newProject: Project = {
-      id: Math.floor(Math.random() * 1000),
-      name,
-      description,
-      status,
-      progress: status === 'Completed' ? 100 : status === 'In Progress' ? Math.floor(Math.random() * 60) + 20 : Math.floor(Math.random() * 20),
-      members: selectedMembers,
-      team,
-      created: 'Just now'
-    };
+    try {
+      const projectData: CreateProjectDto = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+      };
 
-    onProjectCreate(newProject);
-    toast.success("Project created successfully");
-    setOpen(false);
-    resetForm();
+      const newProject = await createProjectMutation.mutateAsync(projectData);
+      
+      if (onProjectCreate) {
+        onProjectCreate(newProject);
+      }
+      
+      toast.success("Project created successfully");
+      setOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast.error("Failed to create project");
+    }
   };
 
   const resetForm = () => {
@@ -170,7 +176,9 @@ const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ onProjectCrea
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create Project</Button>
+            <Button type="submit" disabled={createProjectMutation.isPending}>
+              {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

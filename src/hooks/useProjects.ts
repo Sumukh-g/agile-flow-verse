@@ -22,14 +22,20 @@ export interface UpdateProjectDto {
 export const useProjects = () => {
   return useQuery({
     queryKey: ['projects'],
-    queryFn: () => apiClient.get<Project[]>('/projects'),
+    queryFn: async () => {
+      const response = await apiClient.get<{ items: Project[] }>('/v1/projects');
+      return { data: response.items };
+    },
   });
 };
 
 export const useProject = (id: string) => {
   return useQuery({
     queryKey: ['projects', id],
-    queryFn: () => apiClient.get<Project>(`/projects/${id}`),
+    queryFn: async () => {
+      const response = await apiClient.get<Project>(`/v1/projects/${id}`);
+      return response;
+    },
     enabled: !!id,
   });
 };
@@ -38,7 +44,7 @@ export const useCreateProject = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: CreateProjectDto) => apiClient.post<Project>('/projects', data),
+    mutationFn: (data: CreateProjectDto) => apiClient.post<Project>('/v1/projects', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
@@ -50,7 +56,7 @@ export const useUpdateProject = () => {
   
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) =>
-      apiClient.put<Project>(`/projects/${id}`, data),
+      apiClient.put<Project>(`/v1/projects/${id}`, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects', id] });
@@ -62,7 +68,7 @@ export const useDeleteProject = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/projects/${id}`),
+    mutationFn: (id: string) => apiClient.delete(`/v1/projects/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },

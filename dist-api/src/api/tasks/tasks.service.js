@@ -17,9 +17,9 @@ let TasksService = class TasksService {
         this.prisma = prisma;
     }
     async ensureProjectAccess(tenantId, userId, projectId) {
-        const isMember = await this.prisma.tx.projectMember.findFirst({ where: { tenantId, userId, projectId } });
+        const isMember = await this.prisma.projectMember.findFirst({ where: { tenantId, userId, projectId } });
         if (!isMember) {
-            const hasAdmin = await this.prisma.tx.roleAssignment.findFirst({
+            const hasAdmin = await this.prisma.roleAssignment.findFirst({
                 where: { tenantId, userId, role: { permissions: { hasSome: ['tenant.admin', 'tenant.owner'] } } },
             });
             if (!hasAdmin)
@@ -29,7 +29,7 @@ let TasksService = class TasksService {
     async ensureNoCycles(taskId, deps, tenantId) {
         // Simple DFS to prevent cycles in TaskDependency graph
         const adj = new Map();
-        const edges = await this.prisma.tx.taskDependency.findMany({
+        const edges = await this.prisma.taskDependency.findMany({
             where: { tenantId },
             select: { fromTaskId: true, toTaskId: true },
         });
@@ -65,7 +65,7 @@ let TasksService = class TasksService {
     }
     async create(tenantId, userId, dto) {
         await this.ensureProjectAccess(tenantId, userId, dto.projectId);
-        const task = await this.prisma.tx.task.create({
+        const task = await this.prisma.task.create({
             data: {
                 title: dto.title,
                 description: dto.description,
@@ -80,7 +80,7 @@ let TasksService = class TasksService {
         });
         // Assignees
         if (Array.isArray(dto.assigneeIds) && dto.assigneeIds.length > 0) {
-            await this.prisma.tx.taskAssignee.createMany({
+            await this.prisma.taskAssignee.createMany({
                 data: dto.assigneeIds.map((uid) => ({
                     taskId: task.id,
                     userId: uid,
@@ -92,7 +92,7 @@ let TasksService = class TasksService {
         // Dependencies
         if (Array.isArray(dto.dependencyIds) && dto.dependencyIds.length > 0) {
             await this.ensureNoCycles(task.id, dto.dependencyIds, tenantId);
-            await this.prisma.tx.taskDependency.createMany({
+            await this.prisma.taskDependency.createMany({
                 data: dto.dependencyIds.map((depId) => ({
                     fromTaskId: task.id,
                     toTaskId: depId,
@@ -102,7 +102,7 @@ let TasksService = class TasksService {
             });
         }
         // Outbox event
-        await this.prisma.tx.outbox.create({
+        await this.prisma.outbox.create({
             data: {
                 tenantId,
                 aggregate: 'Task',
@@ -111,14 +111,20 @@ let TasksService = class TasksService {
         });
         return task;
     }
-    async list(tenantId, projectId, cursor, limit = 25) {
+    async list(tenantId, cursor, limit = 25, sort = { createdAt: 'desc' }) {
         const take = Math.min(Math.max(limit, 1), 100);
-        const where = { tenantId, ...(projectId ? { projectId } : {}) };
-        const items = await this.prisma.tx.task.findMany({
+        const where = { tenantId };
+        const orderBy = sort;
+        const items = await this.prisma.task.findMany({
             where,
             take: take + 1,
             ...(cursor ? { cursor: { id: cursor.id }, skip: 1 } : {}),
-            orderBy: { createdAt: 'desc' },
+            orderBy,
+            include: {
+                project: { select: { id: true, name: true } },
+                assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+                dependenciesTo: { include: { from: { select: { id: true, title: true } } } },
+            },
         });
         const nextCursor = items.length > take ? { id: items[take - 1].id } : null;
         return {
@@ -126,20 +132,85 @@ let TasksService = class TasksService {
             nextCursor: nextCursor ? Buffer.from(JSON.stringify(nextCursor), 'utf8').toString('base64url') : null,
         };
     }
-    async update(tenantId, userId, id, dto) {
-        const existing = await this.prisma.tx.task.findFirst({ where: { id, tenantId } });
-        if (!existing)
+    async get(tenantId, userId, id) {
+        const task = await this.prisma.task.findFirst({
+            where: { id, tenantId },
+            include: {
+                project: { select: { id: true, name: true } },
+                assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+                dependenciesTo: { include: { from: { select: { id: true, title: true } } } },
+            },
+        });
+        if (!task)
             throw new common_1.NotFoundException('Task not found');
-        await this.ensureProjectAccess(tenantId, userId, existing.projectId);
-        const updated = await this.prisma.tx.task.update({ where: { id }, data: { ...dto } });
-        await this.prisma.tx.outbox.create({
+        await this.ensureProjectAccess(tenantId, userId, task.projectId);
+        return task;
+    }
+    async update(tenantId, userId, id, dto) {
+        const task = await this.prisma.task.findFirst({ where: { id, tenantId } });
+        if (!task)
+            throw new common_1.NotFoundException('Task not found');
+        await this.ensureProjectAccess(tenantId, userId, task.projectId);
+        // Update dependencies if provided
+        if (Array.isArray(dto.dependencyIds)) {
+            await this.ensureNoCycles(id, dto.dependencyIds, tenantId);
+            await this.prisma.taskDependency.deleteMany({ where: { fromTaskId: id } });
+            if (dto.dependencyIds.length > 0) {
+                await this.prisma.taskDependency.createMany({
+                    data: dto.dependencyIds.map((depId) => ({
+                        fromTaskId: id,
+                        toTaskId: depId,
+                        tenantId,
+                    })),
+                    skipDuplicates: true,
+                });
+            }
+        }
+        // Update assignees if provided
+        if (Array.isArray(dto.assigneeIds)) {
+            await this.prisma.taskAssignee.deleteMany({ where: { taskId: id } });
+            if (dto.assigneeIds.length > 0) {
+                await this.prisma.taskAssignee.createMany({
+                    data: dto.assigneeIds.map((uid) => ({
+                        taskId: id,
+                        userId: uid,
+                        tenantId,
+                    })),
+                    skipDuplicates: true,
+                });
+            }
+        }
+        const updateData = { ...dto };
+        delete updateData.dependencyIds;
+        delete updateData.assigneeIds;
+        if (updateData.dueDate)
+            updateData.dueDate = new Date(updateData.dueDate);
+        const updated = await this.prisma.task.update({ where: { id }, data: updateData });
+        // Outbox event
+        await this.prisma.outbox.create({
             data: {
                 tenantId,
                 aggregate: 'Task',
-                payload: { type: 'task.updated', taskId: id },
+                payload: { type: 'task.updated', taskId: id, projectId: task.projectId },
             },
         });
         return updated;
+    }
+    async remove(tenantId, userId, id) {
+        const task = await this.prisma.task.findFirst({ where: { id, tenantId } });
+        if (!task)
+            throw new common_1.NotFoundException('Task not found');
+        await this.ensureProjectAccess(tenantId, userId, task.projectId);
+        await this.prisma.task.delete({ where: { id } });
+        // Outbox event
+        await this.prisma.outbox.create({
+            data: {
+                tenantId,
+                aggregate: 'Task',
+                payload: { type: 'task.deleted', taskId: id, projectId: task.projectId },
+            },
+        });
+        return { ok: true };
     }
 };
 exports.TasksService = TasksService;

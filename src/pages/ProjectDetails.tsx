@@ -1,22 +1,23 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-  CheckCircle, 
-  FileEdit, 
-  FileText, 
-  Calendar, 
-  Clock, 
-  Shield, 
-  FileSpreadsheet, 
-  FileBox, 
-  FileInput, 
-  Layers,
-  StickyNote // Added for Notes tab
-} from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea"; // Added for Notes tab
+import { useProject } from '@/hooks/useProjects';
+import {
+    Calendar,
+    CheckCircle,
+    Clock,
+    FileBox,
+    FileEdit,
+    FileInput,
+    FileSpreadsheet,
+    FileText,
+    Layers,
+    Shield,
+    StickyNote // Added for Notes tab
+} from 'lucide-react';
+import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { toast } from "sonner";
 
 // Mock data for projects
@@ -31,18 +32,46 @@ const ProjectDetails = () => {
   const { projectId } = useParams();
   const [activeTab, setActiveTab] = useState<string>("summary");
   
-  // Find the project by ID, or use a default if not found or no ID
-  const currentProject = 
-    MOCK_PROJECTS.find(p => p.id === projectId) || 
-    MOCK_PROJECTS.find(p => p.name === "Project Manager") || // Fallback for the original hardcoded name
-    { 
-      id: projectId || "default", 
-      name: `Project ${projectId || "Overview"}`, 
-      icon: projectId ? projectId.substring(0,2).toUpperCase() : "P",
-      metrics: { completed: 0, updated: 0, created: 0, due: 0 } 
-    };
+  // Fetch the actual project from the database
+  const { data: project, isLoading, error } = useProject(projectId || '');
+  
+  // Use the fetched project or fallback to mock data
+  const currentProject = project ? {
+    id: project.id,
+    name: project.name,
+    description: project.description || '',
+    icon: project.name.substring(0, 2).toUpperCase(),
+    metrics: { completed: 0, updated: 0, created: 0, due: 0 } // These would come from actual task data
+  } : {
+    id: projectId || "default", 
+    name: `Project ${projectId || "Overview"}`, 
+    icon: projectId ? projectId.substring(0,2).toUpperCase() : "P",
+    metrics: { completed: 0, updated: 0, created: 0, due: 0 } 
+  };
 
   const [projectNote, setProjectNote] = useState(''); // State for project-specific note
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <span className="ml-2">Loading project...</span>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-red-500 mb-2">Error loading project</div>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);

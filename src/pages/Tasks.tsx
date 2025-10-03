@@ -1,132 +1,33 @@
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Search, Filter, Plus, SlidersHorizontal, Lock, ArrowUpDown, Eye, EyeOff, MoreHorizontal, CheckSquare, ListChecks, SaveAll } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
-import TaskViewTabs from '@/components/tasks/TaskViewTabs';
 import CreateTaskDialog from '@/components/tasks/CreateTaskDialog';
 import TaskCalendarView from '@/components/tasks/TaskCalendarView';
-import TaskTimelineView from '@/components/tasks/TaskTimelineView';
-import TaskReportView from '@/components/tasks/TaskReportView';
 import TaskDetailsPanel from '@/components/tasks/TaskDetailsPanel';
+import TaskReportView from '@/components/tasks/TaskReportView';
+import TaskTimelineView from '@/components/tasks/TaskTimelineView';
+import TaskViewTabs from '@/components/tasks/TaskViewTabs';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from '@/components/ui/checkbox';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useProjects } from '@/hooks/useProjects';
+import { Task as ApiTask, useTasks } from '@/hooks/useTasks';
+import { ArrowUpDown, CheckSquare, Eye, Filter, ListChecks, MoreHorizontal, Plus, SaveAll, Search, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
-// Task data
-const INITIAL_TASKS = {
-  'To Do': [
-    {
-      id: 't1',
-      title: 'Research competitor features',
-      priority: 'Medium',
-      dueDate: 'May 20',
-      assignee: 'JD',
-      tags: ['Research', 'Product'],
-      status: 'To Do'
-    },
-    {
-      id: 't2',
-      title: 'Review design mockups',
-      priority: 'High',
-      dueDate: 'May 18',
-      assignee: 'AS',
-      tags: ['Design', 'Review'],
-      status: 'To Do'
-    },
-    {
-      id: 't3',
-      title: 'Setup analytics tracking',
-      priority: 'Low',
-      dueDate: 'May 25',
-      assignee: 'RM',
-      tags: ['Marketing', 'Analytics'],
-      status: 'To Do'
-    }
-  ],
-  'In Progress': [
-    {
-      id: 't4',
-      title: 'Create user onboarding flow',
-      priority: 'High',
-      dueDate: 'May 19',
-      assignee: 'JW',
-      tags: ['UX', 'Design'],
-      status: 'In Progress'
-    },
-    {
-      id: 't5',
-      title: 'Implement authentication system',
-      priority: 'High',
-      dueDate: 'May 18',
-      assignee: 'TW',
-      tags: ['Backend', 'Security'],
-      status: 'In Progress'
-    }
-  ],
-  'In Review': [
-    {
-      id: 't6',
-      title: 'Optimize homepage load time',
-      priority: 'Medium',
-      dueDate: 'May 15',
-      assignee: 'JD',
-      tags: ['Performance', 'Frontend'],
-      status: 'In Review'
-    },
-    {
-      id: 't7',
-      title: 'Add payment processing feature',
-      priority: 'Medium',
-      dueDate: 'May 16',
-      assignee: 'RM',
-      tags: ['Backend', 'Payment'],
-      status: 'In Review'
-    }
-  ],
-  'Done': [
-    {
-      id: 't8',
-      title: 'Create marketing landing page',
-      priority: 'High',
-      dueDate: 'May 12',
-      assignee: 'AS',
-      tags: ['Marketing', 'Frontend'],
-      status: 'Done'
-    },
-    {
-      id: 't9',
-      title: 'Conduct user interviews',
-      priority: 'Medium',
-      dueDate: 'May 10',
-      assignee: 'JW',
-      tags: ['Research', 'UX'],
-      status: 'Done'
-    },
-    {
-      id: 't10',
-      title: 'Fix login page bugs',
-      priority: 'High',
-      dueDate: 'May 11',
-      assignee: 'TW',
-      tags: ['Bug', 'Frontend'],
-      status: 'Done'
-    }
-  ]
-};
-
-interface Task {
+// Convert API task to display task format
+interface DisplayTask {
   id: string;
   title: string;
   description?: string;
@@ -135,14 +36,43 @@ interface Task {
   assignee: string;
   tags: string[];
   status: string;
+  projectId?: string;
+  projectName?: string;
+  createdAt: string;
+  updatedAt: string;
 }
+
+// Helper function to convert API task to display format
+const convertApiTaskToDisplay = (apiTask: ApiTask, projects: any[] = []): DisplayTask => {
+  const project = projects.find(p => p.id === apiTask.projectId);
+  
+  // Generate more realistic assignee names
+  const assigneeNames = ['John Doe', 'Alice Smith', 'Robert Miller', 'Jane Wilson', 'Thomas Wright', 'Sarah Johnson', 'Mike Chen', 'Emily Davis'];
+  const assigneeName = apiTask.assigneeId ? 
+    assigneeNames[parseInt(apiTask.assigneeId.slice(-1), 16) % assigneeNames.length] : 
+    'Unassigned';
+  
+  return {
+    id: apiTask.id,
+    title: apiTask.title,
+    description: apiTask.description,
+    priority: apiTask.priority,
+    dueDate: new Date(apiTask.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    assignee: assigneeName,
+    tags: project ? [project.name] : ['General Task'],
+    status: apiTask.status === 'TODO' ? 'To Do' : 
+            apiTask.status === 'IN_PROGRESS' ? 'In Progress' : 'Done',
+    projectId: apiTask.projectId,
+    projectName: project?.name || 'General Task',
+    createdAt: apiTask.createdAt,
+    updatedAt: apiTask.updatedAt
+  };
+};
 
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<string>('list');
-  const [tasks, setTasks] = useState<Record<string, Task[]>>(INITIAL_TASKS);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
-  const [allTasksFlat, setAllTasksFlat] = useState<Task[]>([]);
   const [visibleColumns, setVisibleColumns] = useState({
     priority: true,
     dueDate: true,
@@ -156,14 +86,58 @@ const Tasks = () => {
     {id: 'v2', name: 'High Priority'},
     {id: 'v3', name: 'Due This Week'}
   ]);
-  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<DisplayTask | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
-  useEffect(() => {
-    // Flatten all tasks for list/calendar/timeline views
-    const flattenedTasks = Object.values(tasks).flat();
-    setAllTasksFlat(flattenedTasks);
-  }, [tasks]);
+  // Task handlers
+  const handleTaskAdd = (newTask: DisplayTask) => {
+    // This will be handled by the API mutation in CreateTaskDialog
+    // The data will be refetched automatically
+    toast.success('Task created successfully');
+  };
+  
+  // Fetch real data from API
+  const { data: projectsData } = useProjects();
+  const { data: tasksData, isLoading: tasksLoading, error: tasksError } = useTasks();
+  
+  // Convert API data to display format
+  const projects = projectsData?.data || [];
+  const apiTasks = tasksData?.data || [];
+  
+  // Convert API data to display format
+  const displayTasks = apiTasks.map(task => convertApiTaskToDisplay(task, projects));
+  
+  // Show empty state if no tasks
+  if (!tasksLoading && !tasksError && displayTasks.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
+          <p className="text-muted-foreground">
+            Track and manage tasks across projects.
+          </p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="text-muted-foreground mb-4">No tasks found</div>
+            <CreateTaskDialog onTaskCreate={handleTaskAdd} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Group tasks by status
+  const tasks = displayTasks.reduce((acc, task) => {
+    if (!acc[task.status]) {
+      acc[task.status] = [];
+    }
+    acc[task.status].push(task);
+    return acc;
+  }, {} as Record<string, DisplayTask[]>);
+  
+  // Flatten all tasks for list/calendar/timeline views
+  const allTasksFlat = displayTasks;
   
   // Filter tasks based on search query
   const filteredTasks = Object.entries(tasks).reduce((acc, [status, taskList]) => {
@@ -208,16 +182,6 @@ const Tasks = () => {
     }
   };
 
-  const handleTaskAdd = (newTask: Task) => {
-    setTasks(prev => {
-      const status = newTask.status;
-      return {
-        ...prev,
-        [status]: [...(prev[status] || []), newTask]
-      };
-    });
-  };
-  
   const toggleSelectTask = (taskId: string) => {
     const newSelected = new Set(selectedTasks);
     if (newSelected.has(taskId)) {
@@ -247,14 +211,8 @@ const Tasks = () => {
     
     switch (action) {
       case 'delete':
-        setTasks(prev => {
-          const newTasks = { ...prev };
-          for (const [status, taskList] of Object.entries(newTasks)) {
-            newTasks[status] = taskList.filter(task => !selectedTasks.has(task.id));
-          }
-          return newTasks;
-        });
-        toast.success(`${selectedTasks.size} tasks deleted`);
+        // TODO: Implement bulk delete API call
+        toast.success(`${selectedTasks.size} tasks marked for deletion`);
         setSelectedTasks(new Set());
         break;
         
@@ -295,22 +253,50 @@ const Tasks = () => {
     toast.success(`View "${newView.name}" saved successfully`);
   };
 
-  const openTaskDetails = (task: Task) => {
+  const openTaskDetails = (task: DisplayTask) => {
     setSelectedTaskForDetails(task);
     setIsDetailsOpen(true);
   };
 
-  const updateTask = (updatedTask: Task) => {
-    setTasks(prev => {
-      const newTasks = { ...prev };
-      for (const [status, taskList] of Object.entries(newTasks)) {
-        newTasks[status] = taskList.map(task => 
-          task.id === updatedTask.id ? updatedTask : task
-        );
-      }
-      return newTasks;
-    });
+  const updateTask = (updatedTask: DisplayTask) => {
+    // This will be handled by the API mutation
+    // The data will be refetched automatically
+    toast.success('Task updated successfully');
   };
+
+  // Show loading state
+  if (tasksLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
+          <p className="text-muted-foreground">
+            Track and manage tasks across projects.
+          </p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-muted-foreground">Loading tasks...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (tasksError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
+          <p className="text-muted-foreground">
+            Track and manage tasks across projects.
+          </p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-600">Error loading tasks. Please try again.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -8,12 +8,15 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OutboxModule = void 0;
 const common_1 = require("@nestjs/common");
+const kafka_module_1 = require("../common/kafka/kafka.module");
+const prisma_module_1 = require("../prisma/prisma.module");
 const outbox_relay_service_1 = require("./outbox.relay.service");
 let OutboxModule = class OutboxModule {
 };
 exports.OutboxModule = OutboxModule;
 exports.OutboxModule = OutboxModule = __decorate([
     (0, common_1.Module)({
+        imports: [prisma_module_1.PrismaModule, kafka_module_1.KafkaModule],
         providers: [outbox_relay_service_1.OutboxRelayService],
     })
 ], OutboxModule);

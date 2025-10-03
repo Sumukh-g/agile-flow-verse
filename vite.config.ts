@@ -15,6 +15,21 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: false,
       },
+      '/calendar/events': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/calendar/ai': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/calendar/integrations': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+      },
       '/docs': {
         target: 'http://localhost:4000',
         changeOrigin: true,

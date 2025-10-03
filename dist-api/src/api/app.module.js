@@ -11,6 +11,7 @@ const common_1 = require("@nestjs/common");
 const schedule_1 = require("@nestjs/schedule");
 const ai_module_1 = require("./ai/ai.module");
 const auth_module_1 = require("./auth/auth.module");
+const calendar_module_1 = require("./calendar/calendar.module");
 const comments_module_1 = require("./comments/comments.module");
 const idempotency_interceptor_1 = require("./common/http/idempotency.interceptor");
 const kafka_module_1 = require("./common/kafka/kafka.module");
@@ -40,6 +41,7 @@ exports.AppModule = AppModule = __decorate([
             comments_module_1.CommentsModule,
             outbox_module_1.OutboxModule,
             ai_module_1.AiModule,
+            calendar_module_1.CalendarModule,
         ],
         providers: [
             idempotency_interceptor_1.IdempotencyInterceptor,

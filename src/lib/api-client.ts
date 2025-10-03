@@ -20,8 +20,11 @@ class ApiClient {
   private maxRetries = 3;
 
   constructor() {
+    // Use environment variable for API URL, fallback to localhost
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    
     this.client = axios.create({
-      baseURL: '/v1',
+      baseURL,
       timeout: 10000,
     });
 
@@ -49,10 +52,9 @@ class ApiClient {
         config.headers['X-Tenant-Id'] = tenantId;
 
         // Add demo user header for development
-        const user = localStorage.getItem('user');
-        if (user) {
-          config.headers['X-Demo-User'] = 'true';
-        }
+        const user = localStorage.getItem('user') || 'demo-user';
+        config.headers['X-Demo-User'] = 'true';
+        config.headers['X-User-Id'] = user;
 
         // Add idempotency key for mutations
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method?.toUpperCase() || '')) {

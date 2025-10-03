@@ -17,13 +17,13 @@ let ProjectsService = class ProjectsService {
         this.prisma = prisma;
     }
     async ensureCanAccessProject(tenantId, userId, projectId) {
-        const member = await this.prisma.tx.projectMember.findFirst({
+        const member = await this.prisma.projectMember.findFirst({
             where: { tenantId, projectId, userId },
             select: { id: true },
         });
         if (!member) {
             // Tenant admins/owners can bypass - check role assignments
-            const ra = await this.prisma.tx.roleAssignment.findFirst({
+            const ra = await this.prisma.roleAssignment.findFirst({
                 where: { tenantId, userId, role: { permissions: { hasSome: ['tenant.admin', 'tenant.owner'] } } },
                 select: { id: true },
             });
@@ -32,7 +32,7 @@ let ProjectsService = class ProjectsService {
         }
     }
     async create(tenantId, userId, data) {
-        return this.prisma.tx.project.create({
+        return this.prisma.project.create({
             data: {
                 ...data,
                 tenantId,
@@ -44,7 +44,7 @@ let ProjectsService = class ProjectsService {
         const take = Math.min(Math.max(limit, 1), 100);
         const where = { tenantId };
         const orderBy = sort;
-        const items = await this.prisma.tx.project.findMany({
+        const items = await this.prisma.project.findMany({
             where,
             take: take + 1,
             ...(cursor ? { cursor: { id: cursor.id }, skip: 1 } : {}),
@@ -58,18 +58,18 @@ let ProjectsService = class ProjectsService {
     }
     async get(tenantId, userId, id) {
         await this.ensureCanAccessProject(tenantId, userId, id);
-        const proj = await this.prisma.tx.project.findFirst({ where: { id, tenantId } });
+        const proj = await this.prisma.project.findFirst({ where: { id, tenantId } });
         if (!proj)
             throw new common_1.NotFoundException('Project not found');
         return proj;
     }
     async update(tenantId, userId, id, data) {
         await this.ensureCanAccessProject(tenantId, userId, id);
-        return this.prisma.tx.project.update({ where: { id }, data });
+        return this.prisma.project.update({ where: { id }, data });
     }
     async remove(tenantId, userId, id) {
         await this.ensureCanAccessProject(tenantId, userId, id);
-        await this.prisma.tx.project.delete({ where: { id } });
+        await this.prisma.project.delete({ where: { id } });
         return { ok: true };
     }
 };
