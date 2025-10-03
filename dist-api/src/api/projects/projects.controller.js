@@ -26,8 +26,8 @@ let ProjectsController = class ProjectsController {
     async create(body, req) {
         return this.svc.create(req.user.tenantId, req.user.userId, body);
     }
-    async list(cursor, limit) {
-        return this.svc.list(arguments[0].user.tenantId, (0, cursor_1.decodeCursor)(cursor), limit ? Number(limit) : 25);
+    async list(cursor, limit, req) {
+        return this.svc.list(req.user.tenantId, (0, cursor_1.decodeCursor)(cursor), limit ? Number(limit) : 25);
     }
     async get(id, req) {
         return this.svc.get(req.user.tenantId, req.user.userId, id);
@@ -43,6 +43,7 @@ exports.ProjectsController = ProjectsController;
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [dto_1.CreateProjectDto, Object]),
     __metadata("design:returntype", Promise)
@@ -51,13 +52,15 @@ __decorate([
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)('cursor')),
     __param(1, (0, common_1.Query)('limit')),
+    __param(2, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], ProjectsController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
@@ -66,6 +69,7 @@ __decorate([
     (0, common_1.Put)(':id'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, dto_1.UpdateProjectDto, Object]),
     __metadata("design:returntype", Promise)
@@ -73,6 +77,7 @@ __decorate([
 __decorate([
     (0, common_1.Delete)(':id'),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
