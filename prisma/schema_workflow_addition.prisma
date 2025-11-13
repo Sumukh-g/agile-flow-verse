@@ -1,0 +1,56 @@
+// Add these models to your schema.prisma file
+
+model Workflow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  enabled     Boolean  @default(true)
+  trigger     Json     // WorkflowTrigger
+  conditions  Json     // Array of conditions
+  actions     Json     // Array of WorkflowAction
+  projectId   String?
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions  WorkflowExecution[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([enabled])
+}
+
+model WorkflowExecution {
+  id         String   @id @default(cuid())
+  tenantId   String
+  workflowId String
+  status     String   // 'success' | 'error'
+  data       Json     // Execution context data
+  error      String?  // Error message if failed
+  
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([workflowId])
+  @@index([createdAt])
+}
+
+// Update these existing models to add relations:
+
+model Tenant {
+  // ... existing fields ...
+  workflows          Workflow[]
+  workflowExecutions WorkflowExecution[]
+}
+
+model Project {
+  // ... existing fields ...
+  workflows Workflow[]
+}
+

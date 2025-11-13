@@ -5,6 +5,16 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  status: 'active' | 'completed' | 'on-hold' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  progress: number;
+  budget?: number;
+  spent: number;
+  startDate?: string;
+  endDate?: string;
+  tags?: string[];
+  isPublic?: boolean;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -12,17 +22,38 @@ export interface Project {
 export interface CreateProjectDto {
   name: string;
   description?: string;
+  status?: 'active' | 'completed' | 'on-hold' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  progress?: number;
+  budget?: number;
+  spent?: number;
+  startDate?: string;
+  endDate?: string;
+  tags?: string[];
+  isPublic?: boolean;
 }
 
 export interface UpdateProjectDto {
   name?: string;
   description?: string;
+  status?: 'active' | 'completed' | 'on-hold' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  progress?: number;
+  budget?: number;
+  spent?: number;
+  startDate?: string;
+  endDate?: string;
+  tags?: string[];
+  isPublic?: boolean;
 }
 
 export const useProjects = () => {
   return useQuery({
     queryKey: ['projects'],
-    queryFn: () => apiClient.get<Project[]>('/projects'),
+    queryFn: async () => {
+      const response = await apiClient.get<{ items: Project[]; nextCursor: string | null }>('/projects');
+      return response.items || [];
+    },
   });
 };
 

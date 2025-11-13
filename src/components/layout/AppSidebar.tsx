@@ -5,39 +5,38 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarGroupLabel,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    useSidebar,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
-    Briefcase,
-    Calendar,
-    Check,
-    CheckSquare,
-    ChevronDown,
-    ChevronUp,
-    Code,
-    FileText,
-    Folder,
-    Layers,
-    LayoutDashboard,
-    MoreHorizontal,
-    PanelRight,
-    Pencil,
-    Plus,
-    Settings,
-    Shield,
-    Star,
-    StickyNote,
-    Trello,
-    X,
-    Zap
+  Briefcase,
+  Calendar,
+  Check,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Code,
+  FileText,
+  Folder,
+  Layers,
+  LayoutDashboard,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Settings,
+  Shield,
+  Star,
+  StickyNote,
+  Trello,
+  X,
+  Zap
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -78,7 +77,7 @@ export const AppSidebar = () => {
   
   // Main navigation items
   const mainNavItems = [
-    { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', isPrimary: true },
     { title: 'Projects', icon: Briefcase, path: '/projects' },
     { title: 'Tasks', icon: CheckSquare, path: '/tasks' },
     { title: 'Boards', icon: Trello, path: '/boards' },
@@ -99,7 +98,7 @@ export const AppSidebar = () => {
 
   // Custom sections
   const customSections = [
-    { title: 'My Dashboard', icon: PanelRight, path: '/custom-dashboard' }
+    // { title: 'My Dashboard', icon: PanelRight, path: '/custom-dashboard' }
   ];
   
   // Helper to determine if a nav item is active
@@ -182,22 +181,37 @@ export const AppSidebar = () => {
       collapsible="icon"
     >
       <SidebarContent>
+
+        {/* Main Navigation */}
         <SidebarGroup>
           <SidebarGroupLabel className={collapsed ? "sr-only" : ""}>
-            Main
+            Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {/* HARD CODED DASHBOARD - FIRST ITEM */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink 
+                    to="/dashboard" 
+                    className={getNavClass}
+                  >
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              
+              {/* REST OF NAVIGATION ITEMS */}
+              {mainNavItems.filter(item => item.title !== 'Dashboard').map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
                       to={item.path} 
-                      end={item.path === '/dashboard'} 
                       className={getNavClass}
                     >
                       <item.icon className="mr-2 h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
+                      <span>{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

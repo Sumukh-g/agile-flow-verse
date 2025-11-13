@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useProjects } from '@/hooks/useProjects';
 import {
     Activity,
     Building2,
@@ -93,7 +94,10 @@ const ProjectsCRM: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
 
-  // Mock data - in real app, this would come from API
+  // Use real API data
+  const { data: apiProjects = [], isLoading: projectsLoading } = useProjects();
+
+  // Mock data for clients and deals (these don't have API endpoints yet)
   const [clients] = useState<Client[]>([
     {
       id: '1',
@@ -145,65 +149,26 @@ const ProjectsCRM: React.FC = () => {
     }
   ]);
 
-  const [projects] = useState<Project[]>([
-    {
-      id: '1',
-      name: 'E-commerce Platform',
-      description: 'Complete e-commerce solution with payment integration',
-      clientId: '1',
-      status: 'in-progress',
-      priority: 'high',
-      progress: 75,
-      budget: 85000,
-      spent: 63750,
-      startDate: '2024-01-15',
-      endDate: '2024-03-30',
-      team: ['dev-1', 'dev-2', 'designer-1'],
-      tasks: 45,
-      completedTasks: 34,
-      type: 'development',
-      profitability: 35,
-      riskLevel: 'low'
-    },
-    {
-      id: '2',
-      name: 'Mobile App MVP',
-      description: 'iOS and Android app for fintech startup',
-      clientId: '2',
-      status: 'planning',
-      priority: 'medium',
-      progress: 15,
-      budget: 45000,
-      spent: 6750,
-      startDate: '2024-02-01',
-      endDate: '2024-05-15',
-      team: ['dev-3', 'designer-2'],
-      tasks: 28,
-      completedTasks: 4,
-      type: 'development',
-      profitability: 42,
-      riskLevel: 'medium'
-    },
-    {
-      id: '3',
-      name: 'Brand Identity Design',
-      description: 'Complete brand redesign and marketing materials',
-      clientId: '3',
-      status: 'review',
-      priority: 'medium',
-      progress: 90,
-      budget: 25000,
-      spent: 22500,
-      startDate: '2024-01-01',
-      endDate: '2024-02-28',
-      team: ['designer-1', 'designer-3'],
-      tasks: 18,
-      completedTasks: 16,
-      type: 'design',
-      profitability: 28,
-      riskLevel: 'low'
-    }
-  ]);
+  // Transform API projects to match the expected format
+  const projects: Project[] = apiProjects.map(apiProject => ({
+    id: apiProject.id,
+    name: apiProject.name,
+    description: apiProject.description || '',
+    clientId: '1', // Default client for now
+    status: 'in-progress' as const,
+    priority: 'medium' as const,
+    progress: 0,
+    budget: 0,
+    spent: 0,
+    startDate: apiProject.createdAt,
+    endDate: '',
+    team: [],
+    tasks: 0,
+    completedTasks: 0,
+    type: 'development' as const,
+    profitability: 0,
+    riskLevel: 'low' as const
+  }));
 
   const [deals] = useState<Deal[]>([
     {
@@ -469,8 +434,18 @@ const ProjectsCRM: React.FC = () => {
               <CardDescription>Current status of all active projects</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {projects.map((project) => (
+              {projectsLoading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-2 text-sm text-muted-foreground">Loading projects...</p>
+                </div>
+              ) : projects.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No projects found. Create your first project to get started!
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {projects.map((project) => (
                   <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div>
@@ -498,7 +473,8 @@ const ProjectsCRM: React.FC = () => {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -655,7 +631,16 @@ const ProjectsCRM: React.FC = () => {
           </div>
 
           {/* Projects Display */}
-          {viewMode === 'grid' ? (
+          {projectsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading projects...</p>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No projects found. Create your first project to get started!</p>
+            </div>
+          ) : viewMode === 'grid' ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {projects.map((project) => (
                 <Card key={project.id} className="hover:shadow-lg transition-shadow">

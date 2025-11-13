@@ -27,6 +27,20 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
+    useArchiveNotifications,
+    useCreateNotificationService,
+    useDeleteNotification,
+    useDeleteNotificationService,
+    useMarkAllAsRead,
+    useMarkAsRead,
+    useNotifications,
+    useNotificationServices,
+    useRealtimeNotifications,
+    useUnarchiveNotifications,
+    useUnreadCount,
+    useUpdateNotificationService
+} from '@/hooks/useNotifications';
+import {
     Archive,
     Bell,
     CheckCircle,
@@ -34,47 +48,21 @@ import {
     EyeOff,
     Facebook,
     Instagram,
+    Loader2,
     Mail,
     MessageCircle,
     MessageSquare,
     MoreHorizontal,
     Plus,
+    RefreshCw,
     Search,
     Slack,
     Trash2
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 
-// Types
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  source: string;
-  category: 'Important' | 'Social' | 'Work';
-  priority: 'high' | 'medium' | 'low';
-  timestamp: Date;
-  read: boolean;
-  archived: boolean;
-  icon: string;
-  color: string;
-  actionUrl?: string;
-}
-
-interface Service {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  enabled: boolean;
-  connected: boolean;
-  category: 'Important' | 'Social' | 'Work';
-}
-
 const NotificationsCenter: React.FC = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,112 +73,50 @@ const NotificationsCenter: React.FC = () => {
     category: 'Work' as 'Important' | 'Social' | 'Work'
   });
 
-  // Initialize with sample data
-  useEffect(() => {
-    const sampleNotifications: Notification[] = [
-      {
-        id: '1',
-        title: 'New email from John Doe',
-        message: 'Project update meeting scheduled for tomorrow at 10 AM',
-        source: 'Gmail',
-        category: 'Work',
-        priority: 'high',
-        timestamp: new Date(Date.now() - 5 * 60 * 1000),
-        read: false,
-        archived: false,
-        icon: 'Mail',
-        color: 'bg-blue-500'
-      },
-      {
-        id: '2',
-        title: 'WhatsApp message from Sarah',
-        message: 'Hey! Are you free for lunch today?',
-        source: 'WhatsApp',
-        category: 'Social',
-        priority: 'medium',
-        timestamp: new Date(Date.now() - 15 * 60 * 1000),
-        read: false,
-        archived: false,
-        icon: 'MessageCircle',
-        color: 'bg-green-500'
-      },
-      {
-        id: '3',
-        title: 'Slack notification',
-        message: 'New message in #general channel',
-        source: 'Slack',
-        category: 'Work',
-        priority: 'low',
-        timestamp: new Date(Date.now() - 30 * 60 * 1000),
-        read: true,
-        archived: false,
-        icon: 'Slack',
-        color: 'bg-purple-500'
-      },
-      {
-        id: '4',
-        title: 'Instagram like',
-        message: 'Sarah liked your photo',
-        source: 'Instagram',
-        category: 'Social',
-        priority: 'low',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        read: true,
-        archived: false,
-        icon: 'Instagram',
-        color: 'bg-pink-500'
-      },
-      {
-        id: '5',
-        title: 'Facebook notification',
-        message: 'You have 3 new friend requests',
-        source: 'Facebook',
-        category: 'Social',
-        priority: 'medium',
-        timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-        read: false,
-        archived: false,
-        icon: 'Facebook',
-        color: 'bg-blue-600'
-      },
-      {
-        id: '6',
-        title: 'Teams meeting reminder',
-        message: 'Weekly standup in 15 minutes',
-        source: 'Teams',
-        category: 'Important',
-        priority: 'high',
-        timestamp: new Date(Date.now() - 45 * 60 * 1000),
-        read: false,
-        archived: false,
-        icon: 'MessageSquare',
-        color: 'bg-indigo-500'
-      }
-    ];
+  // Fetch data from API
+  const { 
+    data: notificationsData, 
+    isLoading: isLoadingNotifications,
+    refetch: refetchNotifications,
+    error: notificationsError
+  } = useNotifications({
+    search: searchQuery || undefined,
+    priority: selectedPriority !== 'all' ? selectedPriority : undefined,
+    limit: 50,
+  });
 
-    const sampleServices: Service[] = [
-      { id: 'gmail', name: 'Gmail', icon: 'Mail', color: 'bg-blue-500', enabled: true, connected: true, category: 'Work' },
-      { id: 'whatsapp', name: 'WhatsApp', icon: 'MessageCircle', color: 'bg-green-500', enabled: true, connected: true, category: 'Social' },
-      { id: 'slack', name: 'Slack', icon: 'Slack', color: 'bg-purple-500', enabled: true, connected: true, category: 'Work' },
-      { id: 'instagram', name: 'Instagram', icon: 'Instagram', color: 'bg-pink-500', enabled: true, connected: true, category: 'Social' },
-      { id: 'facebook', name: 'Facebook', icon: 'Facebook', color: 'bg-blue-600', enabled: false, connected: false, category: 'Social' },
-      { id: 'teams', name: 'Teams', icon: 'MessageSquare', color: 'bg-indigo-500', enabled: true, connected: true, category: 'Important' }
-    ];
+  const { data: unreadCountData } = useUnreadCount();
+  
+  const { 
+    data: services = [], 
+    isLoading: isLoadingServices 
+  } = useNotificationServices();
 
-    setNotifications(sampleNotifications);
-    setServices(sampleServices);
-  }, []);
+  // Enable real-time notification updates
+  useRealtimeNotifications(true);
 
-  // Filter notifications based on current filters
-  const filteredNotifications = notifications.filter(notification => {
-    const matchesCategory = selectedCategory === 'all' || notification.category === selectedCategory;
-    const matchesPriority = selectedPriority === 'all' || notification.priority === selectedPriority;
-    const matchesSearch = notification.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         notification.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         notification.source.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesArchived = showArchived ? true : !notification.archived;
+  // Mutations
+  const markAsReadMutation = useMarkAsRead();
+  const markAllAsReadMutation = useMarkAllAsRead();
+  const archiveMutation = useArchiveNotifications();
+  const unarchiveMutation = useUnarchiveNotifications();
+  const deleteNotificationMutation = useDeleteNotification();
+  const createServiceMutation = useCreateNotificationService();
+  const updateServiceMutation = useUpdateNotificationService();
+  const deleteServiceMutation = useDeleteNotificationService();
 
-    return matchesCategory && matchesPriority && matchesSearch && matchesArchived;
+  // Extract notifications from response
+  const allNotifications = notificationsData?.notifications || [];
+
+  // Filter notifications by category on frontend (since backend doesn't support it yet)
+  const filteredNotifications = allNotifications.filter(notification => {
+    if (selectedCategory !== 'all' && notification.category !== selectedCategory) {
+      return false;
+    }
+    if (showArchived !== notification.archived) {
+      return false;
+    }
+    return true;
   });
 
   // Get icon component
@@ -203,76 +129,64 @@ const NotificationsCenter: React.FC = () => {
 
   // Handle notification actions
   const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    );
-    toast.success('Marked as read');
+    markAsReadMutation.mutate([id]);
   };
 
   const markAsUnread = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id ? { ...notification, read: false } : notification
-      )
-    );
-    toast.success('Marked as unread');
+    // Backend doesn't have unmark as read, we'd need to add that
+    toast.info('Mark as unread not yet implemented in backend');
   };
 
   const archiveNotification = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id ? { ...notification, archived: true } : notification
-      )
-    );
-    toast.success('Notification archived');
+    archiveMutation.mutate([id]);
+  };
+
+  const unarchiveNotification = (id: string) => {
+    unarchiveMutation.mutate([id]);
   };
 
   const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-    toast.success('Notification deleted');
+    deleteNotificationMutation.mutate(id);
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    toast.success('All notifications marked as read');
+    markAllAsReadMutation.mutate();
   };
 
   // Handle service management
   const toggleService = (serviceId: string) => {
-    setServices(prev => 
-      prev.map(service => 
-        service.id === serviceId ? { ...service, enabled: !service.enabled } : service
-      )
-    );
-    toast.success('Service toggled');
+    const service = services.find(s => s.id === serviceId);
+    if (service) {
+      updateServiceMutation.mutate({
+        id: serviceId,
+        data: { enabled: !service.enabled }
+      });
+    }
   };
 
   const addService = () => {
     if (newService.name.trim()) {
-      const service: Service = {
-        id: newService.name.toLowerCase().replace(/\s+/g, '-'),
+      createServiceMutation.mutate({
         name: newService.name,
+        category: newService.category,
         icon: 'Bell',
         color: 'bg-gray-500',
-        enabled: true,
-        connected: false,
-        category: newService.category
-      };
-      setServices(prev => [...prev, service]);
+      });
       setNewService({ name: '', category: 'Work' });
       setIsAddingService(false);
-      toast.success('Service added');
     }
+  };
+
+  const removeService = (serviceId: string) => {
+    deleteServiceMutation.mutate(serviceId);
   };
 
   // Get priority badge color
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800';
+      case 'high':
+      case 'urgent':
+        return 'bg-red-100 text-red-800';
       case 'medium': return 'bg-yellow-100 text-yellow-800';
       case 'low': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -289,7 +203,7 @@ const NotificationsCenter: React.FC = () => {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read && !n.archived).length;
+  const unreadCount = unreadCountData?.count || 0;
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -300,7 +214,20 @@ const NotificationsCenter: React.FC = () => {
           <p className="text-gray-600 mt-2">Manage all your notifications in one place</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={markAllAsRead} disabled={unreadCount === 0}>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => refetchNotifications()}
+            disabled={isLoadingNotifications}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingNotifications ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={markAllAsRead} 
+            disabled={unreadCount === 0 || markAllAsReadMutation.isPending}
+          >
             <CheckCircle className="w-4 h-4 mr-2" />
             Mark all as read
           </Button>
@@ -310,6 +237,14 @@ const NotificationsCenter: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Error Display */}
+      {notificationsError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <p className="font-medium">Error loading notifications</p>
+          <p className="text-sm">{(notificationsError as Error).message}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Services Panel */}
@@ -361,59 +296,78 @@ const NotificationsCenter: React.FC = () => {
                       <Button variant="outline" onClick={() => setIsAddingService(false)}>
                         Cancel
                       </Button>
-                      <Button onClick={addService}>Add Service</Button>
+                      <Button 
+                        onClick={addService}
+                        disabled={createServiceMutation.isPending}
+                      >
+                        {createServiceMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Adding...
+                          </>
+                        ) : (
+                          'Add Service'
+                        )}
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {services.map(service => (
-                <div key={service.id} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full ${service.color} flex items-center justify-center`}>
-                      {React.createElement(getIconComponent(service.icon), { className: 'w-4 h-4 text-white' })}
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm">{service.name}</div>
-                      <Badge variant="secondary" className="text-xs">
-                        {service.category}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={service.enabled}
-                      onCheckedChange={() => toggleService(service.id)}
-                    />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => toast.info('Connecting to service...')}>
-                          Connect
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.info('Service settings opened')}>
-                          Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setServices(prev => prev.filter(s => s.id !== service.id));
-                            toast.success('Service removed');
-                          }}
-                          className="text-red-600"
-                        >
-                          Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+              {isLoadingServices ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                 </div>
-              ))}
+              ) : services.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No services connected yet
+                </p>
+              ) : (
+                services.map(service => (
+                  <div key={service.id} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full ${service.color} flex items-center justify-center`}>
+                        {React.createElement(getIconComponent(service.icon), { className: 'w-4 h-4 text-white' })}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{service.name}</div>
+                        <Badge variant="secondary" className="text-xs">
+                          {service.category}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={service.enabled}
+                        onCheckedChange={() => toggleService(service.id)}
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => toast.info('Connecting to service...')}>
+                            Connect
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toast.info('Service settings opened')}>
+                            Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => removeService(service.id)}
+                            className="text-red-600"
+                          >
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -423,7 +377,14 @@ const NotificationsCenter: React.FC = () => {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Notifications ({filteredNotifications.length})</CardTitle>
+                <CardTitle>
+                  Notifications ({filteredNotifications.length})
+                  {unreadCount > 0 && (
+                    <Badge className="ml-2" variant="destructive">
+                      {unreadCount} unread
+                    </Badge>
+                  )}
+                </CardTitle>
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
@@ -452,6 +413,7 @@ const NotificationsCenter: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="all">All Priority</SelectItem>
                       <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="low">Low</SelectItem>
                     </SelectContent>
@@ -460,11 +422,17 @@ const NotificationsCenter: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {filteredNotifications.length === 0 ? (
+              {isLoadingNotifications ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                </div>
+              ) : filteredNotifications.length === 0 ? (
                 <div className="text-center py-12">
                   <Bell className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
-                  <p className="text-gray-500">You're all caught up!</p>
+                  <p className="text-gray-500">
+                    {showArchived ? "No archived notifications" : "You're all caught up!"}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -476,8 +444,10 @@ const NotificationsCenter: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-full ${notification.color} flex items-center justify-center flex-shrink-0`}>
-                          {React.createElement(getIconComponent(notification.icon), { className: 'w-5 h-5 text-white' })}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          notification.source ? 'bg-blue-500' : 'bg-gray-500'
+                        }`}>
+                          <Bell className="w-5 h-5 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between">
@@ -492,17 +462,24 @@ const NotificationsCenter: React.FC = () => {
                               </div>
                               <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {notification.source}
-                                </Badge>
-                                <Badge className={`text-xs ${getCategoryColor(notification.category)}`}>
-                                  {notification.category}
-                                </Badge>
+                                {notification.source && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {notification.source}
+                                  </Badge>
+                                )}
+                                {notification.category && (
+                                  <Badge className={`text-xs ${getCategoryColor(notification.category)}`}>
+                                    {notification.category}
+                                  </Badge>
+                                )}
                                 <Badge className={`text-xs ${getPriorityColor(notification.priority)}`}>
                                   {notification.priority}
                                 </Badge>
                                 <span className="text-xs text-gray-500">
-                                  {notification.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(notification.createdAt).toLocaleTimeString([], { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
                                 </span>
                               </div>
                             </div>
@@ -524,10 +501,17 @@ const NotificationsCenter: React.FC = () => {
                                     Mark as read
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={() => archiveNotification(notification.id)}>
-                                  <Archive className="w-4 h-4 mr-2" />
-                                  Archive
-                                </DropdownMenuItem>
+                                {notification.archived ? (
+                                  <DropdownMenuItem onClick={() => unarchiveNotification(notification.id)}>
+                                    <Archive className="w-4 h-4 mr-2" />
+                                    Unarchive
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => archiveNotification(notification.id)}>
+                                    <Archive className="w-4 h-4 mr-2" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   onClick={() => deleteNotification(notification.id)}
@@ -553,4 +537,4 @@ const NotificationsCenter: React.FC = () => {
   );
 };
 
-export default NotificationsCenter; 
+export default NotificationsCenter;

@@ -7,34 +7,63 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  priority: string;
-  status: string;
-  dueDate: string;
-  assignee: string;
-  tags: string[];
-}
+import { useCreateTask } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
 
 interface CreateTaskDialogProps {
-  onTaskCreate: (task: Task) => void;
+  onTaskCreate?: () => void; // Optional callback
+  projectId?: string; // Required project ID
   statusColumn?: string;
 }
 
-const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statusColumn }) => {
+const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, projectId, statusColumn }) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('Medium');
-  const [status, setStatus] = useState(statusColumn || 'To Do');
+  const [priority, setPriority] = useState('medium');
+  const [status, setStatus] = useState(statusColumn || 'todo');
   const [dueDate, setDueDate] = useState('');
-  const [assignee, setAssignee] = useState('JD');
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
   const [tags, setTags] = useState('');
+  
+  const createTask = useCreateTask();
+  const { data: projects = [] } = useProjects();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Map frontend status to backend status
+  const mapStatus = (frontendStatus: string): 'todo' | 'in-progress' | 'review' | 'done' | 'blocked' | 'cancelled' => {
+    const statusMap: Record<string, 'todo' | 'in-progress' | 'review' | 'done' | 'blocked' | 'cancelled'> = {
+      'To Do': 'todo',
+      'todo': 'todo',
+      'In Progress': 'in-progress',
+      'in-progress': 'in-progress',
+      'In Review': 'review',
+      'review': 'review',
+      'Done': 'done',
+      'done': 'done',
+      'Blocked': 'blocked',
+      'blocked': 'blocked',
+      'Cancelled': 'cancelled',
+      'cancelled': 'cancelled',
+    };
+    return statusMap[frontendStatus] || 'todo';
+  };
+
+  // Map frontend priority to backend priority
+  const mapPriority = (frontendPriority: string): 'low' | 'medium' | 'high' | 'critical' => {
+    const priorityMap: Record<string, 'low' | 'medium' | 'high' | 'critical'> = {
+      'Low': 'low',
+      'low': 'low',
+      'Medium': 'medium',
+      'medium': 'medium',
+      'High': 'high',
+      'high': 'high',
+      'Critical': 'critical',
+      'critical': 'critical',
+    };
+    return priorityMap[frontendPriority] || 'medium';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title.trim()) {
@@ -42,30 +71,43 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statu
       return;
     }
 
-    const newTask: Task = {
-      id: `t${Math.floor(Math.random() * 10000)}`,
-      title,
-      description,
-      priority,
-      status,
-      dueDate: dueDate || 'Not set',
-      assignee,
-      tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-    };
+    const finalProjectId = selectedProjectId || projectId;
+    if (!finalProjectId) {
+      toast.error("Please select a project");
+      return;
+    }
 
-    onTaskCreate(newTask);
-    toast.success("Task created successfully");
-    setOpen(false);
-    resetForm();
+    try {
+      await createTask.mutateAsync({
+        title,
+        description,
+        projectId: finalProjectId,
+        status: mapStatus(status),
+        priority: mapPriority(priority),
+        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+      });
+
+      toast.success("Task created successfully");
+      setOpen(false);
+      resetForm();
+      
+      if (onTaskCreate) {
+        onTaskCreate();
+      }
+    } catch (error: any) {
+      console.error('Failed to create task:', error);
+      toast.error(error.response?.data?.message || "Failed to create task");
+    }
   };
 
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setPriority('Medium');
-    setStatus(statusColumn || 'To Do');
+    setPriority('medium');
+    setStatus(statusColumn || 'todo');
     setDueDate('');
-    setAssignee('JD');
+    setSelectedProjectId(projectId || '');
     setTags('');
   };
 
@@ -101,6 +143,22 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statu
             />
           </div>
 
+          {!projectId && (
+            <div className="space-y-2">
+              <Label htmlFor="project">Project *</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger id="project">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
@@ -109,9 +167,10 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statu
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -123,41 +182,25 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statu
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="To Do">To Do</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="In Review">In Review</SelectItem>
-                  <SelectItem value="Done">Done</SelectItem>
+                  <SelectItem value="todo">To Do</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
+                  <SelectItem value="review">In Review</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                  <SelectItem value="blocked">Blocked</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">Due Date</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="assignee">Assignee</Label>
-              <Select value={assignee} onValueChange={setAssignee}>
-                <SelectTrigger id="assignee">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="JD">John Doe (JD)</SelectItem>
-                  <SelectItem value="AS">Alice Smith (AS)</SelectItem>
-                  <SelectItem value="RM">Robert Miller (RM)</SelectItem>
-                  <SelectItem value="JW">Jane Wilson (JW)</SelectItem>
-                  <SelectItem value="TW">Thomas Wright (TW)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="dueDate">Due Date</Label>
+            <Input
+              id="dueDate"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">
@@ -171,10 +214,12 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, statu
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={createTask.isPending}>
               Cancel
             </Button>
-            <Button type="submit">Create Task</Button>
+            <Button type="submit" disabled={createTask.isPending}>
+              {createTask.isPending ? 'Creating...' : 'Create Task'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

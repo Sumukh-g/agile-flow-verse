@@ -26,12 +26,12 @@ import {
     Columns,
     Filter,
     GitBranch,
-    Grid2X2,
+    Grid,
     LayoutDashboard,
+    List,
     Lock,
     MoreHorizontal,
     Plus,
-    Rows3,
     Star,
     StarOff,
     Trello,
@@ -178,9 +178,9 @@ const ProjectBoardView = ({ projectId = 'p1' }: ProjectBoardViewProps) => {
       case 'kanban':
         return <Columns className="h-4 w-4 mr-1" />;
       case 'scrum':
-        return <Grid2X2 className="h-4 w-4 mr-1" />;
+        return <Grid className="h-4 w-4 mr-1" />;
       case 'timeline':
-        return <Rows3 className="h-4 w-4 mr-1" />;
+        return <List className="h-4 w-4 mr-1" />;
       default:
         return <Columns className="h-4 w-4 mr-1" />;
     }
@@ -248,7 +248,7 @@ const ProjectBoardView = ({ projectId = 'p1' }: ProjectBoardViewProps) => {
               onClick={() => setViewMode('grid')}
               className="rounded-none rounded-l-md"
             >
-              <Grid2X2 className="h-4 w-4" />
+              <Grid className="h-4 w-4" />
             </Button>
             <Separator orientation="vertical" />
             <Button 
@@ -257,7 +257,7 @@ const ProjectBoardView = ({ projectId = 'p1' }: ProjectBoardViewProps) => {
               onClick={() => setViewMode('list')}
               className="rounded-none rounded-r-md"
             >
-              <Rows3 className="h-4 w-4" />
+              <List className="h-4 w-4" />
             </Button>
           </div>
 

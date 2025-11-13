@@ -1,18 +1,21 @@
+import CalendarBoard from '@/components/boards/CalendarBoard';
 import FlowchartBoard from '@/components/boards/FlowchartBoard';
 import GanttBoard from '@/components/boards/GanttBoard';
 import KanbanBoard from '@/components/boards/KanbanBoard';
+import ListBoard from '@/components/boards/ListBoard';
 import MindmapBoard from '@/components/boards/MindmapBoard';
+import TimelineBoard from '@/components/boards/TimelineBoard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,24 +25,24 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Brain,
-  Calendar,
-  Columns,
-  Filter,
-  GitBranch,
-  Grid2X2,
-  LayoutDashboard,
-  Lock,
-  MoreHorizontal,
-  Plus,
-  Rows3,
-  Settings,
-  Star,
-  StarOff,
-  Trello,
-  Unlock,
-  UserPlus,
-  Users
+    Brain,
+    Calendar,
+    Columns,
+    Filter,
+    GitBranch,
+    Grid,
+    LayoutDashboard,
+    List,
+    Lock,
+    MoreHorizontal,
+    Plus,
+    Settings,
+    Star,
+    StarOff,
+    Trello,
+    Unlock,
+    UserPlus,
+    Users
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from "sonner";
@@ -220,9 +223,9 @@ const BoardsPage = () => {
       case 'kanban':
         return <Columns className="h-4 w-4 mr-1" />;
       case 'scrum':
-        return <Grid2X2 className="h-4 w-4 mr-1" />;
+        return <Grid className="h-4 w-4 mr-1" />;
       case 'timeline':
-        return <Rows3 className="h-4 w-4 mr-1" />;
+        return <List className="h-4 w-4 mr-1" />;
       default:
         return <Columns className="h-4 w-4 mr-1" />;
     }
@@ -300,7 +303,7 @@ const BoardsPage = () => {
               onClick={() => setViewMode('grid')}
               className="rounded-none rounded-l-md"
             >
-              <Grid2X2 className="h-4 w-4" />
+              <Grid className="h-4 w-4" />
             </Button>
             <Separator orientation="vertical" />
             <Button 
@@ -309,7 +312,7 @@ const BoardsPage = () => {
               onClick={() => setViewMode('list')}
               className="rounded-none rounded-r-md"
             >
-              <Rows3 className="h-4 w-4" />
+              <List className="h-4 w-4" />
             </Button>
           </div>
 
@@ -606,13 +609,13 @@ const BoardsPage = () => {
         <FlowchartBoard />
       )}
       {selectedBoardType === 'list' && (
-        <div className="p-8 text-center text-lg text-muted-foreground">List board coming soon!</div>
+        <ListBoard />
       )}
       {selectedBoardType === 'timeline' && (
-        <div className="p-8 text-center text-lg text-muted-foreground">Timeline board coming soon!</div>
+        <TimelineBoard />
       )}
       {selectedBoardType === 'calendar' && (
-        <div className="p-8 text-center text-lg text-muted-foreground">Calendar board coming soon!</div>
+        <CalendarBoard />
       )}
       {selectedBoardType === 'mindmap' && (
         <MindmapBoard />

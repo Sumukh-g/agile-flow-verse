@@ -1,43 +1,292 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export enum TaskStatus {
   Todo = 'todo',
   InProgress = 'in-progress',
   Review = 'review',
   Done = 'done',
+  Blocked = 'blocked',
+  Cancelled = 'cancelled',
+}
+
+export enum TaskPriority {
+  Low = 'low',
+  Medium = 'medium',
+  High = 'high',
+  Critical = 'critical',
 }
 
 export class CreateTaskDto {
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(500)
+  @ApiProperty({ description: 'Task title', example: 'Implement user authentication' })
+  @IsString() 
+  @MinLength(1) 
+  @MaxLength(500)
   title!: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(5000)
+  @ApiPropertyOptional({ description: 'Task description', example: 'Implement JWT-based authentication system' })
+  @IsOptional() 
+  @IsString() 
+  @MaxLength(5000)
   description?: string;
 
-  @ApiPropertyOptional({ enum: TaskStatus }) @IsOptional() @IsEnum(TaskStatus)
+  @ApiPropertyOptional({ 
+    description: 'Task status', 
+    enum: TaskStatus,
+    example: TaskStatus.Todo
+  })
+  @IsOptional() 
+  @IsEnum(TaskStatus)
   status?: TaskStatus;
 
-  @ApiPropertyOptional() @IsOptional() @IsString()
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  @ApiPropertyOptional({ 
+    description: 'Task priority', 
+    enum: TaskPriority,
+    example: TaskPriority.Medium
+  })
+  @IsOptional() 
+  @IsEnum(TaskPriority)
+  priority?: TaskPriority;
 
-  @ApiPropertyOptional() @IsOptional() @IsDateString()
+  @ApiPropertyOptional({ description: 'Task due date', example: '2024-02-15T23:59:59Z' })
+  @IsOptional() 
+  @IsDateString()
   dueDate?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
+  @ApiPropertyOptional({ description: 'Estimated hours to complete', example: 8 })
+  @IsOptional() 
+  @IsNumber() 
+  @Min(0)
+  @Max(999)
+  @Type(() => Number)
   estimatedHours?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
+  @ApiPropertyOptional({ description: 'Actual hours worked', example: 0 })
+  @IsOptional() 
+  @IsNumber() 
+  @Min(0)
+  @Max(999)
+  @Type(() => Number)
   actualHours?: number;
 
-  @ApiProperty() @IsString()
+  @ApiProperty({ description: 'Project ID', example: 'proj123' })
+  @IsString()
+  @IsUUID()
   projectId!: string;
 
-  @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray()
+  @ApiPropertyOptional({ 
+    description: 'User IDs assigned to this task', 
+    type: [String],
+    example: ['user123', 'user456']
+  })
+  @IsOptional() 
+  @IsArray()
+  @IsUUID(4, { each: true })
   assigneeIds?: string[];
 
-  @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray()
+  @ApiPropertyOptional({ 
+    description: 'Task IDs this task depends on', 
+    type: [String],
+    example: ['task123', 'task456']
+  })
+  @IsOptional() 
+  @IsArray()
+  @IsUUID(4, { each: true })
   dependencyIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Task tags', example: ['frontend', 'auth'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Task is blocked', example: false })
+  @IsOptional()
+  @IsBoolean()
+  isBlocked?: boolean;
+
+  @ApiPropertyOptional({ description: 'Block reason if task is blocked', example: 'Waiting for design approval' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  blockReason?: string;
 }
 
-export class UpdateTaskDto extends CreateTaskDto {} 
+export class UpdateTaskDto {
+  @ApiPropertyOptional({ description: 'Task title', example: 'Implement user authentication v2' })
+  @IsOptional()
+  @IsString() 
+  @MinLength(1) 
+  @MaxLength(500)
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'Task description', example: 'Updated task description' })
+  @IsOptional() 
+  @IsString() 
+  @MaxLength(5000)
+  description?: string;
+
+  @ApiPropertyOptional({ 
+    description: 'Task status', 
+    enum: TaskStatus,
+    example: TaskStatus.InProgress
+  })
+  @IsOptional() 
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
+
+  @ApiPropertyOptional({ 
+    description: 'Task priority', 
+    enum: TaskPriority,
+    example: TaskPriority.High
+  })
+  @IsOptional() 
+  @IsEnum(TaskPriority)
+  priority?: TaskPriority;
+
+  @ApiPropertyOptional({ description: 'Task due date', example: '2024-02-20T23:59:59Z' })
+  @IsOptional() 
+  @IsDateString()
+  dueDate?: string;
+
+  @ApiPropertyOptional({ description: 'Estimated hours to complete', example: 12 })
+  @IsOptional() 
+  @IsNumber() 
+  @Min(0)
+  @Max(999)
+  @Type(() => Number)
+  estimatedHours?: number;
+
+  @ApiPropertyOptional({ description: 'Actual hours worked', example: 4 })
+  @IsOptional() 
+  @IsNumber() 
+  @Min(0)
+  @Max(999)
+  @Type(() => Number)
+  actualHours?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'User IDs assigned to this task', 
+    type: [String],
+    example: ['user123', 'user789']
+  })
+  @IsOptional() 
+  @IsArray()
+  @IsUUID(4, { each: true })
+  assigneeIds?: string[];
+
+  @ApiPropertyOptional({ 
+    description: 'Task IDs this task depends on', 
+    type: [String],
+    example: ['task123', 'task789']
+  })
+  @IsOptional() 
+  @IsArray()
+  @IsUUID(4, { each: true })
+  dependencyIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Task tags', example: ['frontend', 'auth', 'urgent'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Task is blocked', example: true })
+  @IsOptional()
+  @IsBoolean()
+  isBlocked?: boolean;
+
+  @ApiPropertyOptional({ description: 'Block reason if task is blocked', example: 'Waiting for API documentation' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  blockReason?: string;
+}
+
+export class TaskQueryDto {
+  @ApiPropertyOptional({ description: 'Search term for task title or description' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by project ID' })
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ 
+    description: 'Filter by status', 
+    enum: TaskStatus
+  })
+  @IsOptional()
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
+
+  @ApiPropertyOptional({ 
+    description: 'Filter by priority', 
+    enum: TaskPriority
+  })
+  @IsOptional()
+  @IsEnum(TaskPriority)
+  priority?: TaskPriority;
+
+  @ApiPropertyOptional({ description: 'Filter by assignee user ID' })
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  assigneeId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by due date (ISO string)' })
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by tags' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Number of items per page', example: 25 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  limit?: number = 25;
+
+  @ApiPropertyOptional({ description: 'Cursor for pagination' })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+}
+
+export class AddTaskAssigneeDto {
+  @ApiProperty({ description: 'User ID to assign to task', example: 'user123' })
+  @IsString()
+  @IsUUID()
+  userId: string;
+}
+
+export class RemoveTaskAssigneeDto {
+  @ApiProperty({ description: 'User ID to remove from task', example: 'user123' })
+  @IsString()
+  @IsUUID()
+  userId: string;
+}
+
+export class AddTaskDependencyDto {
+  @ApiProperty({ description: 'Task ID to add as dependency', example: 'task123' })
+  @IsString()
+  @IsUUID()
+  taskId: string;
+}
+
+export class RemoveTaskDependencyDto {
+  @ApiProperty({ description: 'Task ID to remove as dependency', example: 'task123' })
+  @IsString()
+  @IsUUID()
+  taskId: string;
+} 

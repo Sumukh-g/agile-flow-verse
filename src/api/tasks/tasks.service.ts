@@ -1,9 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   private async ensureProjectAccess(tenantId: string, userId: string, projectId: string) {
     const isMember = await this.prisma.tx.projectMember.findFirst({ where: { tenantId, userId, projectId } });
@@ -101,6 +105,9 @@ export class TasksService {
       },
     });
 
+    // Broadcast real-time update
+    await this.realtime.broadcastTaskUpdate(tenantId, dto.projectId, task.id, 'task.created', task);
+
     return task;
   }
 
@@ -136,6 +143,62 @@ export class TasksService {
       },
     });
 
+    // Broadcast real-time update
+    await this.realtime.broadcastTaskUpdate(tenantId, existing.projectId, id, 'task.updated', updated);
+
     return updated;
+  }
+
+  async get(tenantId: string, userId: string, id: string) {
+    const task = await this.prisma.tx.task.findFirst({ 
+      where: { id, tenantId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+    
+    if (!task) throw new NotFoundException('Task not found');
+    
+    await this.ensureProjectAccess(tenantId, userId, task.projectId);
+    
+    return task;
+  }
+
+  async delete(tenantId: string, userId: string, id: string) {
+    const existing = await this.prisma.tx.task.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException('Task not found');
+
+    await this.ensureProjectAccess(tenantId, userId, existing.projectId);
+
+    await this.prisma.tx.task.delete({ where: { id } });
+
+    await this.prisma.tx.outbox.create({
+      data: {
+        tenantId,
+        aggregate: 'Task',
+        payload: { type: 'task.deleted', taskId: id },
+      },
+    });
+
+    // Broadcast real-time update
+    await this.realtime.broadcastTaskUpdate(tenantId, existing.projectId, id, 'task.deleted', { id });
+
+    return { ok: true };
   }
 } 

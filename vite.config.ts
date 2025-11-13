@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => ({
       }
     }
   },
+  optimizeDeps: {
+    exclude: ['@sentry/react'],
+  },
   plugins: [
     react(),
     splitVendorChunkPlugin(),

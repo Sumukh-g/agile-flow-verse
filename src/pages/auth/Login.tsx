@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -61,13 +62,26 @@ const Login: React.FC = () => {
     setLoading(true);
     
     try {
-      // Use Keycloak login
-      await login();
-      
-      toast.success("Redirecting to login...");
-    } catch (error) {
+      // Call real login API
+      const response = await apiClient.post('/auth/login', {
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // Store tokens
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('tenantId', response.user.tenantId);
+
+      // Update auth context
+      setUser(response.user);
+
+      toast.success("Login successful!");
+      navigate('/dashboard');
+    } catch (error: any) {
       console.error('Login error:', error);
-      toast.error("Login failed. Please try again.");
+      toast.error(error.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }

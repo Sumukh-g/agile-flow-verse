@@ -23,6 +23,7 @@ import TaskTimelineView from '@/components/tasks/TaskTimelineView';
 import TaskReportView from '@/components/tasks/TaskReportView';
 import TaskDetailsPanel from '@/components/tasks/TaskDetailsPanel';
 import { toast } from 'sonner';
+import { useTasks, Task as ApiTask } from '@/hooks/useTasks';
 
 // Task data
 const INITIAL_TASKS = {
@@ -140,9 +141,7 @@ interface Task {
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<string>('list');
-  const [tasks, setTasks] = useState<Record<string, Task[]>>(INITIAL_TASKS);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
-  const [allTasksFlat, setAllTasksFlat] = useState<Task[]>([]);
   const [visibleColumns, setVisibleColumns] = useState({
     priority: true,
     dueDate: true,
@@ -159,10 +158,49 @@ const Tasks = () => {
   const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
-  useEffect(() => {
-    // Flatten all tasks for list/calendar/timeline views
-    const flattenedTasks = Object.values(tasks).flat();
-    setAllTasksFlat(flattenedTasks);
+  // Fetch tasks from API
+  const { data: apiTasks = [], isLoading: tasksLoading } = useTasks();
+  
+  // Transform API tasks to local format for compatibility
+  const tasksByStatus = React.useMemo(() => {
+    const grouped: Record<string, Task[]> = {
+      'To Do': [],
+      'In Progress': [],
+      'In Review': [],
+      'Done': []
+    };
+    
+    apiTasks.forEach(apiTask => {
+      const task: Task = {
+        id: apiTask.id,
+        title: apiTask.title,
+        description: apiTask.description,
+        priority: apiTask.priority === 'critical' ? 'High' : apiTask.priority.charAt(0).toUpperCase() + apiTask.priority.slice(1),
+        status: apiTask.status === 'todo' ? 'To Do' : 
+                apiTask.status === 'in-progress' ? 'In Progress' : 
+                apiTask.status === 'review' ? 'In Review' : 
+                apiTask.status === 'done' ? 'Done' : apiTask.status,
+        dueDate: apiTask.dueDate ? new Date(apiTask.dueDate).toLocaleDateString() : '',
+        assignee: apiTask.assignees?.[0]?.user?.name || 'Unassigned',
+        tags: apiTask.tags || []
+      };
+      
+      const statusKey = task.status === 'To Do' ? 'To Do' :
+                       task.status === 'In Progress' ? 'In Progress' :
+                       task.status === 'In Review' ? 'In Review' :
+                       task.status === 'Done' ? 'Done' : 'To Do';
+      
+      grouped[statusKey].push(task);
+    });
+    
+    return grouped;
+  }, [apiTasks]);
+  
+  const tasks = tasksByStatus;
+  
+  // Flatten all tasks for list/calendar/timeline views
+  const allTasksFlat = React.useMemo(() => {
+    return Object.values(tasks).flat();
   }, [tasks]);
   
   // Filter tasks based on search query
@@ -208,14 +246,10 @@ const Tasks = () => {
     }
   };
 
-  const handleTaskAdd = (newTask: Task) => {
-    setTasks(prev => {
-      const status = newTask.status;
-      return {
-        ...prev,
-        [status]: [...(prev[status] || []), newTask]
-      };
-    });
+  const handleTaskAdd = () => {
+    // Task creation is now handled by CreateTaskDialog via API
+    // This callback is optional and can trigger a refresh if needed
+    // The query will automatically refetch when the mutation succeeds
   };
   
   const toggleSelectTask = (taskId: string) => {

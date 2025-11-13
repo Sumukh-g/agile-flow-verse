@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -75,29 +76,27 @@ const SignUp: React.FC = () => {
     setLoading(true);
     
     try {
-      // For demo purposes, create a mock user
-      const mockUser = {
-        id: Date.now().toString(),
+      // Call real signup API
+      const response = await apiClient.post('/auth/signup', {
         name: formData.name,
         email: formData.email,
-        roles: ['user']
-      };
-      
-      // Store user in localStorage
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('tenantId', 'dev');
-      
-      // Update the auth context
-      setUser(mockUser);
-      
-      toast.success("Account created successfully! Redirecting to dashboard...");
-      
-      // Redirect to dashboard after signup
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1000);
-    } catch (error) {
-      toast.error("An error occurred. Please try again.");
+        password: formData.password,
+      });
+
+      // Store tokens
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('tenantId', response.user.tenantId);
+
+      // Update auth context
+      setUser(response.user);
+
+      toast.success("Account created successfully!");
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast.error(error.response?.data?.message || "Signup failed");
     } finally {
       setLoading(false);
     }

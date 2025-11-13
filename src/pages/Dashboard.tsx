@@ -54,9 +54,9 @@ const Dashboard = () => {
   // Calculate dashboard stats
   const totalProjects = projects.length;
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'DONE').length;
-  const pendingTasks = tasks.filter(t => t.status === 'TODO').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'IN_PROGRESS').length;
+  const completedTasks = tasks.filter(t => t.status === 'done').length;
+  const pendingTasks = tasks.filter(t => t.status === 'todo').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
 
   const createTestData = async () => {
     try {
@@ -70,24 +70,24 @@ const Dashboard = () => {
       await createTask.mutateAsync({
         title: 'Complete project setup',
         description: 'Set up the initial project structure',
-        status: 'TODO',
-        priority: 'HIGH',
+        status: 'todo',
+        priority: 'high',
         projectId: project.id
       });
 
       await createTask.mutateAsync({
         title: 'Design user interface',
         description: 'Create wireframes and mockups',
-        status: 'IN_PROGRESS',
-        priority: 'MEDIUM',
+        status: 'in-progress',
+        priority: 'medium',
         projectId: project.id
       });
 
       await createTask.mutateAsync({
         title: 'Write documentation',
         description: 'Document the project requirements',
-        status: 'DONE',
-        priority: 'LOW',
+        status: 'done',
+        priority: 'low',
         projectId: project.id
       });
 

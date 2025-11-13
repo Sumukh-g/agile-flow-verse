@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
 import { 
   CheckCircle, 
   Workflow, 
@@ -15,6 +16,13 @@ import {
 } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  // Redirect authenticated users to dashboard
+  if (!loading && isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navigation */}

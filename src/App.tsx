@@ -8,9 +8,15 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/lib/auth-context";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useRealtime } from "@/hooks/useRealtime";
 
 // Lazy load all pages for better code splitting
-const BoardsPage = React.lazy(() => import("@/pages/Boards"));
+// Use new simplified functional pages
+const BoardsPage = React.lazy(() => import("@/pages/BoardsSimple"));
+const Projects = React.lazy(() => import("@/pages/ProjectsSimple"));
+const Tasks = React.lazy(() => import("@/pages/TasksSimple"));
+// Original pages
 const CustomDashboard = React.lazy(() => import("@/pages/CustomDashboard"));
 const Dashboard = React.lazy(() => import("@/pages/Dashboard"));
 const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
@@ -19,9 +25,7 @@ const Notes = React.lazy(() => import("@/pages/Notes"));
 const NotificationsCenter = React.lazy(() => import("@/pages/NotificationsCenter"));
 const PagesDirectory = React.lazy(() => import("@/pages/PagesDirectory"));
 const ProjectDashboard = React.lazy(() => import("@/pages/ProjectDashboard"));
-const Projects = React.lazy(() => import("@/pages/Projects"));
 const Setup = React.lazy(() => import("@/pages/Setup"));
-const Tasks = React.lazy(() => import("@/pages/Tasks"));
 const Login = React.lazy(() => import("@/pages/auth/Login"));
 const SignUp = React.lazy(() => import("@/pages/auth/SignUp"));
 
@@ -51,14 +55,13 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
+// Inner component that uses hooks
+const AppContent = () => {
+  // Initialize real-time connection
+  useRealtime();
+  
+  return (
+    <Routes>
             {/* Public routes */}
             <Route path="/" element={
               <Suspense fallback={<PageLoading />}>
@@ -82,6 +85,7 @@ const App = () => (
                 <Layout />
               </ProtectedRoute>
             }>
+              {/* Default route for authenticated users - redirect to dashboard */}
               <Route path="/dashboard" element={
                 <Suspense fallback={<PageLoading />}>
                   <Dashboard />
@@ -169,11 +173,24 @@ const App = () => (
                 <NotFound />
               </Suspense>
             } />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+    </Routes>
+  );
+};
+
+const App = () => (
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

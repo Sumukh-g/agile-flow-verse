@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "dist-api",
-    "rootDir": ".",
+    "rootDir": "src/api",
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "Node",
@@ -11,20 +11,34 @@
     "emitDecoratorMetadata": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["node"]
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node", "multer"],
+    "lib": ["ES2020"]
   },
   "include": [
-    "src/api/main.ts",
-    "src/api/app.module.ts",
-    "src/api/common/**/*.ts",
-    "src/api/prisma/**/*.ts",
-    "src/api/auth/**/*.ts",
-    "src/api/health/**/*.ts",
-    "src/api/projects/**/*.ts",
-    "src/api/tasks/**/*.ts",
-    "src/api/notes/**/*.ts",
-    "src/api/comments/**/*.ts",
-    "src/api/outbox/**/*.ts",
-    "src/api/ai/**/*.ts"
-  ]
-} 
+    "src/api/**/*.ts",
+    "src/api/**/*.d.ts",
+    "src/api/storage/multer.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist-api",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/*.e2e.ts",
+    "src/api/admin",
+    "src/api/**/*.spec.ts",
+    "src/api/**/*.test.ts",
+    "src/api/**/*.e2e.ts",
+    "src/api/tasks/tasks.service.spec.ts",
+    "src/api/notifications/notifications.service.spec.ts"
+  ],
+  "ts-node": {
+    "esm": false,
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
+}

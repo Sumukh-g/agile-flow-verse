@@ -1,9 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   private async ensureCanAccessProject(tenantId: string, userId: string, projectId: string) {
     const member = await this.prisma.tx.projectMember.findFirst({
@@ -21,13 +25,18 @@ export class ProjectsService {
   }
 
   async create(tenantId: string, userId: string, data: any) {
-    return this.prisma.tx.project.create({
+    const project = await this.prisma.tx.project.create({
       data: {
         ...data,
         tenantId,
         createdBy: userId,
       },
     });
+
+    // Broadcast real-time update
+    await this.realtime.broadcastProjectUpdate(tenantId, project.id, 'project.created', project);
+
+    return project;
   }
 
   async list(tenantId: string, cursor?: any, limit = 25, sort = { createdAt: 'desc' as const }) {
@@ -56,12 +65,21 @@ export class ProjectsService {
 
   async update(tenantId: string, userId: string, id: string, data: any) {
     await this.ensureCanAccessProject(tenantId, userId, id);
-    return this.prisma.tx.project.update({ where: { id }, data });
+    const updated = await this.prisma.tx.project.update({ where: { id }, data });
+    
+    // Broadcast real-time update
+    await this.realtime.broadcastProjectUpdate(tenantId, id, 'project.updated', updated);
+    
+    return updated;
   }
 
   async remove(tenantId: string, userId: string, id: string) {
     await this.ensureCanAccessProject(tenantId, userId, id);
     await this.prisma.tx.project.delete({ where: { id } });
+    
+    // Broadcast real-time update
+    await this.realtime.broadcastProjectUpdate(tenantId, id, 'project.deleted', { id });
+    
     return { ok: true };
   }
 } 

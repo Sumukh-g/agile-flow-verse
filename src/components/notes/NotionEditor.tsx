@@ -421,12 +421,13 @@ const NotionEditor: React.FC<NotionEditorProps> = ({ page, onUpdatePage }) => {
             onInput={(e) => setContent(e.currentTarget.innerHTML)}
             onSelect={handleSelection}
             onKeyDown={handleKeyDown}
-            dangerouslySetInnerHTML={{ __html: content }}
             style={{
               lineHeight: '1.6',
               fontSize: '16px'
             }}
-          />
+          >
+            {content}
+          </div>
           
           {/* Empty state */}
           {!content && (
