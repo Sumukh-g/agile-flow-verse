@@ -1,154 +1,174 @@
-import { apiClient } from '@/lib/api-client';
+/**
+ * Enhanced Tasks Hooks with React Query
+ */
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CacheSync } from '@/lib/cache-sync';
-import { useRealtimeInvalidation } from './useRealtime';
-import { Task, CreateTaskDto, UpdateTaskDto } from './useTasks';
+import { toast } from 'sonner';
+import { api, type Task, type CreateTaskDto, type UpdateTaskDto, type TaskQueryDto } from '@/lib/api';
 
-export const useTasksEnhanced = (projectId?: string) => {
-  // Invalidate on real-time updates
-  useRealtimeInvalidation('task.updated', [['tasks', projectId], ['tasks']]);
-  useRealtimeInvalidation('task.created', [['tasks', projectId], ['tasks']]);
-  useRealtimeInvalidation('task.deleted', [['tasks', projectId], ['tasks']]);
-
-  return useQuery({
-    queryKey: ['tasks', projectId],
-    queryFn: () => apiClient.get<Task[]>('/tasks', { params: { projectId } }),
-    enabled: !!projectId,
-    staleTime: 30000, // 30 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
-  });
+// Query keys
+export const taskKeys = {
+  all: ['tasks'] as const,
+  lists: () => [...taskKeys.all, 'list'] as const,
+  list: (filters: TaskQueryDto) => [...taskKeys.lists(), filters] as const,
+  details: () => [...taskKeys.all, 'detail'] as const,
+  detail: (id: string) => [...taskKeys.details(), id] as const,
 };
 
-export const useTaskEnhanced = (id: string) => {
-  useRealtimeInvalidation('task.updated', [['tasks', id]]);
-  useRealtimeInvalidation('task.deleted', [['tasks', id]]);
-
+/**
+ * Get all tasks
+ */
+export function useTasks(query?: TaskQueryDto) {
   return useQuery({
-    queryKey: ['tasks', id],
-    queryFn: () => apiClient.get<Task>(`/tasks/${id}`),
+    queryKey: taskKeys.list(query || {}),
+    queryFn: async () => {
+      const response = await api.tasks.getTasks(query);
+      // Return the data array, not the full response
+      return response.data || [];
+    },
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Get tasks by project
+ */
+export function useTasksByProject(projectId: string, query?: Omit<TaskQueryDto, 'projectId'>) {
+  return useQuery({
+    queryKey: taskKeys.list({ ...query, projectId }),
+    queryFn: async () => {
+      const response = await api.tasks.getTasksByProject(projectId, query);
+      return response.data || [];
+    },
+    enabled: !!projectId,
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Get a single task
+ */
+export function useTask(id: string) {
+  return useQuery({
+    queryKey: taskKeys.detail(id),
+    queryFn: () => api.tasks.getTask(id),
     enabled: !!id,
     staleTime: 30000,
   });
-};
+}
 
-export const useCreateTaskEnhanced = () => {
+/**
+ * Create a new task
+ */
+export function useCreateTask() {
   const queryClient = useQueryClient();
-  const cacheSync = new CacheSync(queryClient);
-  
+
   return useMutation({
-    mutationFn: async (data: CreateTaskDto) => {
-      return cacheSync.optimisticUpdate<Task[]>(
-        ['tasks', data.projectId],
-        (old = []) => {
-          const optimisticTask: Task = {
-            id: `temp-${Date.now()}`,
-            title: data.title,
-            description: data.description,
-            status: data.status || 'todo',
-            priority: data.priority || 'medium',
-            projectId: data.projectId,
-            dueDate: data.dueDate,
-            estimatedHours: data.estimatedHours,
-            actualHours: data.actualHours || 0,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          return [...old, optimisticTask];
-        },
-        () => apiClient.post<Task>('/tasks', data),
-        (error) => {
-          console.error('Failed to create task:', error);
-        },
-      );
+    mutationFn: (data: CreateTaskDto) => api.tasks.createTask(data),
+    onSuccess: (newTask) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.setQueryData<Task>(taskKeys.detail(newTask.id), newTask);
+      toast.success('Task created successfully');
     },
-    onSuccess: (newTask, variables) => {
-      // Update cache with server response
-      queryClient.setQueryData(['tasks', variables.projectId], (old: Task[] = []) => {
-        const withoutTemp = old.filter(t => !t.id.startsWith('temp-'));
-        return [...withoutTemp, newTask];
-      });
-      
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['projects', variables.projectId] });
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to create task');
     },
   });
-};
+}
 
-export const useUpdateTaskEnhanced = () => {
+/**
+ * Update a task
+ */
+export function useUpdateTask() {
   const queryClient = useQueryClient();
-  const cacheSync = new CacheSync(queryClient);
-  
+
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: UpdateTaskDto }) => {
-      // Get current task to know projectId
-      const currentTask = queryClient.getQueryData<Task>(['tasks', id]);
-      
-      return cacheSync.optimisticUpdate<Task>(
-        ['tasks', id],
-        (old) => {
-          if (!old) return old;
-          return { ...old, ...data, updatedAt: new Date().toISOString() };
-        },
-        () => apiClient.put<Task>(`/tasks/${id}`, data),
-        (error) => {
-          console.error('Failed to update task:', error);
-        },
-      );
-    },
-    onSuccess: (updatedTask, { id }) => {
-      // Update specific task
-      queryClient.setQueryData(['tasks', id], updatedTask);
-      
-      // Update in lists
-      cacheSync.updateRelated('task', id, updatedTask);
-      
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      if (updatedTask.projectId) {
-        queryClient.invalidateQueries({ queryKey: ['projects', updatedTask.projectId] });
+    mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) =>
+      api.tasks.updateTask(id, data),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.detail(id) });
+      const previous = queryClient.getQueryData<Task>(taskKeys.detail(id));
+
+      if (previous) {
+        queryClient.setQueryData<Task>(taskKeys.detail(id), {
+          ...previous,
+          ...data,
+          updatedAt: new Date().toISOString(),
+        });
       }
+
+      return { previous };
+    },
+    onSuccess: (updatedTask) => {
+      queryClient.setQueryData<Task>(taskKeys.detail(updatedTask.id), updatedTask);
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success('Task updated successfully');
+    },
+    onError: (error: any, { id }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(taskKeys.detail(id), context.previous);
+      }
+      toast.error(error?.apiError?.message || 'Failed to update task');
+    },
+    onSettled: (_, __, { id }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
     },
   });
-};
+}
 
-export const useDeleteTaskEnhanced = () => {
+/**
+ * Delete a task
+ */
+export function useDeleteTask() {
   const queryClient = useQueryClient();
-  const cacheSync = new CacheSync(queryClient);
-  
+
   return useMutation({
-    mutationFn: async (id: string) => {
-      // Get task before deletion to know projectId
-      const task = queryClient.getQueryData<Task>(['tasks', id]);
-      
-      // Optimistically remove
-      if (task?.projectId) {
-        queryClient.setQueryData(['tasks', task.projectId], (old: Task[] = []) =>
-          old.filter(t => t.id !== id)
-        );
-      }
-      
-      try {
-        await apiClient.delete(`/tasks/${id}`);
-        return { id, projectId: task?.projectId };
-      } catch (error) {
-        // Rollback on error
-        if (task) {
-          queryClient.setQueryData(['tasks', task.projectId], (old: Task[] = []) => [...old, task]);
-        }
-        throw error;
-      }
+    mutationFn: (id: string) => api.tasks.deleteTask(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: taskKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success('Task deleted successfully');
     },
-    onSuccess: ({ id, projectId }) => {
-      // Remove from cache
-      cacheSync.removeEntity('task', id);
-      
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      if (projectId) {
-        queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
-      }
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to delete task');
     },
   });
-};
+}
 
+/**
+ * Assign user to task
+ */
+export function useAssignUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, userId }: { taskId: string; userId: string }) =>
+      api.tasks.assignUser(taskId, userId),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
+      toast.success('User assigned successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to assign user');
+    },
+  });
+}
+
+/**
+ * Unassign user from task
+ */
+export function useUnassignUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, userId }: { taskId: string; userId: string }) =>
+      api.tasks.unassignUser(taskId, userId),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
+      toast.success('User unassigned successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to unassign user');
+    },
+  });
+}

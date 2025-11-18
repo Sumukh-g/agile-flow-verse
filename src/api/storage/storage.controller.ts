@@ -1,4 +1,5 @@
 import {
+    Body,
     Controller,
     Delete,
     Get,
@@ -34,8 +35,19 @@ export class StorageController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Request() req: any,
-    @Query() metadata: CreateAttachmentDto,
   ) {
+    // Extract metadata from form data body (multer puts form fields in req.body)
+    // Log for debugging
+    console.log('[STORAGE] Upload request body:', JSON.stringify(req.body));
+    console.log('[STORAGE] Upload file:', file?.originalname);
+    
+    const metadata: CreateAttachmentDto = {
+      noteId: req.body?.noteId && req.body.noteId !== '' ? req.body.noteId : undefined,
+      projectId: req.body?.projectId && req.body.projectId !== '' ? req.body.projectId : undefined,
+    };
+    
+    console.log('[STORAGE] Extracted metadata:', JSON.stringify(metadata));
+    
     return this.storageService.uploadFile(
       req.user.tenantId,
       req.user.userId,
@@ -84,6 +96,21 @@ export class StorageController {
     return this.storageService.getNoteAttachments(
       req.user.tenantId,
       noteId,
+      query,
+    );
+  }
+
+  @Get('projects/:projectId/attachments')
+  @ApiOperation({ summary: 'Get project attachments' })
+  @ApiResponse({ status: 200, description: 'Attachments retrieved successfully' })
+  async getProjectAttachments(
+    @Param('projectId') projectId: string,
+    @Query() query: AttachmentQueryDto,
+    @Request() req: any,
+  ) {
+    return this.storageService.getProjectAttachments(
+      req.user.tenantId,
+      projectId,
       query,
     );
   }

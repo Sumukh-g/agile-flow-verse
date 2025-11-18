@@ -24,6 +24,7 @@ import {
     Search,
     Target,
     TrendingUp,
+    Trash2,
     Users
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
@@ -41,9 +42,45 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
   const [activities, setActivities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedContact, setSelectedContact] = useState<any>(null);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [editingLead, setEditingLead] = useState<any>(null);
+  const [editingDeal, setEditingDeal] = useState<any>(null);
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [isAddDealOpen, setIsAddDealOpen] = useState(false);
+  
+  // Form states
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    position: '',
+    status: 'prospect',
+    notes: ''
+  });
+  
+  const [leadForm, setLeadForm] = useState({
+    name: '',
+    company: '',
+    contact: '',
+    email: '',
+    phone: '',
+    source: 'website',
+    status: 'New',
+    value: 0
+  });
+  
+  const [dealForm, setDealForm] = useState({
+    name: '',
+    company: '',
+    contact: '',
+    stage: 'Proposal',
+    value: 0,
+    probability: 50,
+    closeDate: '',
+    notes: ''
+  });
 
   useEffect(() => {
     // Mock data for demonstration
@@ -193,36 +230,234 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
     }
   };
 
+  const handleAddContact = () => {
+    if (!contactForm.name.trim() || !contactForm.email.trim()) {
+      toast.error('Name and email are required');
+      return;
+    }
+    const newContact = {
+      id: Date.now(),
+      ...contactForm,
+      value: 0,
+      tags: [],
+      lastContact: new Date().toISOString().split('T')[0],
+      avatar: null
+    };
+    setContacts(prev => [...prev, newContact]);
+    setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
+    setIsAddContactOpen(false);
+    toast.success('Contact added successfully!');
+  };
+
+  const handleEditContact = (contact: any) => {
+    setEditingContact(contact);
+    setContactForm({
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      company: contact.company,
+      position: contact.position,
+      status: contact.status.toLowerCase(),
+      notes: ''
+    });
+    setIsAddContactOpen(true);
+  };
+
+  const handleUpdateContact = () => {
+    if (!contactForm.name.trim() || !contactForm.email.trim()) {
+      toast.error('Name and email are required');
+      return;
+    }
+    setContacts(prev => prev.map(c => 
+      c.id === editingContact.id 
+        ? { ...c, ...contactForm, status: contactForm.status.charAt(0).toUpperCase() + contactForm.status.slice(1) }
+        : c
+    ));
+    setEditingContact(null);
+    setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
+    setIsAddContactOpen(false);
+    toast.success('Contact updated successfully!');
+  };
+
+  const handleDeleteContact = (id: number) => {
+    if (confirm('Are you sure you want to delete this contact?')) {
+      setContacts(prev => prev.filter(c => c.id !== id));
+      toast.success('Contact deleted successfully!');
+    }
+  };
+
+  const handleAddLead = () => {
+    if (!leadForm.name.trim() || !leadForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    const newLead = {
+      id: Date.now(),
+      ...leadForm,
+      score: 50,
+      createdDate: new Date().toISOString().split('T')[0],
+      lastActivity: new Date().toISOString().split('T')[0]
+    };
+    setLeads(prev => [...prev, newLead]);
+    setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
+    setIsAddLeadOpen(false);
+    toast.success('Lead added successfully!');
+  };
+
+  const handleAddDeal = () => {
+    if (!dealForm.name.trim() || !dealForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    const newDeal = {
+      id: Date.now(),
+      ...dealForm,
+      createdDate: new Date().toISOString().split('T')[0],
+      lastActivity: new Date().toISOString().split('T')[0]
+    };
+    setDeals(prev => [...prev, newDeal]);
+    setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
+    setIsAddDealOpen(false);
+    toast.success('Deal added successfully!');
+  };
+
+  const handleEditLead = (lead: any) => {
+    setEditingLead(lead);
+    setLeadForm({
+      name: lead.name,
+      company: lead.company,
+      contact: lead.contact,
+      email: lead.email,
+      phone: lead.phone,
+      source: lead.source,
+      status: lead.status,
+      value: lead.value
+    });
+    setIsAddLeadOpen(true);
+  };
+
+  const handleUpdateLead = () => {
+    if (!leadForm.name.trim() || !leadForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    setLeads(prev => prev.map(l => 
+      l.id === editingLead.id 
+        ? { ...l, ...leadForm }
+        : l
+    ));
+    setEditingLead(null);
+    setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
+    setIsAddLeadOpen(false);
+    toast.success('Lead updated successfully!');
+  };
+
+  const handleDeleteLead = (id: number) => {
+    if (confirm('Are you sure you want to delete this lead?')) {
+      setLeads(prev => prev.filter(l => l.id !== id));
+      toast.success('Lead deleted successfully!');
+    }
+  };
+
+  const handleEditDeal = (deal: any) => {
+    setEditingDeal(deal);
+    setDealForm({
+      name: deal.name,
+      company: deal.company,
+      contact: deal.contact,
+      stage: deal.stage,
+      value: deal.value,
+      probability: deal.probability,
+      closeDate: deal.closeDate,
+      notes: deal.notes || ''
+    });
+    setIsAddDealOpen(true);
+  };
+
+  const handleUpdateDeal = () => {
+    if (!dealForm.name.trim() || !dealForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    setDeals(prev => prev.map(d => 
+      d.id === editingDeal.id 
+        ? { ...d, ...dealForm }
+        : d
+    ));
+    setEditingDeal(null);
+    setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
+    setIsAddDealOpen(false);
+    toast.success('Deal updated successfully!');
+  };
+
+  const handleDeleteDeal = (id: number) => {
+    if (confirm('Are you sure you want to delete this deal?')) {
+      setDeals(prev => prev.filter(d => d.id !== id));
+      toast.success('Deal deleted successfully!');
+    }
+  };
+
   const AddContactForm = () => (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="name">Full Name</Label>
-          <Input id="name" placeholder="Enter full name" />
+          <Label htmlFor="name">Full Name *</Label>
+          <Input 
+            id="name" 
+            placeholder="Enter full name" 
+            value={contactForm.name}
+            onChange={e => setContactForm({ ...contactForm, name: e.target.value })}
+            required
+          />
         </div>
         <div>
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="Enter email" />
+          <Label htmlFor="email">Email *</Label>
+          <Input 
+            id="email" 
+            type="email" 
+            placeholder="Enter email" 
+            value={contactForm.email}
+            onChange={e => setContactForm({ ...contactForm, email: e.target.value })}
+            required
+          />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" placeholder="Enter phone number" />
+          <Input 
+            id="phone" 
+            placeholder="Enter phone number" 
+            value={contactForm.phone}
+            onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
+          />
         </div>
         <div>
           <Label htmlFor="company">Company</Label>
-          <Input id="company" placeholder="Enter company name" />
+          <Input 
+            id="company" 
+            placeholder="Enter company name" 
+            value={contactForm.company}
+            onChange={e => setContactForm({ ...contactForm, company: e.target.value })}
+          />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="position">Position</Label>
-          <Input id="position" placeholder="Enter position/title" />
+          <Input 
+            id="position" 
+            placeholder="Enter position/title" 
+            value={contactForm.position}
+            onChange={e => setContactForm({ ...contactForm, position: e.target.value })}
+          />
         </div>
         <div>
           <Label htmlFor="status">Status</Label>
-          <Select>
+          <Select 
+            value={contactForm.status} 
+            onValueChange={value => setContactForm({ ...contactForm, status: value })}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
@@ -236,14 +471,22 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
       </div>
       <div>
         <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" placeholder="Additional notes..." />
+        <Textarea 
+          id="notes" 
+          placeholder="Additional notes..." 
+          value={contactForm.notes}
+          onChange={e => setContactForm({ ...contactForm, notes: e.target.value })}
+        />
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => setIsAddContactOpen(false)}>Cancel</Button>
-        <Button onClick={() => {
-          toast.success("Contact added successfully!");
+        <Button variant="outline" onClick={() => {
           setIsAddContactOpen(false);
-        }}>Add Contact</Button>
+          setEditingContact(null);
+          setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
+        }}>Cancel</Button>
+        <Button onClick={editingContact ? handleUpdateContact : handleAddContact}>
+          {editingContact ? 'Update Contact' : 'Add Contact'}
+        </Button>
       </div>
     </div>
   );
@@ -257,11 +500,19 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
           <p className="text-muted-foreground">Manage contacts, leads, and deals for this project</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => setActiveTab('analytics')}
+          >
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
           </Button>
-          <Button>
+          <Button
+            onClick={() => {
+              // Quick add menu - show options
+              toast.info('Quick add: Select a tab to add Contacts, Leads, or Deals');
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Quick Add
           </Button>
@@ -344,7 +595,10 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                   className="pl-10"
                 />
               </div>
-              <Button variant="outline">
+              <Button 
+                variant="outline"
+                onClick={() => toast.info('Filter contacts coming soon')}
+              >
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
               </Button>
@@ -420,14 +674,27 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                       Last contact: {contact.lastContact}
                     </span>
                     <div className="flex gap-1">
-                      <Button size="sm" variant="ghost">
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setSelectedContact(contact)}
+                      >
                         <Eye className="h-3 w-3" />
                       </Button>
-                      <Button size="sm" variant="ghost">
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => handleEditContact(contact)}
+                      >
                         <Edit className="h-3 w-3" />
                       </Button>
-                      <Button size="sm" variant="ghost">
-                        <MessageSquare className="h-3 w-3" />
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-red-600"
+                        onClick={() => handleDeleteContact(contact.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -452,28 +719,84 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                   <DialogTitle>Add New Lead</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <Input placeholder="Lead name" />
-                  <Input placeholder="Company" />
-                  <Input placeholder="Contact person" />
-                  <Input placeholder="Email" />
-                  <Input placeholder="Phone" />
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Lead source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="website">Website</SelectItem>
-                      <SelectItem value="referral">Referral</SelectItem>
-                      <SelectItem value="social">Social Media</SelectItem>
-                      <SelectItem value="event">Event</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label>Lead Name *</Label>
+                    <Input 
+                      placeholder="Lead name" 
+                      value={leadForm.name}
+                      onChange={e => setLeadForm({ ...leadForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Company *</Label>
+                    <Input 
+                      placeholder="Company" 
+                      value={leadForm.company}
+                      onChange={e => setLeadForm({ ...leadForm, company: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Contact Person</Label>
+                    <Input 
+                      placeholder="Contact person" 
+                      value={leadForm.contact}
+                      onChange={e => setLeadForm({ ...leadForm, contact: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input 
+                      type="email"
+                      placeholder="Email" 
+                      value={leadForm.email}
+                      onChange={e => setLeadForm({ ...leadForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Phone</Label>
+                    <Input 
+                      placeholder="Phone" 
+                      value={leadForm.phone}
+                      onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Lead Source</Label>
+                    <Select 
+                      value={leadForm.source} 
+                      onValueChange={value => setLeadForm({ ...leadForm, source: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Lead source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="website">Website</SelectItem>
+                        <SelectItem value="referral">Referral</SelectItem>
+                        <SelectItem value="social">Social Media</SelectItem>
+                        <SelectItem value="event">Event</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Value ($)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0" 
+                      value={leadForm.value}
+                      onChange={e => setLeadForm({ ...leadForm, value: Number(e.target.value) })}
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsAddLeadOpen(false)}>Cancel</Button>
-                    <Button onClick={() => {
-                      toast.success("Lead added successfully!");
+                    <Button variant="outline" onClick={() => {
                       setIsAddLeadOpen(false);
-                    }}>Add Lead</Button>
+                      setEditingLead(null);
+                      setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
+                    }}>Cancel</Button>
+                    <Button onClick={editingLead ? handleUpdateLead : handleAddLead}>
+                      {editingLead ? 'Update Lead' : 'Add Lead'}
+                    </Button>
                   </div>
                 </div>
               </DialogContent>
@@ -526,6 +849,26 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                     </div>
                     <Progress value={lead.score} className="h-2" />
                   </div>
+                  
+                  <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => handleEditLead(lead)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="text-red-600"
+                      onClick={() => handleDeleteLead(lead.id)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -547,31 +890,97 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                   <DialogTitle>Add New Deal</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <Input placeholder="Deal name" />
-                  <Input placeholder="Company" />
-                  <Input placeholder="Contact person" />
-                  <Input placeholder="Deal value" type="number" />
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Deal stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="prospecting">Prospecting</SelectItem>
-                      <SelectItem value="qualification">Qualification</SelectItem>
-                      <SelectItem value="proposal">Proposal</SelectItem>
-                      <SelectItem value="negotiation">Negotiation</SelectItem>
-                      <SelectItem value="closed-won">Closed Won</SelectItem>
-                      <SelectItem value="closed-lost">Closed Lost</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input placeholder="Expected close date" type="date" />
-                  <Textarea placeholder="Deal notes..." />
+                  <div>
+                    <Label>Deal Name *</Label>
+                    <Input 
+                      placeholder="Deal name" 
+                      value={dealForm.name}
+                      onChange={e => setDealForm({ ...dealForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Company *</Label>
+                    <Input 
+                      placeholder="Company" 
+                      value={dealForm.company}
+                      onChange={e => setDealForm({ ...dealForm, company: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Contact Person</Label>
+                    <Input 
+                      placeholder="Contact person" 
+                      value={dealForm.contact}
+                      onChange={e => setDealForm({ ...dealForm, contact: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Deal Value ($)</Label>
+                    <Input 
+                      placeholder="0" 
+                      type="number" 
+                      value={dealForm.value}
+                      onChange={e => setDealForm({ ...dealForm, value: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Deal Stage</Label>
+                    <Select 
+                      value={dealForm.stage} 
+                      onValueChange={value => setDealForm({ ...dealForm, stage: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Deal stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Prospecting">Prospecting</SelectItem>
+                        <SelectItem value="Qualification">Qualification</SelectItem>
+                        <SelectItem value="Proposal">Proposal</SelectItem>
+                        <SelectItem value="Negotiation">Negotiation</SelectItem>
+                        <SelectItem value="Closed Won">Closed Won</SelectItem>
+                        <SelectItem value="Closed Lost">Closed Lost</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Probability (%)</Label>
+                    <Input 
+                      placeholder="50" 
+                      type="number" 
+                      min="0" 
+                      max="100"
+                      value={dealForm.probability}
+                      onChange={e => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Expected Close Date</Label>
+                    <Input 
+                      placeholder="Expected close date" 
+                      type="date" 
+                      value={dealForm.closeDate}
+                      onChange={e => setDealForm({ ...dealForm, closeDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Deal Notes</Label>
+                    <Textarea 
+                      placeholder="Deal notes..." 
+                      value={dealForm.notes}
+                      onChange={e => setDealForm({ ...dealForm, notes: e.target.value })}
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsAddDealOpen(false)}>Cancel</Button>
-                    <Button onClick={() => {
-                      toast.success("Deal added successfully!");
+                    <Button variant="outline" onClick={() => {
                       setIsAddDealOpen(false);
-                    }}>Add Deal</Button>
+                      setEditingDeal(null);
+                      setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
+                    }}>Cancel</Button>
+                    <Button onClick={editingDeal ? handleUpdateDeal : handleAddDeal}>
+                      {editingDeal ? 'Update Deal' : 'Add Deal'}
+                    </Button>
                   </div>
                 </div>
               </DialogContent>
@@ -623,6 +1032,26 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
                       <p className="text-sm">{deal.notes}</p>
                     </div>
                   )}
+                  
+                  <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => handleEditDeal(deal)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="text-red-600"
+                      onClick={() => handleDeleteDeal(deal.id)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -632,7 +1061,9 @@ const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
         <TabsContent value="activities" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Recent Activities</h3>
-            <Button>
+            <Button
+              onClick={() => toast.info('Log activity feature coming soon')}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Log Activity
             </Button>

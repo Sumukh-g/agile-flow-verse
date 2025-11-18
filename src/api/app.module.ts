@@ -28,6 +28,9 @@ import { TasksModule } from './tasks/tasks.module';
 import { TestModule } from './test/test.module';
 import { DatabaseOptimizationModule } from './common/database/database-optimization.module';
 import { LoggingModule } from './common/logging/logging.module';
+import { CrmModule } from './crm/crm.module';
+import { FormsModule } from './forms/forms.module';
+import { IssuesModule } from './issues/issues.module';
 
 @Module({
   imports: [
@@ -57,6 +60,9 @@ import { LoggingModule } from './common/logging/logging.module';
     MonitoringModule,
     ReportsModule,
     TestModule,
+    CrmModule,
+    FormsModule,
+    IssuesModule,
   ],
   providers: [
     IdempotencyInterceptor,

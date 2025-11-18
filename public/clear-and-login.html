@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearing Old Data...</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        h1 { margin: 0 0 1rem 0; }
+        p { margin: 0.5rem 0; opacity: 0.9; }
+        .success { color: #4ade80; font-weight: bold; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fixing Authentication...</h1>
+        <div class="spinner"></div>
+        <p id="status">Clearing old tokens...</p>
+    </div>
+
+    <script>
+        const status = document.getElementById('status');
+        
+        // Clear all storage
+        status.textContent = 'Clearing localStorage...';
+        localStorage.clear();
+        
+        setTimeout(() => {
+            status.textContent = 'Clearing sessionStorage...';
+            sessionStorage.clear();
+        }, 500);
+        
+        setTimeout(() => {
+            status.textContent = 'Clearing cookies...';
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+        }, 1000);
+        
+        setTimeout(() => {
+            status.className = 'success';
+            status.textContent = '✅ All cleared! Redirecting to login...';
+        }, 1500);
+        
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 2500);
+    </script>
+</body>
+</html>
+

@@ -3,10 +3,15 @@ import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class CreateAttachmentDto {
-  @ApiProperty({ description: 'Note ID to attach file to', example: 'note123' })
+  @ApiPropertyOptional({ description: 'Note ID to attach file to', example: 'note123' })
+  @IsOptional()
   @IsString()
-  @IsUUID()
-  noteId: string;
+  noteId?: string;
+
+  @ApiPropertyOptional({ description: 'Project ID to attach file to', example: 'project123' })
+  @IsOptional()
+  @IsString()
+  projectId?: string;
 }
 
 export class AttachmentQueryDto {

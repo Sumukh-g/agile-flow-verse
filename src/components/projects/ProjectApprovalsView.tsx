@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useNotes, useCreateNote, useUpdateNote } from '@/hooks/useNotesEnhanced';
 
 interface ProjectApprovalsViewProps {
   projectId: string | undefined;
@@ -47,126 +48,55 @@ const ProjectApprovalsView: React.FC<ProjectApprovalsViewProps> = ({ projectId }
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("pending");
 
+  // Notes backend used to persist approvals (content JSON with meta.kind === 'approval')
+  const { data: notesData } = useNotes(projectId);
+  const createNote = useCreateNote();
+  const updateNote = useUpdateNote();
+
   useEffect(() => {
-    // Mock approvals data
-    setApprovals([
-      {
-        id: 1,
-        title: "Project Budget Approval",
-        description: "Approval required for Q1 project budget allocation of $150,000",
-        type: "Budget",
-        priority: "High",
-        status: "Pending",
-        requester: "John Smith",
-        currentApprover: "Sarah Johnson",
-        approvalChain: [
-          { name: "Sarah Johnson", role: "Project Manager", status: "pending", order: 1 },
-          { name: "Mike Wilson", role: "Finance Director", status: "waiting", order: 2 },
-          { name: "Lisa Brown", role: "CEO", status: "waiting", order: 3 }
-        ],
-        createdDate: "2024-01-15",
-        dueDate: "2024-01-20",
-        documents: ["budget-proposal.pdf", "cost-breakdown.xlsx"],
-        comments: [
-          { author: "John Smith", message: "Urgent approval needed for project kickoff", date: "2024-01-15" }
-        ]
-      },
-      {
-        id: 2,
-        title: "Design Mockup Approval",
-        description: "Final approval for user interface design mockups and prototypes",
-        type: "Design",
-        priority: "Medium",
-        status: "In Review",
-        requester: "Lisa Brown",
-        currentApprover: "Tom Davis",
-        approvalChain: [
-          { name: "Tom Davis", role: "UX Lead", status: "approved", order: 1 },
-          { name: "Sarah Johnson", role: "Project Manager", status: "in_review", order: 2 }
-        ],
-        createdDate: "2024-01-12",
-        dueDate: "2024-01-18",
-        documents: ["ui-mockups.fig", "prototype-demo.mp4"],
-        comments: [
-          { author: "Tom Davis", message: "Looks good, minor adjustments needed", date: "2024-01-14" },
-          { author: "Lisa Brown", message: "Updated based on feedback", date: "2024-01-15" }
-        ]
-      },
-      {
-        id: 3,
-        title: "Technical Architecture Review",
-        description: "Approval for proposed system architecture and technology stack",
-        type: "Technical",
-        priority: "High",
-        status: "Approved",
-        requester: "Mike Wilson",
-        currentApprover: null,
-        approvalChain: [
-          { name: "Tom Davis", role: "Tech Lead", status: "approved", order: 1 },
-          { name: "Sarah Johnson", role: "Project Manager", status: "approved", order: 2 },
-          { name: "John Smith", role: "CTO", status: "approved", order: 3 }
-        ],
-        createdDate: "2024-01-08",
-        dueDate: "2024-01-15",
-        approvedDate: "2024-01-14",
-        documents: ["architecture-diagram.pdf", "tech-stack-analysis.docx"],
-        comments: [
-          { author: "Tom Davis", message: "Architecture looks solid", date: "2024-01-10" },
-          { author: "John Smith", message: "Approved with recommendations", date: "2024-01-14" }
-        ]
-      },
-      {
-        id: 4,
-        title: "Marketing Campaign Approval",
-        description: "Approval for Q1 marketing campaign strategy and budget",
-        type: "Marketing",
-        priority: "Medium",
-        status: "Rejected",
-        requester: "Emma Davis",
-        currentApprover: null,
-        approvalChain: [
-          { name: "Sarah Johnson", role: "Project Manager", status: "approved", order: 1 },
-          { name: "Mike Wilson", role: "Marketing Director", status: "rejected", order: 2 }
-        ],
-        createdDate: "2024-01-10",
-        dueDate: "2024-01-17",
-        rejectedDate: "2024-01-16",
-        documents: ["campaign-strategy.pdf", "budget-breakdown.xlsx"],
-        comments: [
-          { author: "Mike Wilson", message: "Budget exceeds allocated amount, please revise", date: "2024-01-16" }
-        ]
+    const items = (notesData?.items || notesData?.data || notesData || []) as any[];
+    const mapped = items.map((n) => {
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(n.content || '{}');
+      } catch {
+        parsed = {};
       }
-    ]);
+      if (parsed?.meta?.kind !== 'approval') return null;
+      return {
+        id: n.id,
+        title: n.title,
+        description: parsed.description || '',
+        type: parsed.meta.type || 'General',
+        priority: parsed.meta.priority || 'Medium',
+        status: parsed.meta.status || 'Pending',
+        requester: parsed.meta.requester || '',
+        currentApprover: parsed.meta.currentApprover || null,
+        approvalChain: parsed.meta.approvalChain || [],
+        createdDate: n.createdAt,
+        dueDate: parsed.meta.dueDate || '',
+        documents: parsed.meta.documents || [],
+        comments: parsed.meta.comments || [],
+      };
+    }).filter(Boolean) as any[];
+    setApprovals(mapped);
 
     setWorkflows([
       {
         id: 1,
-        name: "Budget Approval Workflow",
-        description: "Standard workflow for budget approvals",
+        name: "Default Approval Workflow",
+        description: "PM → Director → Executive",
         steps: [
           { role: "Project Manager", required: true },
-          { role: "Finance Director", required: true },
-          { role: "CEO", required: false, condition: "amount > $100,000" }
+          { role: "Director", required: true },
+          { role: "Executive", required: false },
         ],
         isActive: true,
-        createdBy: "Admin",
-        createdDate: "2024-01-01"
+        createdBy: "System",
+        createdDate: new Date().toISOString().slice(0, 10),
       },
-      {
-        id: 2,
-        name: "Design Review Workflow",
-        description: "Workflow for design and creative approvals",
-        steps: [
-          { role: "UX Lead", required: true },
-          { role: "Project Manager", required: true },
-          { role: "Client", required: false, condition: "client_review_required" }
-        ],
-        isActive: true,
-        createdBy: "Admin",
-        createdDate: "2024-01-01"
-      }
     ]);
-  }, [projectId]);
+  }, [notesData, projectId]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -274,9 +204,27 @@ const ProjectApprovalsView: React.FC<ProjectApprovalsViewProps> = ({ projectId }
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => setIsCreateApprovalOpen(false)}>Cancel</Button>
-        <Button onClick={() => {
-          toast.success("Approval request created successfully!");
-          setIsCreateApprovalOpen(false);
+        <Button onClick={async () => {
+          const titleEl = document.getElementById('title') as HTMLInputElement | null;
+          const descriptionEl = document.getElementById('description') as HTMLTextAreaElement | null;
+          if (!titleEl?.value.trim()) {
+            toast.error('Title is required');
+            return;
+          }
+          try {
+            await createNote.mutateAsync({
+              title: titleEl.value.trim(),
+              projectId,
+              content: JSON.stringify({
+                meta: { kind: 'approval', status: 'Pending', type: 'General', priority: 'Medium' },
+                description: descriptionEl?.value || ''
+              }),
+            } as any);
+            toast.success("Approval request created successfully!");
+            setIsCreateApprovalOpen(false);
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Failed to create approval');
+          }
         }}>Create Approval</Button>
       </div>
     </div>
@@ -336,14 +284,46 @@ const ProjectApprovalsView: React.FC<ProjectApprovalsViewProps> = ({ projectId }
                 <span>{approval.comments.length} comments</span>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" variant="ghost">
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectedApproval(approval);
+                    toast.info(`Viewing approval: ${approval.title}`);
+                  }}
+                >
                   <Eye className="h-3 w-3" />
                 </Button>
-                <Button size="sm" variant="ghost">
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectedApproval(approval);
+                    toast.info(`Editing approval: ${approval.title}`);
+                  }}
+                >
                   <Edit className="h-3 w-3" />
                 </Button>
                 {approval.status === "Pending" && (
-                  <Button size="sm" variant="ghost">
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={async () => {
+                      try {
+                        await updateNote.mutateAsync({
+                          id: approval.id,
+                          data: {
+                            content: JSON.stringify({
+                              meta: { kind: 'approval', status: 'In Review' },
+                            }),
+                          },
+                        });
+                        toast.success('Approval sent');
+                      } catch (e: any) {
+                        toast.error(e?.response?.data?.message || 'Failed to send approval');
+                      }
+                    }}
+                  >
                     <Send className="h-3 w-3" />
                   </Button>
                 )}
@@ -364,7 +344,12 @@ const ProjectApprovalsView: React.FC<ProjectApprovalsViewProps> = ({ projectId }
           <p className="text-muted-foreground">Manage approval workflows and track approval status</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => {
+              toast.info('Exporting approvals data...');
+            }}
+          >
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
@@ -554,17 +539,29 @@ const ProjectApprovalsView: React.FC<ProjectApprovalsViewProps> = ({ projectId }
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2"
+              onClick={() => toast.info('Bulk approve feature coming soon')}
+            >
               <CheckCircle2 className="h-6 w-6 text-green-500" />
               <span>Bulk Approve</span>
               <span className="text-xs text-muted-foreground">Approve multiple items</span>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2"
+              onClick={() => toast.info('Delegate approval feature coming soon')}
+            >
               <Users className="h-6 w-6 text-blue-500" />
               <span>Delegate Approval</span>
               <span className="text-xs text-muted-foreground">Assign to another approver</span>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2"
+              onClick={() => toast.info('Set reminders feature coming soon')}
+            >
               <Flag className="h-6 w-6 text-orange-500" />
               <span>Set Reminders</span>
               <span className="text-xs text-muted-foreground">Configure approval reminders</span>

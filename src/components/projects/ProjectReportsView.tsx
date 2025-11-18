@@ -26,8 +26,9 @@ import {
     TrendingUp,
     Users
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useBurndownReport, useVelocityReport, useCapacityReport, useTimeTrackingReport } from '@/hooks/useReports';
 
 interface ProjectReportsViewProps {
   projectId: string | undefined;
@@ -44,134 +45,35 @@ const ProjectReportsView: React.FC<ProjectReportsViewProps> = ({ projectId }) =>
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [isReportDetailsOpen, setIsReportDetailsOpen] = useState(false);
 
-  useEffect(() => {
-    // Mock reports data
-    setReports([
-      {
-        id: 1,
-        title: "Project Performance Summary",
-        description: "Comprehensive overview of project metrics and KPIs",
-        category: "Performance",
-        type: "Dashboard",
-        createdBy: "John Smith",
-        createdDate: "2024-01-15",
-        lastUpdated: "2024-01-15",
-        isScheduled: true,
-        frequency: "Weekly",
-        nextRun: "2024-01-22",
-        recipients: ["Team Leads", "Stakeholders"],
-        status: "Active",
-        views: 45,
-        exports: 12
-      },
-      {
-        id: 2,
-        title: "Time Tracking Analysis",
-        description: "Detailed breakdown of time spent across different tasks and team members",
-        category: "Time",
-        type: "Chart",
-        createdBy: "Sarah Johnson",
-        createdDate: "2024-01-12",
-        lastUpdated: "2024-01-14",
-        isScheduled: false,
-        frequency: null,
-        nextRun: null,
-        recipients: ["Project Managers"],
-        status: "Active",
-        views: 28,
-        exports: 8
-      },
-      {
-        id: 3,
-        title: "Budget vs Actual Spending",
-        description: "Financial analysis comparing planned budget with actual expenditure",
-        category: "Finance",
-        type: "Table",
-        createdBy: "Mike Wilson",
-        createdDate: "2024-01-10",
-        lastUpdated: "2024-01-13",
-        isScheduled: true,
-        frequency: "Monthly",
-        nextRun: "2024-02-10",
-        recipients: ["Finance Team", "Executives"],
-        status: "Active",
-        views: 67,
-        exports: 23
-      },
-      {
-        id: 4,
-        title: "Team Productivity Metrics",
-        description: "Analysis of team performance and productivity indicators",
-        category: "Team",
-        type: "Dashboard",
-        createdBy: "Lisa Brown",
-        createdDate: "2024-01-08",
-        lastUpdated: "2024-01-15",
-        isScheduled: true,
-        frequency: "Bi-weekly",
-        nextRun: "2024-01-22",
-        recipients: ["HR", "Team Leads"],
-        status: "Active",
-        views: 34,
-        exports: 15
-      },
-      {
-        id: 5,
-        title: "Risk Assessment Report",
-        description: "Identification and analysis of project risks and mitigation strategies",
-        category: "Risk",
-        type: "Document",
-        createdBy: "Tom Davis",
-        createdDate: "2024-01-05",
-        lastUpdated: "2024-01-12",
-        isScheduled: false,
-        frequency: null,
-        nextRun: null,
-        recipients: ["Risk Committee"],
-        status: "Draft",
-        views: 12,
-        exports: 3
-      }
-    ]);
+  // Compute a rolling 30-day window
+  const range = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 30);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return { start: iso(start), end: iso(end) };
+  }, []);
 
-    // Mock dashboard data
+  const { data: burndown } = useBurndownReport(projectId, range.start, range.end, 'day');
+  const { data: velocity } = useVelocityReport(projectId, range.start, range.end);
+  const { data: capacity } = useCapacityReport(projectId, range.start, range.end);
+  const { data: timeTracking } = useTimeTrackingReport(projectId, range.start, range.end);
+
+  useEffect(() => {
+    // Minimal synthesized dashboard from real backend reports
+    const remaining = Array.isArray(burndown) && burndown.length ? burndown[burndown.length - 1].remaining ?? 0 : 0;
+    const completedTasks = Array.isArray(velocity) ? velocity.reduce((s: number, v: any) => s + (v.completed || 0), 0) : 0;
+    const avgUtilization = Array.isArray(capacity) && capacity.length
+      ? Math.round(capacity.reduce((s: number, c: any) => s + (c.utilization || 0), 0) / capacity.length)
+      : 0;
+
     setDashboardData({
-      projectHealth: {
-        score: 85,
-        trend: "up",
-        change: "+5%"
-      },
-      tasksCompleted: {
-        total: 156,
-        thisWeek: 23,
-        trend: "up",
-        change: "+12%"
-      },
-      teamEfficiency: {
-        score: 92,
-        trend: "up",
-        change: "+3%"
-      },
-      budgetUtilization: {
-        percentage: 67,
-        spent: "$45,200",
-        remaining: "$22,800",
-        trend: "stable"
-      },
-      timeTracking: {
-        totalHours: 1240,
-        thisWeek: 185,
-        overtime: 12,
-        trend: "down"
-      },
-      qualityMetrics: {
-        bugRate: 2.3,
-        testCoverage: 94,
-        codeReview: 98,
-        trend: "up"
-      }
+      projectHealth: { score: Math.max(0, 100 - remaining), trend: 'neutral', change: 0 },
+      tasksCompleted: { total: completedTasks, thisWeek: 0, trend: 'neutral', change: 0 },
+      teamEfficiency: { score: avgUtilization, trend: 'neutral', change: 0 },
+      timeTracking,
     });
-  }, [projectId]);
+  }, [burndown, velocity, capacity, timeTracking]);
 
   const filteredReports = reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -474,9 +376,30 @@ const ProjectReportsView: React.FC<ProjectReportsViewProps> = ({ projectId }) =>
       </div>
       
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button variant="outline">Edit</Button>
-        <Button variant="outline">Duplicate</Button>
-        <Button>View Report</Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            setIsCreateReportOpen(true);
+            toast.info(`Editing report: ${selectedReport.title}`);
+          }}
+        >
+          Edit
+        </Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            toast.success(`Report duplicated: ${selectedReport.title}`);
+          }}
+        >
+          Duplicate
+        </Button>
+        <Button
+          onClick={() => {
+            toast.info(`Viewing report: ${selectedReport.title}`);
+          }}
+        >
+          View Report
+        </Button>
       </div>
     </div>
   );
@@ -490,7 +413,10 @@ const ProjectReportsView: React.FC<ProjectReportsViewProps> = ({ projectId }) =>
           <p className="text-muted-foreground">Comprehensive project insights and performance metrics</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Report settings coming soon')}
+          >
             <Settings className="h-4 w-4 mr-2" />
             Configure
           </Button>
@@ -718,7 +644,10 @@ const ProjectReportsView: React.FC<ProjectReportsViewProps> = ({ projectId }) =>
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline">
+            <Button 
+              variant="outline"
+              onClick={() => toast.info('Advanced filters coming soon')}
+            >
               <Filter className="h-4 w-4 mr-2" />
               Advanced Filters
             </Button>

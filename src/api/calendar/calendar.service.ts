@@ -39,7 +39,7 @@ export class CalendarService {
       },
       include: {
         project: {
-          select: { id: true, name: true, color: true },
+          select: { id: true, name: true },
         },
         assignees: {
           include: {
@@ -66,7 +66,6 @@ export class CalendarService {
         name: true,
         endDate: true,
         status: true,
-        color: true,
       },
     });
 
@@ -95,7 +94,7 @@ export class CalendarService {
       end: project.endDate,
       type: 'project',
       status: project.status,
-      project: { id: project.id, name: project.name, color: project.color },
+      project: { id: project.id, name: project.name },
       color: this.getProjectColor(project.status),
       source: 'projects',
     }));
@@ -188,7 +187,7 @@ export class CalendarService {
       },
       include: {
         project: {
-          select: { id: true, name: true, color: true },
+          select: { id: true, name: true },
         },
         assignees: {
           include: {
@@ -244,7 +243,7 @@ export class CalendarService {
       where,
       include: {
         project: {
-          select: { id: true, name: true, color: true },
+          select: { id: true, name: true },
         },
         assignees: {
           include: {

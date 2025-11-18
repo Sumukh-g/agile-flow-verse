@@ -1,0 +1,19 @@
+URGENT: You need to manually edit the .env file!
+
+Open .env in Notepad and find the line that starts with DATABASE_URL
+
+Change it from whatever it says now to EXACTLY this:
+
+DATABASE_URL="postgresql://postgres@agile-postgres:5432/agileflow_db"
+
+Key points:
+- User: postgres (no password needed with trust auth)
+- Host: agile-postgres (container name, not localhost)
+- Database: agileflow_db
+
+Save the file, then run:
+1. npx prisma generate
+2. npm run api:start
+
+This WILL fix the authentication error!
+

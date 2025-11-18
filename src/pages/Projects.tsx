@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -8,31 +9,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useProjects } from '@/hooks/useProjects';
+import { Textarea } from '@/components/ui/textarea';
+import { useCreateCrmClient, useCreateCrmDeal, useCreateCrmProject, useCrmClients, useCrmDeals, useCrmProjects, useCrmSummary, useUpdateCrmClient, useUpdateCrmDeal, useUpdateCrmProject } from '@/hooks/useCrm';
+import { api } from '@/lib/api';
+
 import {
-    Activity,
-    Building2,
-    Calendar,
-    CheckCircle2,
-    DollarSign,
-    Download,
-    Edit,
-    Eye,
-    FileText,
-    Filter,
-    Grid,
-    List,
-    Mail,
-    MoreVertical,
-    Phone,
-    Plus,
-    Search,
-    Target,
-    Trash2,
-    TrendingUp,
-    Upload,
-    Users,
-    Zap
+  Activity,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  DollarSign,
+  Download,
+  Edit,
+  Eye,
+  FileText,
+  Filter,
+  Grid,
+  List,
+  Mail,
+  MoreVertical,
+  Phone,
+  Plus,
+  Search,
+  Target,
+  Trash2,
+  TrendingUp,
+  Upload,
+  Users,
+  Zap
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
@@ -93,75 +97,97 @@ const ProjectsCRM: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
+  
+  // Dialog states
+  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
+  const [isDealDialogOpen, setIsDealDialogOpen] = useState(false);
+  const [isCrmProjectDialogOpen, setIsCrmProjectDialogOpen] = useState(false);
+  const [isMeetingDialogOpen, setIsMeetingDialogOpen] = useState(false);
+  const [isClientViewOpen, setIsClientViewOpen] = useState(false);
+  const [isProjectViewOpen, setIsProjectViewOpen] = useState(false);
 
-  // Use real API data
-  const { data: apiProjects = [], isLoading: projectsLoading } = useProjects();
+  // Quick view and editing state
+  const [viewClient, setViewClient] = useState<Client | null>(null);
+  const [viewProject, setViewProject] = useState<Project | null>(null);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [editingProject, setEditingProject] = useState<any | null>(null);
+  
+  // Project assignment states
+  const [selectedProjectForClient, setSelectedProjectForClient] = useState<string>('');
+  const [selectedProjectForDeal, setSelectedProjectForDeal] = useState<Record<string, string>>({});
+  
+  // Form states
+  const [clientForm, setClientForm] = useState({
+    name: '',
+    company: '',
+    email: '',
+    phone: '',
+    status: 'lead' as const,
+    industry: '',
+    source: '',
+    notes: ''
+  });
+  
+  const [dealForm, setDealForm] = useState({
+    title: '',
+    clientId: '',
+    value: 0,
+    stage: 'lead' as const,
+    probability: 50,
+    expectedCloseDate: '',
+    source: '',
+    notes: ''
+  });
 
-  // Mock data for clients and deals (these don't have API endpoints yet)
-  const [clients] = useState<Client[]>([
-    {
-      id: '1',
-      name: 'John Smith',
-      company: 'TechCorp Inc.',
-      email: 'john@techcorp.com',
-      phone: '+1 (555) 123-4567',
-      status: 'client',
-      value: 125000,
-      lastContact: '2 days ago',
-      projects: 3,
-      industry: 'Technology',
-      source: 'Referral',
-      assignedTo: 'Sarah Wilson',
-      tags: ['enterprise', 'high-value'],
-      notes: 'Key decision maker for technology initiatives'
-    },
-    {
-      id: '2',
-      name: 'Emily Chen',
-      company: 'StartupXYZ',
-      email: 'emily@startupxyz.com',
-      phone: '+1 (555) 987-6543',
-      status: 'prospect',
-      value: 45000,
-      lastContact: '1 week ago',
-      projects: 1,
-      industry: 'Fintech',
-      source: 'Website',
-      assignedTo: 'Mike Johnson',
-      tags: ['startup', 'growth'],
-      notes: 'Interested in MVP development'
-    },
-    {
-      id: '3',
-      name: 'David Rodriguez',
-      company: 'Global Solutions',
-      email: 'david@globalsolutions.com',
-      phone: '+1 (555) 456-7890',
-      status: 'lead',
-      value: 85000,
-      lastContact: '3 days ago',
-      projects: 0,
-      industry: 'Consulting',
-      source: 'LinkedIn',
-      assignedTo: 'Sarah Wilson',
-      tags: ['enterprise', 'consulting'],
-      notes: 'Evaluating digital transformation options'
-    }
-  ]);
+  // Meeting form
+  const [meetingClientId, setMeetingClientId] = useState('');
+  const [meetingStart, setMeetingStart] = useState('');
+  const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingNotes, setMeetingNotes] = useState('');
 
-  // Transform API projects to match the expected format
-  const projects: Project[] = apiProjects.map(apiProject => ({
-    id: apiProject.id,
-    name: apiProject.name,
-    description: apiProject.description || '',
-    clientId: '1', // Default client for now
-    status: 'in-progress' as const,
-    priority: 'medium' as const,
-    progress: 0,
-    budget: 0,
-    spent: 0,
-    startDate: apiProject.createdAt,
-    endDate: '',
+  // CRM API data
+  const { data: crmProjects = [], isLoading: projectsLoading } = useCrmProjects();
+  const { data: crmClients = [] } = useCrmClients();
+  const { data: crmDeals = [] } = useCrmDeals();
+  const { data: summary } = useCrmSummary();
+  const createCrmProject = useCreateCrmProject();
+  const createCrmDeal = useCreateCrmDeal();
+  const createCrmClient = useCreateCrmClient();
+  const updateCrmClient = useUpdateCrmClient();
+  const updateCrmDeal = useUpdateCrmDeal();
+  const updateCrmProject = useUpdateCrmProject();
+
+  // Map backend CRM data to local UI shapes
+  const clients: Client[] = (crmClients || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    company: c.company || '',
+    email: c.email || '',
+    phone: c.phone || '',
+    status: (c.status as any) || 'lead',
+    value: c.value || 0,
+    lastContact: c.lastContact ? new Date(c.lastContact).toLocaleDateString() : '',
+    projects: 0,
+    industry: c.industry || '',
+    source: c.source || '',
+    assignedTo: c.assignedTo || '',
+    tags: c.tags || [],
+    notes: c.notes || '',
+  }));
+
+  const projects: Project[] = (crmProjects || []).map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description || '',
+    clientId: p.clientId || '',
+    status: (p.status as any) || 'in-progress',
+    priority: (p.priority as any) || 'medium',
+    progress: p.progress || 0,
+    budget: p.budget || 0,
+    spent: p.spent || 0,
+    startDate: p.startDate || '',
+    endDate: p.endDate || '',
     team: [],
     tasks: 0,
     completedTasks: 0,
@@ -170,47 +196,53 @@ const ProjectsCRM: React.FC = () => {
     riskLevel: 'low' as const
   }));
 
-  const [deals] = useState<Deal[]>([
-    {
-      id: '1',
-      title: 'Enterprise CRM System',
-      clientId: '1',
-      value: 150000,
-      stage: 'proposal',
-      probability: 75,
-      expectedCloseDate: '2024-03-15',
-      source: 'Referral',
-      assignedTo: 'Sarah Wilson',
-      lastActivity: '2 days ago',
-      notes: 'Proposal submitted, waiting for feedback'
-    },
-    {
-      id: '2',
-      title: 'Mobile App Development',
-      clientId: '2',
-      value: 65000,
-      stage: 'negotiation',
-      probability: 85,
-      expectedCloseDate: '2024-02-28',
-      source: 'Website',
-      assignedTo: 'Mike Johnson',
-      lastActivity: '1 day ago',
-      notes: 'Finalizing contract terms'
-    },
-    {
-      id: '3',
-      title: 'Digital Marketing Campaign',
-      clientId: '3',
-      value: 35000,
-      stage: 'qualified',
-      probability: 60,
-      expectedCloseDate: '2024-04-10',
-      source: 'LinkedIn',
-      assignedTo: 'Sarah Wilson',
-      lastActivity: '5 days ago',
-      notes: 'Scheduled demo for next week'
+  const deals: Deal[] = (crmDeals || []).map(d => ({
+    id: d.id,
+    title: d.title,
+    clientId: d.clientId,
+    value: d.value || 0,
+    stage: d.stage as any,
+    probability: d.probability || 0,
+    expectedCloseDate: d.expectedCloseDate || '',
+    source: d.source || '',
+    assignedTo: d.assignedTo || '',
+    lastActivity: d.lastActivity || '',
+    notes: d.notes || '',
+  }));
+
+  // Initialize deal-to-project assignments from existing project client assignments
+  React.useEffect(() => {
+    if (deals.length > 0 && projects.length > 0) {
+      const initialAssignments: Record<string, string> = {};
+      deals.forEach(deal => {
+        const projectWithClient = projects.find(p => p.clientId === deal.clientId);
+        if (projectWithClient) {
+          initialAssignments[deal.id] = projectWithClient.id;
+        }
+      });
+      // Update state with current assignments
+      setSelectedProjectForDeal(prev => {
+        // Check if we need to update
+        const needsUpdate = Object.keys(initialAssignments).some(
+          dealId => prev[dealId] !== initialAssignments[dealId]
+        ) || Object.keys(prev).some(
+          dealId => !deals.find(d => d.id === dealId) // Remove assignments for deals that no longer exist
+        );
+        if (needsUpdate) {
+          // Merge with existing, prioritizing existing user selections
+          const updated = { ...initialAssignments };
+          // Keep user selections that are still valid
+          Object.keys(prev).forEach(dealId => {
+            if (deals.find(d => d.id === dealId) && projects.find(p => p.id === prev[dealId])) {
+              updated[dealId] = prev[dealId];
+            }
+          });
+          return updated;
+        }
+        return prev;
+      });
     }
-  ]);
+  }, [crmDeals, crmProjects]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -227,6 +259,57 @@ const ProjectsCRM: React.FC = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Unified save handlers (create or update)
+  const handleSaveClient = async () => {
+    if (!clientForm.name.trim() || !clientForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    try {
+      if (editingClientId) {
+        await updateCrmClient.mutateAsync({
+          id: editingClientId,
+          data: {
+            name: clientForm.name,
+            company: clientForm.company,
+            email: clientForm.email,
+            phone: clientForm.phone,
+            status: clientForm.status,
+            industry: clientForm.industry,
+            source: clientForm.source,
+            notes: clientForm.notes,
+          },
+        });
+      } else {
+        await createCrmClient.mutateAsync({
+          name: clientForm.name,
+          company: clientForm.company,
+          email: clientForm.email,
+          phone: clientForm.phone,
+          status: clientForm.status,
+          industry: clientForm.industry,
+          source: clientForm.source,
+          notes: clientForm.notes,
+        });
+      }
+      setIsClientDialogOpen(false);
+      setEditingClientId(null);
+      setClientForm({
+        name: '',
+        company: '',
+        email: '',
+        phone: '',
+        status: 'lead',
+        industry: '',
+        source: '',
+        notes: ''
+      });
+    } catch (e: any) {
+      toast.error(e?.apiError?.message || 'Failed to save client');
+    }
+  };
+
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -250,22 +333,139 @@ const ProjectsCRM: React.FC = () => {
     }
   };
 
-  const handleCreateClient = () => {
-    toast.success('Client creation dialog would open');
+  const handleCreateClient = async () => {
+    if (!clientForm.name.trim() || !clientForm.company.trim()) {
+      toast.error('Name and company are required');
+      return;
+    }
+    try {
+      await createCrmClient.mutateAsync({
+        name: clientForm.name,
+        company: clientForm.company,
+        email: clientForm.email,
+        phone: clientForm.phone,
+        status: clientForm.status,
+        industry: clientForm.industry,
+        source: clientForm.source,
+        notes: clientForm.notes,
+      });
+      toast.success('Client created successfully');
+      setIsClientDialogOpen(false);
+      setClientForm({
+        name: '',
+        company: '',
+        email: '',
+        phone: '',
+        status: 'lead',
+        industry: '',
+        source: '',
+        notes: ''
+      });
+    } catch (e: any) {
+      toast.error(e?.apiError?.message || 'Failed to create client');
+    }
   };
 
-  const handleCreateProject = () => {
-    toast.success('Project creation dialog would open');
+  const handleCreateDeal = async () => {
+    if (!dealForm.title.trim() || !dealForm.clientId) {
+      toast.error('Title and client are required');
+      return;
+    }
+    try {
+      if (editingDealId) {
+        await updateCrmDeal.mutateAsync({
+          id: editingDealId,
+          data: {
+            title: dealForm.title,
+            clientId: dealForm.clientId,
+            value: dealForm.value,
+            stage: dealForm.stage,
+            probability: dealForm.probability,
+            expectedCloseDate: dealForm.expectedCloseDate || undefined,
+            source: dealForm.source,
+            notes: dealForm.notes,
+          }
+        });
+        toast.success('Deal updated successfully');
+      } else {
+        await createCrmDeal.mutateAsync({
+          title: dealForm.title,
+          clientId: dealForm.clientId,
+          value: dealForm.value,
+          stage: dealForm.stage,
+          probability: dealForm.probability,
+          expectedCloseDate: dealForm.expectedCloseDate || undefined,
+          source: dealForm.source,
+          notes: dealForm.notes,
+        });
+        toast.success('Deal created successfully');
+      }
+      setIsDealDialogOpen(false);
+      setEditingDealId(null);
+      setDealForm({
+        title: '',
+        clientId: '',
+        value: 0,
+        stage: 'lead',
+        probability: 50,
+        expectedCloseDate: '',
+        source: '',
+        notes: ''
+      });
+    } catch (e: any) {
+      toast.error(e?.apiError?.message || `Failed to ${editingDealId ? 'update' : 'create'} deal`);
+    }
   };
 
-  const handleCreateDeal = () => {
-    toast.success('Deal creation dialog would open');
-  };
+  const totalRevenue = (summary?.totalRevenue ?? projects.reduce((sum, project) => sum + (project.budget || 0), 0));
+  const totalProfit = projects.reduce((sum, project) => sum + ((project.budget || 0) * (project.profitability || 0) / 100), 0);
+  const activeProjects = (summary?.activeProjects ?? projects.filter(p => p.status === 'in-progress').length);
+  const totalClients = (summary?.totalClients ?? clients.length);
 
-  const totalRevenue = projects.reduce((sum, project) => sum + project.budget, 0);
-  const totalProfit = projects.reduce((sum, project) => sum + (project.budget * project.profitability / 100), 0);
-  const activeProjects = projects.filter(p => p.status === 'in-progress').length;
-  const totalClients = clients.length;
+  const exportCrmReport = () => {
+    const csvEscape = (v: any) => {
+      const s = String(v ?? '').replace(/"/g, '""');
+      return `"${s}"`;
+    };
+
+    const clientsCsv = [
+      ['Clients'],
+      ['id', 'name', 'company', 'email', 'phone', 'status', 'value', 'lastContact', 'industry', 'source', 'notes'],
+      ...clients.map(c => [
+        c.id, c.name, c.company, c.email, c.phone, c.status, c.value, c.lastContact, c.industry, c.source, c.notes,
+      ]),
+      [''],
+    ].map(row => row.map(csvEscape).join(',')).join('\n');
+
+    const projectsCsv = [
+      ['Projects'],
+      ['id', 'name', 'clientId', 'status', 'priority', 'progress', 'budget', 'spent', 'startDate', 'endDate'],
+      ...projects.map(p => [
+        p.id, p.name, p.clientId, p.status, p.priority, p.progress, p.budget, p.spent, p.startDate, p.endDate,
+      ]),
+      [''],
+    ].map(row => row.map(csvEscape).join(',')).join('\n');
+
+    const dealsCsv = [
+      ['Deals'],
+      ['id', 'title', 'clientId', 'value', 'stage', 'probability', 'expectedCloseDate', 'source', 'notes'],
+      ...deals.map(d => [
+        d.id, d.title, d.clientId, d.value, d.stage, d.probability, d.expectedCloseDate, d.source, d.notes,
+      ]),
+    ].map(row => row.map(csvEscape).join(',')).join('\n');
+
+    const content = [clientsCsv, projectsCsv, dealsCsv].join('\n');
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crm-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CRM report generated');
+  };
 
   return (
     <div className="space-y-6">
@@ -280,11 +480,11 @@ const ProjectsCRM: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={exportCrmReport}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
-          <Button>
+          <Button onClick={() => { setEditingClientId(null); setIsClientDialogOpen(true); }}>
             <Plus className="w-4 h-4 mr-2" />
             Quick Add
           </Button>
@@ -403,22 +603,343 @@ const ProjectsCRM: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full justify-start" onClick={handleCreateClient}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New Client
-                </Button>
-                <Button className="w-full justify-start" variant="outline" onClick={handleCreateProject}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Project
-                </Button>
-                <Button className="w-full justify-start" variant="outline" onClick={handleCreateDeal}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Deal
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Schedule Meeting
-                </Button>
+                <Dialog open={isClientDialogOpen} onOpenChange={(open) => {
+                  setIsClientDialogOpen(open);
+                  if (!open) setEditingClientId(null);
+                }}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full justify-start">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add New Client
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>{editingClientId ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+                      <DialogDescription>{editingClientId ? 'Update client details' : 'Create a new client in your CRM'}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="client-name">Name *</Label>
+                          <Input
+                            id="client-name"
+                            value={clientForm.name}
+                            onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                            placeholder="John Doe"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="client-company">Company *</Label>
+                          <Input
+                            id="client-company"
+                            value={clientForm.company}
+                            onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })}
+                            placeholder="Company Inc."
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="client-email">Email</Label>
+                          <Input
+                            id="client-email"
+                            type="email"
+                            value={clientForm.email}
+                            onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                            placeholder="john@company.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="client-phone">Phone</Label>
+                          <Input
+                            id="client-phone"
+                            value={clientForm.phone}
+                            onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                            placeholder="+1 (555) 123-4567"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="client-status">Status</Label>
+                          <Select value={clientForm.status} onValueChange={(value: any) => setClientForm({ ...clientForm, status: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lead">Lead</SelectItem>
+                              <SelectItem value="prospect">Prospect</SelectItem>
+                              <SelectItem value="client">Client</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="client-industry">Industry</Label>
+                          <Input
+                            id="client-industry"
+                            value={clientForm.industry}
+                            onChange={(e) => setClientForm({ ...clientForm, industry: e.target.value })}
+                            placeholder="Technology"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client-source">Source</Label>
+                        <Input
+                          id="client-source"
+                          value={clientForm.source}
+                          onChange={(e) => setClientForm({ ...clientForm, source: e.target.value })}
+                          placeholder="Website, Referral, etc."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client-notes">Notes</Label>
+                        <Textarea
+                          id="client-notes"
+                          value={clientForm.notes}
+                          onChange={(e) => setClientForm({ ...clientForm, notes: e.target.value })}
+                          placeholder="Additional notes about the client"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsClientDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={handleSaveClient}>{editingClientId ? 'Save Changes' : 'Create Client'}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={isCrmProjectDialogOpen} onOpenChange={setIsCrmProjectDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full justify-start" variant="outline" onClick={() => setIsCrmProjectDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Project
+                    </Button>
+                  </DialogTrigger>
+                  <CrmProjectDialog
+                    onClose={() => { setIsCrmProjectDialogOpen(false); setEditingProject(null); }}
+                    project={editingProject || undefined}
+                    onSave={async (payload: any) => {
+                      if (editingProject?.id) {
+                        await updateCrmProject.mutateAsync({ id: editingProject.id, data: payload });
+                      } else {
+                        await createCrmProject.mutateAsync(payload);
+                      }
+                    }}
+                  />
+                </Dialog>
+                <Dialog open={isDealDialogOpen} onOpenChange={(open) => {
+                  setIsDealDialogOpen(open);
+                  if (!open) {
+                    setEditingDealId(null);
+                    setDealForm({
+                      title: '',
+                      clientId: '',
+                      value: 0,
+                      stage: 'lead',
+                      probability: 50,
+                      expectedCloseDate: '',
+                      source: '',
+                      notes: ''
+                    });
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full justify-start" variant="outline" onClick={() => {
+                      setEditingDealId(null);
+                      setDealForm({
+                        title: '',
+                        clientId: '',
+                        value: 0,
+                        stage: 'lead',
+                        probability: 50,
+                        expectedCloseDate: '',
+                        source: '',
+                        notes: ''
+                      });
+                      setIsDealDialogOpen(true);
+                    }}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Deal
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>{editingDealId ? 'Edit Deal' : 'Add New Deal'}</DialogTitle>
+                      <DialogDescription>{editingDealId ? 'Update deal details' : 'Create a new deal in your sales pipeline'}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="deal-title-dash">Deal Title *</Label>
+                        <Input
+                          id="deal-title-dash"
+                          value={dealForm.title}
+                          onChange={(e) => setDealForm({ ...dealForm, title: e.target.value })}
+                          placeholder="Enterprise CRM System"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-client-dash">Client *</Label>
+                          <Select value={dealForm.clientId} onValueChange={(value) => setDealForm({ ...dealForm, clientId: value })}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select client" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clients.map((client) => (
+                                <SelectItem key={client.id} value={client.id}>
+                                  {client.name} - {client.company}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-value-dash">Deal Value</Label>
+                          <Input
+                            id="deal-value-dash"
+                            type="number"
+                            value={dealForm.value}
+                            onChange={(e) => setDealForm({ ...dealForm, value: Number(e.target.value) })}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-stage-dash">Stage</Label>
+                          <Select value={dealForm.stage} onValueChange={(value: any) => setDealForm({ ...dealForm, stage: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lead">Lead</SelectItem>
+                              <SelectItem value="qualified">Qualified</SelectItem>
+                              <SelectItem value="proposal">Proposal</SelectItem>
+                              <SelectItem value="negotiation">Negotiation</SelectItem>
+                              <SelectItem value="closed-won">Closed Won</SelectItem>
+                              <SelectItem value="closed-lost">Closed Lost</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-probability-dash">Probability (%)</Label>
+                          <Input
+                            id="deal-probability-dash"
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={dealForm.probability}
+                            onChange={(e) => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-close-date-dash">Expected Close Date</Label>
+                          <Input
+                            id="deal-close-date-dash"
+                            type="date"
+                            value={dealForm.expectedCloseDate}
+                            onChange={(e) => setDealForm({ ...dealForm, expectedCloseDate: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="deal-source-dash">Source</Label>
+                          <Input
+                            id="deal-source-dash"
+                            value={dealForm.source}
+                            onChange={(e) => setDealForm({ ...dealForm, source: e.target.value })}
+                            placeholder="Website, Referral, etc."
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="deal-notes-dash">Notes</Label>
+                        <Textarea
+                          id="deal-notes-dash"
+                          value={dealForm.notes}
+                          onChange={(e) => setDealForm({ ...dealForm, notes: e.target.value })}
+                          placeholder="Additional notes about the deal"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsDealDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={handleCreateDeal}>{editingDealId ? 'Save Changes' : 'Create Deal'}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={isMeetingDialogOpen} onOpenChange={setIsMeetingDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full justify-start" variant="outline">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Schedule Meeting
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Schedule Meeting</DialogTitle>
+                      <DialogDescription>Choose the client and time. We’ll prepare an email invite with a meeting link.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Client</Label>
+                        <Select value={meetingClientId} onValueChange={setMeetingClientId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select client with email" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.filter(c => !!c.email).map(c => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name} {c.email ? `(${c.email})` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Start</Label>
+                          <Input type="datetime-local" value={meetingStart} onChange={e => setMeetingStart(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Title</Label>
+                          <Input value={meetingTitle} onChange={e => setMeetingTitle(e.target.value)} placeholder="Optional subject" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notes</Label>
+                        <Textarea value={meetingNotes} onChange={e => setMeetingNotes(e.target.value)} placeholder="Any notes to share with client" />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsMeetingDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={async () => {
+                        if (!meetingClientId || !meetingStart) {
+                          toast.error('Client and start time are required');
+                          return;
+                        }
+                        try {
+                          const resp = await api.crm.scheduleMeeting({
+                            clientId: meetingClientId,
+                            start: new Date(meetingStart).toISOString(),
+                            title: meetingTitle || undefined,
+                            notes: meetingNotes || undefined,
+                          } as any);
+                          setIsMeetingDialogOpen(false);
+                          const mailto = `mailto:${resp.email}?subject=${encodeURIComponent(resp.subject)}&body=${encodeURIComponent(resp.body)}`;
+                          window.location.href = mailto;
+                          navigator.clipboard?.writeText(resp.meetingLink).catch(() => {});
+                          toast.success('Invite prepared. Email draft opened and meeting link copied.');
+                        } catch (e: any) {
+                          toast.error(e?.apiError?.message || 'Failed to schedule meeting');
+                        }
+                      }}>Send Invite</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="mr-2 h-4 w-4" />
                   Generate Report
@@ -510,10 +1031,113 @@ const ProjectsCRM: React.FC = () => {
                 <Filter className="w-4 h-4 mr-2" />
                 More Filters
               </Button>
-              <Button onClick={handleCreateClient}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Client
-              </Button>
+              <Dialog open={isClientDialogOpen} onOpenChange={(open) => {
+                setIsClientDialogOpen(open);
+                if (!open) setEditingClientId(null);
+              }}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Client
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>{editingClientId ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+                    <DialogDescription>{editingClientId ? 'Update client details' : 'Create a new client in your CRM'}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="client-name-2">Name *</Label>
+                        <Input
+                          id="client-name-2"
+                          value={clientForm.name}
+                          onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client-company-2">Company *</Label>
+                        <Input
+                          id="client-company-2"
+                          value={clientForm.company}
+                          onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })}
+                          placeholder="Company Inc."
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="client-email-2">Email</Label>
+                        <Input
+                          id="client-email-2"
+                          type="email"
+                          value={clientForm.email}
+                          onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                          placeholder="john@company.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client-phone-2">Phone</Label>
+                        <Input
+                          id="client-phone-2"
+                          value={clientForm.phone}
+                          onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                          placeholder="+1 (555) 123-4567"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="client-status-2">Status</Label>
+                        <Select value={clientForm.status} onValueChange={(value: any) => setClientForm({ ...clientForm, status: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lead">Lead</SelectItem>
+                            <SelectItem value="prospect">Prospect</SelectItem>
+                            <SelectItem value="client">Client</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client-industry-2">Industry</Label>
+                        <Input
+                          id="client-industry-2"
+                          value={clientForm.industry}
+                          onChange={(e) => setClientForm({ ...clientForm, industry: e.target.value })}
+                          placeholder="Technology"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="client-source-2">Source</Label>
+                      <Input
+                        id="client-source-2"
+                        value={clientForm.source}
+                        onChange={(e) => setClientForm({ ...clientForm, source: e.target.value })}
+                        placeholder="Website, Referral, etc."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="client-notes-2">Notes</Label>
+                      <Textarea
+                        id="client-notes-2"
+                        value={clientForm.notes}
+                        onChange={(e) => setClientForm({ ...clientForm, notes: e.target.value })}
+                        placeholder="Additional notes about the client"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsClientDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveClient}>{editingClientId ? 'Save Changes' : 'Create Client'}</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
 
@@ -568,11 +1192,28 @@ const ProjectsCRM: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button size="sm" className="flex-1">
+                    <Button size="sm" className="flex-1" onClick={() => { setViewClient(client); setIsClientViewOpen(true); }}>
                       <Eye className="w-4 h-4 mr-1" />
                       View
                     </Button>
-                    <Button size="sm" variant="outline">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingClientId(client.id);
+                        setClientForm({
+                          name: client.name,
+                          company: client.company,
+                          email: client.email,
+                          phone: client.phone,
+                          status: client.status as any,
+                          industry: client.industry,
+                          source: client.source,
+                          notes: client.notes,
+                        });
+                        setIsClientDialogOpen(true);
+                      }}
+                    >
                       <Edit className="w-4 h-4 mr-1" />
                       Edit
                     </Button>
@@ -584,6 +1225,77 @@ const ProjectsCRM: React.FC = () => {
               </Card>
             ))}
           </div>
+
+          {/* Client Quick View */}
+          <Dialog open={isClientViewOpen} onOpenChange={(open) => {
+            setIsClientViewOpen(open);
+            if (!open) {
+              setSelectedProjectForClient('');
+            }
+          }}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>{viewClient?.name}</DialogTitle>
+                <DialogDescription>{viewClient?.company}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p><strong>Email:</strong> {viewClient?.email || '-'}</p>
+                  <p><strong>Phone:</strong> {viewClient?.phone || '-'}</p>
+                  <p><strong>Status:</strong> {viewClient?.status}</p>
+                  <p><strong>Industry:</strong> {viewClient?.industry || '-'}</p>
+                  <p><strong>Source:</strong> {viewClient?.source || '-'}</p>
+                  <p className="text-sm text-muted-foreground">{viewClient?.notes || ''}</p>
+                </div>
+                
+                {/* Project Assignment Section */}
+                <div className="space-y-2 pt-4 border-t">
+                  <Label>Assign to Project</Label>
+                  <div className="flex gap-2">
+                    <Select 
+                      value={selectedProjectForClient || projects.find(p => p.clientId === viewClient?.id)?.id || 'none'} 
+                      onValueChange={setSelectedProjectForClient}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {projects.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={async () => {
+                        if (!selectedProjectForClient || selectedProjectForClient === 'none' || !viewClient) return;
+                        try {
+                          await updateCrmProject.mutateAsync({
+                            id: selectedProjectForClient,
+                            data: { clientId: viewClient.id }
+                          });
+                          toast.success('Client assigned to project');
+                          setSelectedProjectForClient('');
+                        } catch (e: any) {
+                          toast.error(e?.apiError?.message || 'Failed to assign client');
+                        }
+                      }}
+                      disabled={!selectedProjectForClient || selectedProjectForClient === 'none' || selectedProjectForClient === projects.find(p => p.clientId === viewClient?.id)?.id}
+                    >
+                      Assign
+                    </Button>
+                  </div>
+                  {projects.find(p => p.clientId === viewClient?.id) && (
+                    <p className="text-xs text-muted-foreground">
+                      Currently assigned to: {projects.find(p => p.clientId === viewClient?.id)?.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="projects" className="space-y-6">
@@ -623,10 +1335,25 @@ const ProjectsCRM: React.FC = () => {
                 <Filter className="w-4 h-4 mr-2" />
                 Filter
               </Button>
-              <Button onClick={handleCreateProject}>
-                <Plus className="w-4 h-4 mr-2" />
-                New Project
-              </Button>
+              <Dialog open={isCrmProjectDialogOpen} onOpenChange={setIsCrmProjectDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Project
+                  </Button>
+                </DialogTrigger>
+                <CrmProjectDialog
+                  onClose={() => { setIsCrmProjectDialogOpen(false); setEditingProject(null); }}
+                  project={editingProject || undefined}
+                  onSave={async (payload: any) => {
+                    if (editingProject?.id) {
+                      await updateCrmProject.mutateAsync({ id: editingProject.id, data: payload });
+                    } else {
+                      await createCrmProject.mutateAsync(payload);
+                    }
+                  }}
+                />
+              </Dialog>
             </div>
           </div>
 
@@ -687,11 +1414,31 @@ const ProjectsCRM: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                      <Button size="sm" className="flex-1">
+                      <Button 
+                        size="sm" 
+                        className="flex-1" 
+                        onClick={() => window.location.href = `/crm-projects/${(project as any).id}`}
+                      >
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button size="sm" variant="outline">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingProject({
+                            id: (project as any).id,
+                            name: project.name,
+                            description: project.description,
+                            status: project.status,
+                            priority: project.priority,
+                            budget: project.budget,
+                            progress: project.progress,
+                            clientId: project.clientId,
+                          });
+                          setIsCrmProjectDialogOpen(true);
+                        }}
+                      >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
@@ -746,10 +1493,30 @@ const ProjectsCRM: React.FC = () => {
                           <td className="p-4">{project.endDate}</td>
                           <td className="p-4">
                             <div className="flex gap-2">
-                              <Button size="sm" variant="ghost">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => window.location.href = `/crm-projects/${(project as any).id}`}
+                              >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingProject({
+                                    id: (project as any).id,
+                                    name: project.name,
+                                    description: project.description,
+                                    status: project.status,
+                                    priority: project.priority,
+                                    budget: project.budget,
+                                    progress: project.progress,
+                                    clientId: project.clientId,
+                                  });
+                                  setIsCrmProjectDialogOpen(true);
+                                }}
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
                               <Button size="sm" variant="ghost">
@@ -765,9 +1532,479 @@ const ProjectsCRM: React.FC = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Project Quick View */}
+          <Dialog open={isProjectViewOpen} onOpenChange={(open) => {
+            setIsProjectViewOpen(open);
+            if (!open) {
+              setViewProject(null);
+            }
+          }}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{viewProject?.name}</DialogTitle>
+                <DialogDescription>
+                  {clients.find(c => c.id === viewProject?.clientId)?.company || 'No client assigned'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">{viewProject?.description || 'No description'}</p>
+                  <div className="flex gap-2">
+                    <Badge className={getStatusColor(viewProject?.status || 'planning')}>{viewProject?.status}</Badge>
+                    <Badge className={getPriorityColor(viewProject?.priority || 'medium')}>{viewProject?.priority}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div><strong>Progress:</strong> {viewProject?.progress}%</div>
+                    <div><strong>Budget:</strong> ${viewProject?.budget.toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {/* Add Client Section */}
+                <div className="space-y-2 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label>Assign Client to Project</Label>
+                    <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create New Client
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Create New Client</DialogTitle>
+                          <DialogDescription>Add a new client and assign to this project</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="new-client-name">Name *</Label>
+                            <Input
+                              id="new-client-name"
+                              value={clientForm.name}
+                              onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                              placeholder="John Doe"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="new-client-company">Company</Label>
+                              <Input
+                                id="new-client-company"
+                                value={clientForm.company}
+                                onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })}
+                                placeholder="Acme Corp"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="new-client-email">Email</Label>
+                              <Input
+                                id="new-client-email"
+                                type="email"
+                                value={clientForm.email}
+                                onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                                placeholder="john@acme.com"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="new-client-phone">Phone</Label>
+                              <Input
+                                id="new-client-phone"
+                                value={clientForm.phone}
+                                onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                                placeholder="+1 234 567 8900"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="new-client-status">Status</Label>
+                              <Select value={clientForm.status} onValueChange={(value: any) => setClientForm({ ...clientForm, status: value })}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="lead">Lead</SelectItem>
+                                  <SelectItem value="prospect">Prospect</SelectItem>
+                                  <SelectItem value="client">Client</SelectItem>
+                                  <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsClientDialogOpen(false)}>Cancel</Button>
+                          <Button onClick={async () => {
+                            try {
+                              const newClient = await createCrmClient.mutateAsync({
+                                name: clientForm.name,
+                                company: clientForm.company,
+                                email: clientForm.email,
+                                phone: clientForm.phone,
+                                status: clientForm.status,
+                                industry: clientForm.industry,
+                                source: clientForm.source,
+                                notes: clientForm.notes
+                              });
+                              // Assign the new client to the project
+                              if (viewProject && newClient?.id) {
+                                await updateCrmProject.mutateAsync({
+                                  id: viewProject.id,
+                                  data: { clientId: newClient.id }
+                                });
+                                toast.success('Client created and assigned to project');
+                              } else {
+                                toast.success('Client created');
+                              }
+                              setIsClientDialogOpen(false);
+                              setClientForm({
+                                name: '',
+                                company: '',
+                                email: '',
+                                phone: '',
+                                status: 'lead',
+                                industry: '',
+                                source: '',
+                                notes: ''
+                              });
+                            } catch (e: any) {
+                              toast.error(e?.apiError?.message || 'Failed to create client');
+                            }
+                          }} disabled={!clientForm.name}>
+                            Create & Assign
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <Select 
+                    value={viewProject?.clientId || 'none'} 
+                    onValueChange={async (value) => {
+                      if (!viewProject) return;
+                      try {
+                        await updateCrmProject.mutateAsync({
+                          id: viewProject.id,
+                          data: { clientId: value === 'none' ? null : value }
+                        });
+                        // Refresh project data immediately
+                        setViewProject({ ...viewProject, clientId: value === 'none' ? undefined : value });
+                      } catch (e: any) {
+                        toast.error(e?.apiError?.message || 'Failed to assign client');
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No client</SelectItem>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} {c.company ? `(${c.company})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Add Deal Section */}
+                <div className="space-y-2 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label>Create Deal for Project Client</Label>
+                    <Dialog open={isDealDialogOpen} onOpenChange={(open) => {
+                      setIsDealDialogOpen(open);
+                      if (!open) {
+                        setEditingDealId(null);
+                        setDealForm({
+                          title: '',
+                          clientId: viewProject?.clientId || '',
+                          value: 0,
+                          stage: 'lead',
+                          probability: 50,
+                          expectedCloseDate: '',
+                          source: '',
+                          notes: ''
+                        });
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" disabled={!viewProject?.clientId}>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Deal
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Create New Deal</DialogTitle>
+                          <DialogDescription>
+                            Create a deal for {clients.find(c => c.id === viewProject?.clientId)?.name || 'the project client'}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="project-deal-title">Deal Title *</Label>
+                            <Input
+                              id="project-deal-title"
+                              value={dealForm.title}
+                              onChange={(e) => setDealForm({ ...dealForm, title: e.target.value })}
+                              placeholder="Enterprise CRM System"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="project-deal-client">Client *</Label>
+                              <Select 
+                                value={dealForm.clientId || viewProject?.clientId || ''} 
+                                onValueChange={(value) => setDealForm({ ...dealForm, clientId: value })}
+                                disabled={!!viewProject?.clientId}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select client" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {clients.map((client) => (
+                                    <SelectItem key={client.id} value={client.id}>
+                                      {client.name} - {client.company}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="project-deal-value">Deal Value</Label>
+                              <Input
+                                id="project-deal-value"
+                                type="number"
+                                value={dealForm.value}
+                                onChange={(e) => setDealForm({ ...dealForm, value: Number(e.target.value) })}
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="project-deal-stage">Stage</Label>
+                              <Select value={dealForm.stage} onValueChange={(value: any) => setDealForm({ ...dealForm, stage: value })}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="lead">Lead</SelectItem>
+                                  <SelectItem value="qualified">Qualified</SelectItem>
+                                  <SelectItem value="proposal">Proposal</SelectItem>
+                                  <SelectItem value="negotiation">Negotiation</SelectItem>
+                                  <SelectItem value="closed-won">Closed Won</SelectItem>
+                                  <SelectItem value="closed-lost">Closed Lost</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="project-deal-probability">Probability (%)</Label>
+                              <Input
+                                id="project-deal-probability"
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={dealForm.probability}
+                                onChange={(e) => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="project-deal-close-date">Expected Close Date</Label>
+                            <Input
+                              id="project-deal-close-date"
+                              type="date"
+                              value={dealForm.expectedCloseDate}
+                              onChange={(e) => setDealForm({ ...dealForm, expectedCloseDate: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsDealDialogOpen(false)}>Cancel</Button>
+                          <Button onClick={async () => {
+                            try {
+                              await createCrmDeal.mutateAsync({
+                                title: dealForm.title,
+                                clientId: dealForm.clientId || viewProject?.clientId || '',
+                                value: dealForm.value,
+                                stage: dealForm.stage,
+                                probability: dealForm.probability,
+                                expectedCloseDate: dealForm.expectedCloseDate || undefined,
+                                source: dealForm.source,
+                                notes: dealForm.notes
+                              });
+                              setIsDealDialogOpen(false);
+                              setDealForm({
+                                title: '',
+                                clientId: viewProject?.clientId || '',
+                                value: 0,
+                                stage: 'lead',
+                                probability: 50,
+                                expectedCloseDate: '',
+                                source: '',
+                                notes: ''
+                              });
+                            } catch (e: any) {
+                              toast.error(e?.apiError?.message || 'Failed to create deal');
+                            }
+                          }} disabled={!dealForm.title || !(dealForm.clientId || viewProject?.clientId)}>
+                            Create Deal
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {viewProject?.clientId 
+                      ? `Deals can be created for ${clients.find(c => c.id === viewProject.clientId)?.name || 'the assigned client'}`
+                      : 'Assign a client to this project first to create deals'}
+                  </p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="deals" className="space-y-6">
+          {/* Header with Add Deal button */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Sales Pipeline</h2>
+              <p className="text-muted-foreground">Manage your deals and track sales progress</p>
+            </div>
+            <Dialog open={isDealDialogOpen} onOpenChange={(open) => {
+              setIsDealDialogOpen(open);
+              if (!open) {
+                setEditingDealId(null);
+                setDealForm({
+                  title: '',
+                  clientId: '',
+                  value: 0,
+                  stage: 'lead',
+                  probability: 50,
+                  expectedCloseDate: '',
+                  source: '',
+                  notes: ''
+                });
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Deal
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>{editingDealId ? 'Edit Deal' : 'Add New Deal'}</DialogTitle>
+                  <DialogDescription>{editingDealId ? 'Update deal details' : 'Create a new deal in your sales pipeline'}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="deal-title">Deal Title *</Label>
+                    <Input
+                      id="deal-title"
+                      value={dealForm.title}
+                      onChange={(e) => setDealForm({ ...dealForm, title: e.target.value })}
+                      placeholder="Enterprise CRM System"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-client">Client *</Label>
+                      <Select value={dealForm.clientId} onValueChange={(value) => setDealForm({ ...dealForm, clientId: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.name} - {client.company}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-value">Deal Value</Label>
+                      <Input
+                        id="deal-value"
+                        type="number"
+                        value={dealForm.value}
+                        onChange={(e) => setDealForm({ ...dealForm, value: Number(e.target.value) })}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-stage">Stage</Label>
+                      <Select value={dealForm.stage} onValueChange={(value: any) => setDealForm({ ...dealForm, stage: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lead">Lead</SelectItem>
+                          <SelectItem value="qualified">Qualified</SelectItem>
+                          <SelectItem value="proposal">Proposal</SelectItem>
+                          <SelectItem value="negotiation">Negotiation</SelectItem>
+                          <SelectItem value="closed-won">Closed Won</SelectItem>
+                          <SelectItem value="closed-lost">Closed Lost</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-probability">Probability (%)</Label>
+                      <Input
+                        id="deal-probability"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={dealForm.probability}
+                        onChange={(e) => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-close-date">Expected Close Date</Label>
+                      <Input
+                        id="deal-close-date"
+                        type="date"
+                        value={dealForm.expectedCloseDate}
+                        onChange={(e) => setDealForm({ ...dealForm, expectedCloseDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="deal-source">Source</Label>
+                      <Input
+                        id="deal-source"
+                        value={dealForm.source}
+                        onChange={(e) => setDealForm({ ...dealForm, source: e.target.value })}
+                        placeholder="Website, Referral, etc."
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deal-notes">Notes</Label>
+                    <Textarea
+                      id="deal-notes"
+                      value={dealForm.notes}
+                      onChange={(e) => setDealForm({ ...dealForm, notes: e.target.value })}
+                      placeholder="Additional notes about the deal"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDealDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleCreateDeal}>{editingDealId ? 'Save Changes' : 'Create Deal'}</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
           {/* Sales Pipeline */}
           <Card>
             <CardHeader>
@@ -814,34 +2051,117 @@ const ProjectsCRM: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {deals.map((deal) => (
-                  <div key={deal.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <h4 className="font-medium">{deal.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {clients.find(c => c.id === deal.clientId)?.company}
-                        </p>
+                {deals.map((deal) => {
+                  const dealClient = clients.find(c => c.id === deal.clientId);
+                  // Find project that has this deal's client assigned
+                  const assignedProject = projects.find(p => p.clientId === deal.clientId);
+                  // Use selectedProjectForDeal state if set, otherwise use assignedProject, otherwise 'none'
+                  const currentProjectId = selectedProjectForDeal[deal.id] !== undefined 
+                    ? selectedProjectForDeal[deal.id] 
+                    : (assignedProject?.id || 'none');
+                  
+                  return (
+                    <div key={deal.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <h4 className="font-medium">{deal.title}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {dealClient?.name || dealClient?.company || 'No client'}
+                          </p>
+                        </div>
+                        <Badge className={getStageColor(deal.stage)}>
+                          {deal.stage.replace('-', ' ')}
+                        </Badge>
                       </div>
-                      <Badge className={getStageColor(deal.stage)}>
-                        {deal.stage.replace('-', ' ')}
-                      </Badge>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className="text-sm font-medium">${deal.value.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{deal.expectedCloseDate || 'Not set'}</p>
+                          <p className="text-xs text-muted-foreground">Expected close</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select 
+                            value={currentProjectId}
+                            onValueChange={async (value) => {
+                              // Update state immediately for UI responsiveness
+                              setSelectedProjectForDeal({ ...selectedProjectForDeal, [deal.id]: value });
+                              
+                              if (value !== 'none' && dealClient) {
+                                try {
+                                  await updateCrmProject.mutateAsync({
+                                    id: value,
+                                    data: { clientId: deal.clientId }
+                                  });
+                                  // State already updated above, no need to update again
+                                } catch (e: any) {
+                                  // Revert state on error
+                                  setSelectedProjectForDeal(prev => {
+                                    const newState = { ...prev };
+                                    delete newState[deal.id];
+                                    return newState;
+                                  });
+                                  toast.error(e?.apiError?.message || 'Failed to assign deal to project');
+                                }
+                              } else if (value === 'none' && assignedProject) {
+                                // If unassigning, clear the clientId from the project
+                                try {
+                                  await updateCrmProject.mutateAsync({
+                                    id: assignedProject.id,
+                                    data: { clientId: null }
+                                  });
+                                  // State already updated above
+                                } catch (e: any) {
+                                  // Revert state on error
+                                  setSelectedProjectForDeal(prev => {
+                                    const newState = { ...prev };
+                                    newState[deal.id] = assignedProject.id;
+                                    return newState;
+                                  });
+                                  toast.error(e?.apiError?.message || 'Failed to unassign deal');
+                                }
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue placeholder="Assign to project" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No project</SelectItem>
+                              {projects.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingDealId(deal.id);
+                              setDealForm({
+                                title: deal.title || '',
+                                clientId: deal.clientId || '',
+                                value: deal.value || 0,
+                                stage: (deal.stage as any) || 'lead',
+                                probability: deal.probability || 0,
+                                expectedCloseDate: deal.expectedCloseDate || '',
+                                source: deal.source || '',
+                                notes: deal.notes || '',
+                              });
+                              setIsDealDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="text-sm font-medium">${deal.value.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{deal.expectedCloseDate}</p>
-                        <p className="text-xs text-muted-foreground">Expected close</p>
-                      </div>
-                      <Button size="sm" variant="outline">
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -975,7 +2295,7 @@ const ProjectsCRM: React.FC = () => {
                   <Upload className="w-4 h-4 mr-2" />
                   Import Data
                 </Button>
-                <Button className="w-full" variant="outline">
+                <Button className="w-full" variant="outline" onClick={exportCrmReport}>
                   <FileText className="w-4 h-4 mr-2" />
                   Generate Report
                 </Button>
@@ -992,5 +2312,133 @@ const ProjectsCRM: React.FC = () => {
     </div>
   );
 };
+
+function CrmProjectDialog({
+  onClose,
+  project,
+  onSave,
+}: {
+  onClose: () => void;
+  project?: any;
+  onSave: (payload: any) => Promise<any> | void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<'planning' | 'in-progress' | 'review' | 'completed' | 'on-hold' | 'cancelled'>('in-progress');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
+  const [budget, setBudget] = useState<number>(0);
+  const [clientId, setClientId] = useState<string>('');
+  
+  const { data: clients = [] } = useCrmClients();
+
+  React.useEffect(() => {
+    if (project) {
+      setName(project.name ?? '');
+      setDescription(project.description ?? '');
+      setStatus(project.status ?? 'in-progress');
+      setPriority(project.priority ?? 'medium');
+      setBudget(project.budget ?? 0);
+      setClientId(project.clientId ?? '');
+    } else {
+      setName('');
+      setDescription('');
+      setStatus('in-progress');
+      setPriority('medium');
+      setBudget(0);
+      setClientId('');
+    }
+  }, [project]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      name,
+      description,
+      status,
+      priority,
+      budget,
+      progress: project?.progress ?? 0,
+      clientId: clientId || undefined,
+    });
+    setName('');
+    setDescription('');
+    setBudget(0);
+    setClientId('');
+    onClose();
+  };
+
+  return (
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>{project?.id ? 'Edit CRM Project' : 'Create CRM Project'}</DialogTitle>
+        <DialogDescription>
+          {project?.id ? 'Update CRM project details.' : 'Create a project within CRM (does not affect main Projects module).'}
+        </DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <div className="space-y-2">
+          <Label htmlFor="crm-name">Name</Label>
+          <Input id="crm-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="New CRM Project" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="crm-desc">Description</Label>
+          <Textarea id="crm-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the project" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+              <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="planning">Planning</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="review">Review</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="on-hold">On Hold</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
+              <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="crm-client">Client (Optional)</Label>
+          <Select value={clientId || "none"} onValueChange={(value) => setClientId(value === "none" ? "" : value)}>
+            <SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No client</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} {c.company ? `(${c.company})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="crm-budget">Budget</Label>
+          <Input id="crm-budget" type="number" value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
+        </div>
+        <DialogFooter className="mt-4">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={!name}>
+            {project?.id ? 'Save Changes' : 'Create Project'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
 
 export default ProjectsCRM;

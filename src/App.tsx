@@ -14,7 +14,7 @@ import { useRealtime } from "@/hooks/useRealtime";
 // Lazy load all pages for better code splitting
 // Use new simplified functional pages
 const BoardsPage = React.lazy(() => import("@/pages/BoardsSimple"));
-const Projects = React.lazy(() => import("@/pages/ProjectsSimple"));
+const Projects = React.lazy(() => import("@/pages/Projects")); // Full CRM version
 const Tasks = React.lazy(() => import("@/pages/TasksSimple"));
 // Original pages
 const CustomDashboard = React.lazy(() => import("@/pages/CustomDashboard"));
@@ -28,12 +28,14 @@ const ProjectDashboard = React.lazy(() => import("@/pages/ProjectDashboard"));
 const Setup = React.lazy(() => import("@/pages/Setup"));
 const Login = React.lazy(() => import("@/pages/auth/Login"));
 const SignUp = React.lazy(() => import("@/pages/auth/SignUp"));
+const ClearStorage = React.lazy(() => import("@/pages/ClearStorage"));
 
 // Lazy load new pages
 const AdminPage = React.lazy(() => import("@/pages/AdminPage"));
 const AutomationsPage = React.lazy(() => import("@/pages/AutomationsPage"));
 const BestInClassExtrasPage = React.lazy(() => import("@/pages/BestInClassExtrasPage"));
 const CalendarHub = React.lazy(() => import("@/pages/CalendarHub"));
+const CrmProjectDashboard = React.lazy(() => import("@/pages/CrmProjectDashboard"));
 const DeveloperPage = React.lazy(() => import("@/pages/DeveloperPage"));
 const IntegrationsPage = React.lazy(() => import("@/pages/IntegrationsPage"));
 const SettingsPage = React.lazy(() => import("@/pages/SettingsPage"));
@@ -45,12 +47,13 @@ const PageLoading = () => (
   </div>
 );
 
-// Create a client
-const queryClient = new QueryClient({
+// Create a client - export it so it can be used to clear cache on logout
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 3,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      staleTime: 0, // Always consider data stale to prevent showing wrong user's data
     },
   },
 });
@@ -78,6 +81,11 @@ const AppContent = () => {
                 <SignUp />
               </Suspense>
             } />
+            <Route path="/clear-storage" element={
+              <Suspense fallback={<PageLoading />}>
+                <ClearStorage />
+              </Suspense>
+            } />
             
             {/* Protected routes with Layout */}
             <Route element={
@@ -99,6 +107,11 @@ const AppContent = () => {
               <Route path="/projects/:id" element={
                 <Suspense fallback={<PageLoading />}>
                   <ProjectDashboard />
+                </Suspense>
+              } />
+              <Route path="/crm-projects/:id" element={
+                <Suspense fallback={<PageLoading />}>
+                  <CrmProjectDashboard />
                 </Suspense>
               } />
               <Route path="/tasks" element={

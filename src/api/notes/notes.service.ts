@@ -6,6 +6,12 @@ export class NotesService {
   constructor(private readonly prisma: PrismaService) {}
 
   private async ensureProjectAccess(tenantId: string, userId: string, projectId: string) {
+    // Check if user is project creator
+    const project = await this.prisma.tx.project.findFirst({ where: { id: projectId, tenantId } });
+    if (project && project.createdBy === userId) {
+      return; // Creator has access
+    }
+    
     const isMember = await this.prisma.tx.projectMember.findFirst({ where: { tenantId, userId, projectId } });
     if (!isMember) {
       const hasAdmin = await this.prisma.tx.roleAssignment.findFirst({
@@ -28,9 +34,12 @@ export class NotesService {
     });
   }
 
-  async list(tenantId: string, projectId: string, cursor?: any, limit = 25) {
+  async list(tenantId: string, projectId: string | undefined, cursor?: any, limit = 25) {
     const take = Math.min(Math.max(limit, 1), 100);
-    const where = { tenantId, projectId };
+    const where: any = { tenantId };
+    if (projectId) {
+      where.projectId = projectId;
+    }
     const items = await this.prisma.tx.note.findMany({
       where,
       take: take + 1,
@@ -47,7 +56,34 @@ export class NotesService {
   async get(tenantId: string, userId: string, id: string) {
     const note = await this.prisma.tx.note.findFirst({ where: { id, tenantId } });
     if (!note) throw new NotFoundException('Note not found');
-    await this.ensureProjectAccess(tenantId, userId, note.projectId);
+    if (note.projectId) {
+      await this.ensureProjectAccess(tenantId, userId, note.projectId);
+    }
     return note;
+  }
+
+  async update(tenantId: string, userId: string, id: string, dto: any) {
+    const note = await this.prisma.tx.note.findFirst({ where: { id, tenantId } });
+    if (!note) throw new NotFoundException('Note not found');
+    if (note.projectId) {
+      await this.ensureProjectAccess(tenantId, userId, note.projectId);
+    }
+    return this.prisma.tx.note.update({
+      where: { id },
+      data: {
+        title: dto.title,
+        content: dto.content,
+        ...(dto.tags && { tags: dto.tags }),
+      },
+    });
+  }
+
+  async delete(tenantId: string, userId: string, id: string) {
+    const note = await this.prisma.tx.note.findFirst({ where: { id, tenantId } });
+    if (!note) throw new NotFoundException('Note not found');
+    if (note.projectId) {
+      await this.ensureProjectAccess(tenantId, userId, note.projectId);
+    }
+    return this.prisma.tx.note.delete({ where: { id } });
   }
 } 

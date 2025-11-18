@@ -24,7 +24,6 @@ import {
     ClipboardList,
     Clock,
     FileText,
-    Filter,
     FormInput,
     Layers,
     MessageSquare,
@@ -34,89 +33,175 @@ import {
     StickyNote,
     Users
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useProject, useProjects } from '@/hooks/useProjects';
+import { useTasks } from '@/hooks/useTasks';
+import { useNotes } from '@/hooks/useNotesEnhanced';
 
 const ProjectDashboard = () => {
-  const { projectId } = useParams();
+  const params = useParams();
+  const projectId = params.id; // Route uses :id, not :projectId
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("summary");
-  const [project, setProject] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   
-  useEffect(() => {
-    // Fetch project data based on projectId
-    setTimeout(() => {
-      const mockProject = {
-        id: projectId,
-        name: `Project ${projectId}`,
-        description: "This is a detailed project description that provides context about goals and scope.",
-        status: "In Progress",
-        progress: 45,
-        startDate: "2023-05-01",
-        dueDate: "2023-06-30",
-        owner: "JD",
-        team: ["AS", "RM", "TW"],
-        tasks: {
-          total: 25,
-          completed: 12,
-          inProgress: 8,
-          todo: 5
-        },
-        recentActivities: [
-          { id: 'a1', user: 'JD', action: 'commented on', item: 'Task A', time: '2 hours ago', icon: MessageSquare },
-          { id: 'a2', user: 'AS', action: 'completed', item: 'Task B', time: '4 hours ago', icon: CheckCircle2 },
-          { id: 'a3', user: 'RM', action: 'created', item: 'Document C', time: '1 day ago', icon: FileText }
-        ],
-        automations: [
-          { id: 'r1', name: 'Assign overdue tasks', status: 'active', lastRun: '2 days ago' },
-          { id: 'r2', name: 'Notify on milestone completion', status: 'active', lastRun: '1 week ago' }
-        ]
-      };
-      
-      setProject(mockProject);
-      setLoading(false);
-    }, 800);
-  }, [projectId]);
+  // Fetch real project data from API - refetch when projectId changes
+  const { data: projectData, isLoading: loading, error, refetch } = useProject(projectId || '');
+  
+  // Handle both direct project object and wrapped responses
+  const project = projectData?.data || projectData;
+  
+  // Fetch all projects to determine project number
+  const { data: allProjects = [] } = useProjects();
+  
+  // Calculate project number based on position in sorted list (by createdAt desc)
+  // Projects are sorted by createdAt desc, so newest is first
+  // We want P1 for the newest, P2 for second newest, etc.
+  const sortedProjects = React.useMemo(() => {
+    return [...allProjects].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
+  }, [allProjects]);
+  
+  const projectNumber = React.useMemo(() => {
+    if (!projectId) return 1;
+    const index = sortedProjects.findIndex(p => p.id === projectId);
+    return index >= 0 ? index + 1 : 1; // P1, P2, P3, etc.
+  }, [projectId, sortedProjects]);
+  
+  // Fetch tasks for this project - refetch when projectId changes
+  const { data: tasks = [] } = useTasks(projectId || undefined);
+  
+  // Fetch notes for this project
+  const { data: notesData } = useNotes(projectId);
+  const notes = notesData?.data || notesData || [];
+  
+  // Force refetch when projectId changes - use queryClient to invalidate cache
+  const queryClient = useQueryClient();
+  React.useEffect(() => {
+    if (projectId) {
+      console.log('ProjectDashboard - projectId changed, invalidating cache and refetching:', projectId);
+      // Invalidate all project-related queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      // Then refetch
+      refetch();
+    }
+  }, [projectId, refetch, queryClient]);
+  
+  // Debug: Log when projectId or project changes
+  React.useEffect(() => {
+    console.log('ProjectDashboard - params:', params);
+    console.log('ProjectDashboard - projectId:', projectId);
+    console.log('ProjectDashboard - project data:', project);
+    console.log('ProjectDashboard - tasks count:', tasks.length);
+  }, [params, projectId, project, tasks.length]);
+  
+  // Calculate real task stats
+  const taskStats = {
+    total: tasks.length,
+    completed: tasks.filter(t => t.status === 'done').length,
+    inProgress: tasks.filter(t => t.status === 'in-progress').length,
+    todo: tasks.filter(t => t.status === 'todo').length
+  };
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (project) {
+      console.log('Project loaded:', project);
+    }
+    if (error) {
+      console.error('Project error:', error);
+    }
+  }, [project, error]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-pulse text-center">
-          <p className="text-lg">Loading project dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  // Always show the interface - use fallback data if project is not loaded
+  // This ensures users can see all tabs and features even if data is still loading
+  const displayProject = project || {
+    id: projectId,
+    name: projectId || 'Project',
+    status: 'active',
+    description: 'Loading project details...',
+    progress: 0
+  };
 
-  if (!project) {
+  // Don't render if projectId is missing
+  if (!projectId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <h2 className="text-2xl font-bold mb-4">Project Not Found</h2>
-        <p className="text-muted-foreground mb-6">The requested project could not be found.</p>
+        <h2 className="text-2xl font-bold mb-4">Invalid Project</h2>
+        <p className="text-muted-foreground mb-6">No project ID provided in the URL.</p>
         <Button onClick={() => navigate('/projects')}>Back to Projects</Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" key={projectId}>
+      {/* Error Banner - show but don't block */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">
+              {(error as any)?.response?.status === 401 
+                ? 'Authentication Error - Please log out and log back in'
+                : (error as any)?.response?.status === 403
+                ? 'Access Denied - You do not have permission to view this project'
+                : (error as any)?.response?.status === 404
+                ? 'Project Not Found'
+                : 'Error loading project data'}
+            </p>
+            <p className="text-xs text-red-600 mt-1">
+              {(error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'}
+            </p>
+            {(error as any)?.response?.status === 403 && (
+              <p className="text-xs text-red-600 mt-2">
+                If you believe you should have access, please contact the project owner or administrator.
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => navigate('/projects')} variant="outline" size="sm">
+              Back to Projects
+            </Button>
+            <Button onClick={() => refetch()} variant="outline" size="sm">Retry</Button>
+          </div>
+        </div>
+      )}
+      
+      {/* Loading Indicator */}
+      {loading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">Loading project data...</p>
+        </div>
+      )}
+      
       {/* Project Header */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-            <span className="text-xl font-bold">P1</span>
+            <span className="text-xl font-bold">P{projectNumber}</span>
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                {project.status}
-              </Badge>
+              <h1 className="text-3xl font-bold tracking-tight">
+                {displayProject.name || projectId || 'Project'}
+              </h1>
+              {displayProject.status && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                  {displayProject.status}
+                </Badge>
+              )}
             </div>
-            <p className="text-muted-foreground mt-1">
-              {project.description}
-            </p>
+            {displayProject.description && (
+              <p className="text-muted-foreground mt-1">
+                {displayProject.description}
+              </p>
+            )}
           </div>
         </div>
         
@@ -132,11 +217,6 @@ const ProjectDashboard = () => {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Filter</span>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -144,8 +224,9 @@ const ProjectDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">0 completed</p>
-                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+                <p className="text-2xl font-bold">{taskStats.completed}</p>
+                <p className="text-sm font-medium text-muted-foreground">Completed</p>
+                <p className="text-xs text-muted-foreground">of {taskStats.total} total tasks</p>
               </div>
               <CheckCircle2 className="h-8 w-8 text-green-500" />
             </div>
@@ -156,8 +237,9 @@ const ProjectDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">0 updated</p>
-                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+                <p className="text-2xl font-bold">{taskStats.inProgress}</p>
+                <p className="text-sm font-medium text-muted-foreground">In Progress</p>
+                <p className="text-xs text-muted-foreground">actively being worked on</p>
               </div>
               <FileText className="h-8 w-8 text-blue-500" />
             </div>
@@ -168,8 +250,9 @@ const ProjectDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">0 created</p>
-                <p className="text-xs text-muted-foreground">in the last 7 days</p>
+                <p className="text-2xl font-bold">{taskStats.todo}</p>
+                <p className="text-sm font-medium text-muted-foreground">To Do</p>
+                <p className="text-xs text-muted-foreground">pending tasks</p>
               </div>
               <Sparkles className="h-8 w-8 text-purple-500" />
             </div>
@@ -180,8 +263,9 @@ const ProjectDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">0 due soon</p>
-                <p className="text-xs text-muted-foreground">in the next 7 days</p>
+                <p className="text-2xl font-bold">{displayProject.progress || 0}%</p>
+                <p className="text-sm font-medium text-muted-foreground">Progress</p>
+                <p className="text-xs text-muted-foreground">project completion</p>
               </div>
               <Calendar className="h-8 w-8 text-orange-500" />
             </div>
@@ -256,42 +340,43 @@ const ProjectDashboard = () => {
               <CardHeader>
                 <CardTitle>Status overview</CardTitle>
                 <CardDescription>
-                  The status overview for this project will display here after you{' '}
-                  <span className="text-purple-600 underline cursor-pointer">create some work items</span>
+                  Overview of all work items in this project
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="text-8xl font-bold text-muted-foreground/20 mb-4">0</div>
-                <p className="text-muted-foreground mb-6">Total work items</p>
+              <CardContent className="py-6">
+                <div className="text-6xl font-bold text-muted-foreground/20 mb-4 text-center">
+                  {tasks.length + notes.length}
+                </div>
+                <p className="text-muted-foreground mb-6 text-center">Total work items</p>
                 
-                <div className="space-y-2 w-full">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-3 w-full">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                      <span className="text-sm">To Do</span>
+                      <span className="text-sm font-medium">Tasks</span>
                     </div>
-                    <span className="text-sm font-medium">0</span>
+                    <span className="text-sm font-bold">{tasks.length}</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-purple-50">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                      <span className="text-sm">Testing</span>
+                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                      <span className="text-sm font-medium">Notes</span>
                     </div>
-                    <span className="text-sm font-medium">0</span>
+                    <span className="text-sm font-bold">{notes.length}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-pink-500"></div>
-                      <span className="text-sm">Design</span>
-                    </div>
-                    <span className="text-sm font-medium">0</span>
-                  </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-green-50">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="text-sm">Concepting</span>
+                      <span className="text-sm font-medium">Completed Tasks</span>
                     </div>
-                    <span className="text-sm font-medium">0</span>
+                    <span className="text-sm font-bold">{taskStats.completed}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-orange-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                      <span className="text-sm font-medium">In Progress</span>
+                    </div>
+                    <span className="text-sm font-bold">{taskStats.inProgress}</span>
                   </div>
                 </div>
               </CardContent>
@@ -299,14 +384,116 @@ const ProjectDashboard = () => {
             
             <Card>
               <CardHeader>
-                <CardTitle>No activity yet</CardTitle>
+                <CardTitle>Project Activity</CardTitle>
+                <CardDescription>
+                  Recent activity and progress
+                </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="p-4 rounded-full bg-blue-100 mb-4">
-                  <CheckCircle2 className="h-12 w-12 text-blue-500" />
+              <CardContent className="py-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Tasks</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{tasks.length} total</span>
+                      {tasks.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          ({taskStats.completed} completed)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {tasks.length > 0 && (
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-500 h-2 rounded-full transition-all"
+                        style={{ width: `${(taskStats.completed / tasks.length) * 100}%` }}
+                      ></div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm text-muted-foreground">Notes</span>
+                    <span className="text-sm font-medium">{notes.length}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm text-muted-foreground">Project Progress</span>
+                    <span className="text-sm font-medium">
+                      {tasks.length > 0 
+                        ? `${Math.round((taskStats.completed / tasks.length) * 100)}%`
+                        : '0%'}
+                    </span>
+                  </div>
+                  {tasks.length > 0 && (
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${(taskStats.completed / tasks.length) * 100}%` }}
+                      ></div>
+                    </div>
+                  )}
+                  
+                  {tasks.length === 0 && notes.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="p-4 rounded-full bg-blue-100 mb-4 inline-block">
+                        <CheckCircle2 className="h-8 w-8 text-blue-500" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Create tasks and notes to see activity here.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-center text-muted-foreground mb-6">
-                  Create a few work items and invite some teammates to your project to see activity here.
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Quick Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{tasks.length}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {taskStats.todo} to do
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Completed</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{taskStats.completed}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {tasks.length > 0 ? `${Math.round((taskStats.completed / tasks.length) * 100)}%` : '0%'} done
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{taskStats.inProgress}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Active work
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{notes.length}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Project notes
                 </p>
               </CardContent>
             </Card>
@@ -318,7 +505,7 @@ const ProjectDashboard = () => {
         </TabsContent>
         
         <TabsContent value="list">
-          <ProjectTasksList projectId={projectId} />
+          {projectId && <ProjectTasksList key={projectId} projectId={projectId} />}
         </TabsContent>
         
         <TabsContent value="calendar">

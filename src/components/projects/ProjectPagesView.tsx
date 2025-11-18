@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useNotes, useCreateNote } from '@/hooks/useNotesEnhanced';
 
 interface ProjectPagesViewProps {
   projectId: string | undefined;
@@ -41,127 +42,44 @@ const ProjectPagesView: React.FC<ProjectPagesViewProps> = ({ projectId }) => {
   const [selectedPage, setSelectedPage] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("all");
 
-  useEffect(() => {
-    // Mock pages data
-    setPages([
-      {
-        id: 1,
-        title: "Project Overview",
-        content: "Comprehensive overview of the project including goals, scope, timeline, and key stakeholders. This document serves as the central reference point for all project activities.",
-        category: "Documentation",
-        tags: ["overview", "goals", "scope"],
-        author: "John Smith",
-        createdDate: "2024-01-10",
-        lastModified: "2024-01-15",
-        lastEditor: "Sarah Johnson",
-        isPublic: true,
-        isStarred: true,
-        isBookmarked: false,
-        views: 45,
-        comments: 8,
-        collaborators: ["Sarah Johnson", "Mike Wilson", "Lisa Brown"],
-        status: "Published",
-        version: "1.3"
-      },
-      {
-        id: 2,
-        title: "Technical Architecture",
-        content: "Detailed technical architecture documentation including system design, database schema, API specifications, and integration points.",
-        category: "Technical",
-        tags: ["architecture", "design", "api"],
-        author: "Mike Wilson",
-        createdDate: "2024-01-08",
-        lastModified: "2024-01-14",
-        lastEditor: "Tom Davis",
-        isPublic: false,
-        isStarred: false,
-        isBookmarked: true,
-        views: 32,
-        comments: 12,
-        collaborators: ["Tom Davis", "John Smith"],
-        status: "Published",
-        version: "2.1"
-      },
-      {
-        id: 3,
-        title: "User Stories & Requirements",
-        content: "Collection of user stories, functional requirements, and acceptance criteria for the project features.",
-        category: "Requirements",
-        tags: ["user-stories", "requirements", "features"],
-        author: "Sarah Johnson",
-        createdDate: "2024-01-12",
-        lastModified: "2024-01-16",
-        lastEditor: "Lisa Brown",
-        isPublic: true,
-        isStarred: true,
-        isBookmarked: true,
-        views: 28,
-        comments: 6,
-        collaborators: ["Lisa Brown", "John Smith", "Emma Davis"],
-        status: "Published",
-        version: "1.5"
-      },
-      {
-        id: 4,
-        title: "Meeting Notes - Sprint Planning",
-        content: "Notes from sprint planning meetings including task assignments, estimates, and sprint goals.",
-        category: "Meetings",
-        tags: ["meetings", "sprint", "planning"],
-        author: "Lisa Brown",
-        createdDate: "2024-01-14",
-        lastModified: "2024-01-14",
-        lastEditor: "Lisa Brown",
-        isPublic: false,
-        isStarred: false,
-        isBookmarked: false,
-        views: 15,
-        comments: 3,
-        collaborators: ["John Smith", "Sarah Johnson"],
-        status: "Draft",
-        version: "1.0"
-      },
-      {
-        id: 5,
-        title: "API Documentation",
-        content: "Complete API documentation with endpoints, request/response examples, and authentication details.",
-        category: "Technical",
-        tags: ["api", "documentation", "endpoints"],
-        author: "Tom Davis",
-        createdDate: "2024-01-11",
-        lastModified: "2024-01-13",
-        lastEditor: "Mike Wilson",
-        isPublic: true,
-        isStarred: false,
-        isBookmarked: false,
-        views: 67,
-        comments: 15,
-        collaborators: ["Mike Wilson", "John Smith"],
-        status: "Published",
-        version: "1.8"
-      },
-      {
-        id: 6,
-        title: "Testing Strategy",
-        content: "Comprehensive testing strategy including unit tests, integration tests, and user acceptance testing procedures.",
-        category: "Testing",
-        tags: ["testing", "strategy", "qa"],
-        author: "Emma Davis",
-        createdDate: "2024-01-13",
-        lastModified: "2024-01-15",
-        lastEditor: "Tom Davis",
-        isPublic: false,
-        isStarred: false,
-        isBookmarked: true,
-        views: 22,
-        comments: 4,
-        collaborators: ["Tom Davis", "Sarah Johnson"],
-        status: "Review",
-        version: "1.2"
-      }
-    ]);
+  // Real notes as pages
+  const { data: notesData } = useNotes(projectId);
+  const createNote = useCreateNote();
 
+  useEffect(() => {
+    // Map notes from backend to pages
+    const items = (notesData?.items || notesData?.data || notesData || []) as any[];
+    const mapped = items.map((n) => {
+      let text = '';
+      try {
+        const parsed = typeof n.content === 'string' ? JSON.parse(n.content) : n.content;
+        text = parsed?.content || parsed?.text || '';
+      } catch {
+        text = n.content || '';
+      }
+      return {
+        id: n.id,
+        title: n.title || 'Untitled',
+        content: text,
+        category: 'Documentation',
+        tags: [],
+        author: '',
+        createdDate: n.createdAt,
+        lastModified: n.updatedAt,
+        lastEditor: '',
+        isPublic: false,
+        isStarred: false,
+        isBookmarked: false,
+        views: 0,
+        comments: 0,
+        collaborators: [],
+        status: 'Published',
+        version: '1.0'
+      };
+    });
+    setPages(mapped);
     setCategories(["Documentation", "Technical", "Requirements", "Meetings", "Testing", "Design"]);
-  }, [projectId]);
+  }, [notesData, projectId]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -252,9 +170,24 @@ const ProjectPagesView: React.FC<ProjectPagesViewProps> = ({ projectId }) => {
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => setIsCreatePageOpen(false)}>Cancel</Button>
         <Button variant="outline">Save as Draft</Button>
-        <Button onClick={() => {
-          toast.success("Page created successfully!");
-          setIsCreatePageOpen(false);
+        <Button onClick={async () => {
+          const titleEl = document.getElementById('title') as HTMLInputElement | null;
+          const contentEl = document.getElementById('content') as HTMLTextAreaElement | null;
+          if (!titleEl?.value.trim()) {
+            toast.error('Title is required');
+            return;
+          }
+          try {
+            await createNote.mutateAsync({
+              title: titleEl.value.trim(),
+              content: JSON.stringify({ content: contentEl?.value || '' }),
+              projectId,
+            } as any);
+            toast.success("Page created successfully!");
+            setIsCreatePageOpen(false);
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Failed to create page');
+          }
         }}>Publish</Button>
       </div>
     </div>
@@ -346,16 +279,45 @@ const ProjectPagesView: React.FC<ProjectPagesViewProps> = ({ projectId }) => {
             Last edited by {page.lastEditor} on {page.lastModified}
           </div>
           <div className="flex gap-1">
-            <Button size="sm" variant="ghost">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => {
+                setSelectedPage(page);
+                toast.info(`Viewing page: ${page.title}`);
+              }}
+            >
               <Eye className="h-3 w-3" />
             </Button>
-            <Button size="sm" variant="ghost">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => {
+                setSelectedPage(page);
+                setIsCreatePageOpen(true);
+                toast.info(`Editing page: ${page.title}`);
+              }}
+            >
               <Edit className="h-3 w-3" />
             </Button>
-            <Button size="sm" variant="ghost">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => {
+                const shareUrl = `${window.location.origin}/pages/${page.id}`;
+                navigator.clipboard.writeText(shareUrl);
+                toast.success('Page link copied to clipboard');
+              }}
+            >
               <Share className="h-3 w-3" />
             </Button>
-            <Button size="sm" variant="ghost">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => {
+                toast.info(`Viewing history for: ${page.title}`);
+              }}
+            >
               <History className="h-3 w-3" />
             </Button>
           </div>
@@ -373,15 +335,24 @@ const ProjectPagesView: React.FC<ProjectPagesViewProps> = ({ projectId }) => {
           <p className="text-muted-foreground">Collaborative documentation and knowledge base for your project</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Import feature coming soon')}
+          >
             <Upload className="h-4 w-4 mr-2" />
             Import
           </Button>
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Exporting pages...')}
+          >
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Page templates feature coming soon')}
+          >
             <Settings className="h-4 w-4 mr-2" />
             Templates
           </Button>

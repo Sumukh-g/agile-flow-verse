@@ -1263,6 +1263,19 @@ const KanbanBoard: React.FC<{
                           >
                             <Archive className="h-3 w-3" />
                           </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 px-2 text-xs text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
+                                deleteCard(card.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -1354,6 +1367,18 @@ const KanbanBoard: React.FC<{
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setEditingCard(card)}>
                     <Edit2 className="h-3 w-3" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-red-600"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
+                        deleteCard(card.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
@@ -1499,11 +1524,27 @@ const KanbanBoard: React.FC<{
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-xl">{showCardDetails.title}</DialogTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setEditingCard(showCardDetails)}>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setEditingCard(showCardDetails);
+                    setShowCardDetails(null);
+                  }}>
                     <Edit2 className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => duplicateCard(showCardDetails.id)}>
                     <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-red-600"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${showCardDetails.title}"?`)) {
+                        deleteCard(showCardDetails.id);
+                        setShowCardDetails(null);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => archiveCard(showCardDetails.id)}>
                     <Archive className="h-4 w-4" />
@@ -1901,6 +1942,219 @@ const KanbanBoard: React.FC<{
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Enhanced Edit Card Dialog */}
+      <Dialog open={!!editingCard} onOpenChange={() => setEditingCard(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Card</DialogTitle>
+          </DialogHeader>
+          
+          {editingCard && (
+            <>
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="basic">Basic</TabsTrigger>
+                  <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="planning">Planning</TabsTrigger>
+                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="basic" className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Title *</label>
+                    <Input
+                      value={editingCard.title || ''}
+                      onChange={e => setEditingCard({ ...editingCard, title: e.target.value })}
+                      placeholder="Enter card title"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Description</label>
+                    <Textarea
+                      value={editingCard.description || ''}
+                      onChange={e => setEditingCard({ ...editingCard, description: e.target.value })}
+                      placeholder="Enter card description"
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Column *</label>
+                      <Select 
+                        value={editingCard.columnId || ''} 
+                        onValueChange={value => setEditingCard({ ...editingCard, columnId: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {columns.map(col => (
+                            <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Priority</label>
+                      <Select 
+                        value={editingCard.priority || 'Medium'} 
+                        onValueChange={value => setEditingCard({ ...editingCard, priority: value as any })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">Low</SelectItem>
+                          <SelectItem value="Medium">Medium</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                          <SelectItem value="Critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="details" className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Assignee</label>
+                      <Input
+                        value={editingCard.assignee || ''}
+                        onChange={e => setEditingCard({ ...editingCard, assignee: e.target.value })}
+                        placeholder="Enter assignee"
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Status</label>
+                      <Input
+                        value={editingCard.status || ''}
+                        onChange={e => setEditingCard({ ...editingCard, status: e.target.value })}
+                        placeholder="Enter status"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Start Date</label>
+                      <Input
+                        type="date"
+                        value={editingCard.startDate || ''}
+                        onChange={e => setEditingCard({ ...editingCard, startDate: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Due Date</label>
+                      <Input
+                        type="date"
+                        value={editingCard.dueDate || ''}
+                        onChange={e => setEditingCard({ ...editingCard, dueDate: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Labels</label>
+                    <Input
+                      value={editingCard.labels?.join(', ') || ''}
+                      onChange={e => setEditingCard({ ...editingCard, labels: e.target.value.split(', ').filter(Boolean) })}
+                      placeholder="Enter labels separated by commas"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Notes</label>
+                    <Textarea
+                      value={editingCard.notes || ''}
+                      onChange={e => setEditingCard({ ...editingCard, notes: e.target.value })}
+                      placeholder="Enter additional notes"
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="planning" className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Duration (days)</label>
+                      <Input
+                        type="number"
+                        value={editingCard.duration || 0}
+                        onChange={e => setEditingCard({ ...editingCard, duration: Number(e.target.value) })}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Estimated Hours</label>
+                      <Input
+                        type="number"
+                        value={editingCard.estimatedHours || 0}
+                        onChange={e => setEditingCard({ ...editingCard, estimatedHours: Number(e.target.value) })}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Actual Hours</label>
+                      <Input
+                        type="number"
+                        value={editingCard.actualHours || 0}
+                        onChange={e => setEditingCard({ ...editingCard, actualHours: Number(e.target.value) })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="advanced" className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Dependencies</label>
+                    <Input
+                      value={editingCard.dependencies?.join(', ') || ''}
+                      onChange={e => setEditingCard({ ...editingCard, dependencies: e.target.value.split(', ').filter(Boolean) })}
+                      placeholder="Enter card IDs separated by commas"
+                      className="mt-1"
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+              
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setEditingCard(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  if (!editingCard.title?.trim()) {
+                    alert('Title is required');
+                    return;
+                  }
+                  setCards(prev => prev.map(card => 
+                    card.id === editingCard.id ? { ...editingCard, updatedAt: new Date().toISOString() } : card
+                  ));
+                  setEditingCard(null);
+                }}>
+                  Save Changes
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Enhanced New Card Dialog */}
       <Dialog open={showNewCardDialog} onOpenChange={setShowNewCardDialog}>

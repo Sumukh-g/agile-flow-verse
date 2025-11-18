@@ -15,6 +15,7 @@ import {
   Calendar as CalendarIcon, LineChart, Filter, ArrowDownUp
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useGantt } from '@/hooks/useGantt';
 
 interface Task {
   id: string;
@@ -38,74 +39,23 @@ const ProjectTimelineView = ({ projectId }: ProjectTimelineViewProps) => {
   const [timeScale, setTimeScale] = useState<'days' | 'weeks' | 'months'>('weeks');
   const [view, setView] = useState<'timeline' | 'calendar'>('timeline');
   
+  const { data: ganttData, isLoading: ganttLoading } = useGantt(projectId);
+
   useEffect(() => {
-    setTimeout(() => {
-      const today = new Date();
-      const mockTasks: Task[] = [
-        {
-          id: 't1',
-          title: 'Project Planning',
-          status: 'Done',
-          startDate: '2023-06-01',
-          endDate: '2023-06-05',
-          progress: 100,
-          owner: 'JD'
-        },
-        {
-          id: 't2',
-          title: 'Requirements Gathering',
-          status: 'Done',
-          startDate: '2023-06-03',
-          endDate: '2023-06-10',
-          progress: 100,
-          dependencies: ['t1'],
-          owner: 'AS'
-        },
-        {
-          id: 't3',
-          title: 'Design Phase',
-          status: 'In Progress',
-          startDate: '2023-06-11',
-          endDate: '2023-06-20',
-          progress: 60,
-          dependencies: ['t2'],
-          owner: 'RM'
-        },
-        {
-          id: 't4',
-          title: 'Frontend Development',
-          status: 'In Progress',
-          startDate: '2023-06-15',
-          endDate: '2023-06-30',
-          progress: 30,
-          dependencies: ['t3'],
-          owner: 'TW'
-        },
-        {
-          id: 't5',
-          title: 'Backend Implementation',
-          status: 'To Do',
-          startDate: '2023-06-18',
-          endDate: '2023-07-05',
-          progress: 0,
-          dependencies: ['t3'],
-          owner: 'JD'
-        },
-        {
-          id: 't6',
-          title: 'Integration & Testing',
-          status: 'To Do',
-          startDate: '2023-06-25',
-          endDate: '2023-07-10',
-          progress: 0,
-          dependencies: ['t4', 't5'],
-          owner: 'AS'
-        }
-      ];
-      setTasks(mockTasks);
-      setLoading(false);
-    }, 800);
-  }, [projectId]);
+    if (!ganttData) return;
+    const mapped: Task[] = (ganttData.tasks || []).map((t: any) => ({
+      id: t.id,
+      title: t.name,
+      status: t.progress === 100 ? 'Done' : t.progress > 0 ? 'In Progress' : 'To Do',
+      startDate: new Date(t.start).toISOString().slice(0, 10),
+      endDate: new Date(t.end).toISOString().slice(0, 10),
+      progress: t.progress,
+      dependencies: t.dependencies,
+      owner: (t.assignees || [])[0] || '',
+    }));
+    setTasks(mapped);
+    setLoading(false);
+  }, [ganttData]);
   
   const getStatusColor = (status: string) => {
     switch (status) {

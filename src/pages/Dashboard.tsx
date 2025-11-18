@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCreateProject, useProjects } from '@/hooks/useProjects';
-import { useCreateTask, useTasks } from '@/hooks/useTasks';
+import { useCreateTask, useTasks } from '@/hooks/useTasksEnhanced';
 import { useAuth } from '@/lib/auth-context';
 import {
     Briefcase,
@@ -13,7 +13,7 @@ import {
     Users,
     Zap
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 interface UserSetupData {
@@ -32,12 +32,19 @@ const Dashboard = () => {
   const [userSetupData, setUserSetupData] = useState<UserSetupData | null>(null);
   
   // Use API hooks to fetch real data
-  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useProjects();
   const { data: tasks = [], isLoading: tasksLoading } = useTasks();
   
   // Use mutation hooks for creating data
   const createProject = useCreateProject();
   const createTask = useCreateTask();
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('Dashboard projects:', projects);
+    console.log('Projects loading:', projectsLoading);
+    console.log('Projects error:', projectsError);
+  }, [projects, projectsLoading, projectsError]);
 
   useEffect(() => {
     const setupDataString = localStorage.getItem('userSetup');
@@ -63,38 +70,49 @@ const Dashboard = () => {
       // Create a test project
       const project = await createProject.mutateAsync({
         name: `Test Project ${Date.now()}`,
-        description: 'This is a test project created from the dashboard'
+        description: 'This is a test project created from the dashboard',
+        status: 'active',
+        priority: 'medium',
+        progress: 0
       });
+
+      // Wait a moment for project to be created
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Create some test tasks for the project
-      await createTask.mutateAsync({
-        title: 'Complete project setup',
-        description: 'Set up the initial project structure',
-        status: 'todo',
-        priority: 'high',
-        projectId: project.id
-      });
+      if (project && project.id) {
+        await createTask.mutateAsync({
+          title: 'Complete project setup',
+          description: 'Set up the initial project structure',
+          status: 'todo',
+          priority: 'high',
+          projectId: project.id
+        });
 
-      await createTask.mutateAsync({
-        title: 'Design user interface',
-        description: 'Create wireframes and mockups',
-        status: 'in-progress',
-        priority: 'medium',
-        projectId: project.id
-      });
+        await createTask.mutateAsync({
+          title: 'Design user interface',
+          description: 'Create wireframes and mockups',
+          status: 'in-progress',
+          priority: 'medium',
+          projectId: project.id
+        });
 
-      await createTask.mutateAsync({
-        title: 'Write documentation',
-        description: 'Document the project requirements',
-        status: 'done',
-        priority: 'low',
-        projectId: project.id
-      });
+        await createTask.mutateAsync({
+          title: 'Write documentation',
+          description: 'Document the project requirements',
+          status: 'done',
+          priority: 'low',
+          projectId: project.id
+        });
 
-      toast.success('Test data created successfully!');
-    } catch (error) {
+        toast.success('Test data created successfully!');
+        // Refresh projects and tasks after creation
+        await refetchProjects();
+      }
+    } catch (error: any) {
       console.error('Failed to create test data:', error);
-      toast.error('Failed to create test data. Please try again.');
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to create test data';
+      toast.error(errorMsg);
     }
   };
 
@@ -175,7 +193,12 @@ const Dashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{projectsLoading ? '...' : totalProjects}</div>
             <p className="text-xs text-muted-foreground">
-              {/* completedProjects */}
+              {projectsError && (
+                <span className="text-red-500">Error loading projects</span>
+              )}
+              {!projectsError && !projectsLoading && (
+                <span>active projects</span>
+              )}
             </p>
           </CardContent>
         </Card>

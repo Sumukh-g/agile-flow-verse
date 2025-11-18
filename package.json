@@ -13,6 +13,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "upgrade-tenant": "tsx scripts/upgrade-tenant.ts",
+    "seed-agents": "tsx scripts/seed-agents.ts",
+    "create-test-user": "tsx scripts/create-test-user.ts",
     "api:dev": "tsc -p tsconfig.api.json && node dist-api/main.js",
     "api:dev:watch": "tsc -p tsconfig.api.json --watch",
     "api:dev:build": "tsc -p tsconfig.api.json && node dist-api/main.js",

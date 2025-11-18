@@ -51,17 +51,45 @@ export const useProjects = () => {
   return useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const response = await apiClient.get<{ items: Project[]; nextCursor: string | null }>('/projects');
-      return response.items || [];
+      try {
+        const response = await apiClient.get<{ items: Project[]; nextCursor: string | null }>('/projects');
+        // Handle both wrapped and unwrapped responses
+        if (Array.isArray(response)) {
+          return response;
+        }
+        return response.items || [];
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+        throw error;
+      }
     },
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    staleTime: 0, // Always consider data stale to ensure fresh data
   });
 };
 
 export const useProject = (id: string) => {
   return useQuery({
     queryKey: ['projects', id],
-    queryFn: () => apiClient.get<Project>(`/projects/${id}`),
+    queryFn: async () => {
+      try {
+        console.log(`Fetching project with ID: ${id}`);
+        const response = await apiClient.get<Project>(`/projects/${id}`);
+        console.log(`Project fetched:`, response);
+        return response;
+      } catch (error) {
+        console.error(`Failed to fetch project ${id}:`, error);
+        throw error;
+      }
+    },
     enabled: !!id,
+    retry: 1, // Retry once on failure
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid unnecessary calls
+    // Ensure cache is properly invalidated when id changes
+    gcTime: 0, // Don't keep stale data in cache
   });
 };
 

@@ -19,7 +19,7 @@ export class ProjectsController {
 
   @Get()
   async list(@Query('cursor') cursor?: string, @Query('limit') limit?: string, @Request() req?: any) {
-    return this.svc.list(req.user.tenantId, decodeCursor(cursor), limit ? Number(limit) : 25);
+    return this.svc.list(req.user.tenantId, req.user.userId, decodeCursor(cursor), limit ? Number(limit) : 25);
   }
 
   @Get(':id')

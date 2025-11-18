@@ -55,6 +55,11 @@ export class TasksService {
   }
 
   async create(tenantId: string, userId: string, dto: any) {
+    // Project ID is required
+    if (!dto.projectId) {
+      throw new BadRequestException('Project ID is required');
+    }
+    
     await this.ensureProjectAccess(tenantId, userId, dto.projectId);
 
     const task = await this.prisma.tx.task.create({

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
 import Header from './Header';
+import AgentChatButton from '@/components/ai/AgentChatButton';
 
 const Layout = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -43,6 +44,7 @@ const Layout = () => {
           </main>
         </div>
         <StickyNote />
+        <AgentChatButton />
       </div>
     </SidebarProvider>
   );

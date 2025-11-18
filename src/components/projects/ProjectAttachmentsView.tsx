@@ -18,7 +18,6 @@ import {
     FileImage,
     FileText,
     FileVideo,
-    Folder,
     Grid,
     HardDrive,
     List,
@@ -27,378 +26,283 @@ import {
     Search,
     Share,
     Star,
+    Trash2,
     Upload,
     User
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useProjectAttachments, useUploadAttachment, useDeleteAttachment, useDownloadAttachment, useStorageStats } from '@/hooks/useAttachments';
 
 interface ProjectAttachmentsViewProps {
   projectId: string | undefined;
 }
 
 const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ projectId }) => {
-  const [attachments, setAttachments] = useState<any[]>([]);
-  const [folders, setFolders] = useState<any[]>([]);
+  // Real API hooks
+  const { data: attachmentsData, isLoading } = useProjectAttachments(projectId, { limit: 100 });
+  const { data: storageStats } = useStorageStats();
+  const uploadAttachment = useUploadAttachment();
+  const deleteAttachment = useDeleteAttachment();
+  const downloadAttachment = useDownloadAttachment();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const attachments = attachmentsData?.attachments || [];
+  
+  // Calculate storage stats from actual attachments
+  const totalSizeBytes = attachments.reduce((sum, att) => sum + (att.sizeBytes || 0), 0);
+  const totalSizeMB = totalSizeBytes / (1024 * 1024);
+  const sharedFilesCount = 0; // Shared functionality not yet implemented
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [folderFilter, setFolderFilter] = useState("all");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState("all");
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    // Mock attachments data
-    setAttachments([
-      {
-        id: 1,
-        name: "Project Requirements.pdf",
-        type: "document",
-        size: "2.4 MB",
-        uploadedBy: "John Smith",
-        uploadedDate: "2024-01-15",
-        lastModified: "2024-01-15",
-        folder: "Documents",
-        tags: ["requirements", "planning"],
-        isStarred: true,
-        isShared: true,
-        sharedWith: ["Sarah Johnson", "Mike Wilson"],
-        downloadCount: 12,
-        version: "1.0",
-        description: "Initial project requirements document"
-      },
-      {
-        id: 2,
-        name: "UI Mockups.fig",
-        type: "design",
-        size: "15.7 MB",
-        uploadedBy: "Lisa Brown",
-        uploadedDate: "2024-01-12",
-        lastModified: "2024-01-14",
-        folder: "Design",
-        tags: ["ui", "mockups", "figma"],
-        isStarred: false,
-        isShared: true,
-        sharedWith: ["John Smith", "Sarah Johnson"],
-        downloadCount: 8,
-        version: "2.1",
-        description: "User interface design mockups"
-      },
-      {
-        id: 3,
-        name: "Demo Video.mp4",
-        type: "video",
-        size: "45.2 MB",
-        uploadedBy: "Mike Wilson",
-        uploadedDate: "2024-01-10",
-        lastModified: "2024-01-10",
-        folder: "Media",
-        tags: ["demo", "presentation"],
-        isStarred: true,
-        isShared: false,
-        sharedWith: [],
-        downloadCount: 25,
-        version: "1.0",
-        description: "Product demonstration video"
-      },
-      {
-        id: 4,
-        name: "Architecture Diagram.png",
-        type: "image",
-        size: "1.8 MB",
-        uploadedBy: "Tom Davis",
-        uploadedDate: "2024-01-08",
-        lastModified: "2024-01-13",
-        folder: "Technical",
-        tags: ["architecture", "diagram", "technical"],
-        isStarred: false,
-        isShared: true,
-        sharedWith: ["John Smith", "Mike Wilson"],
-        downloadCount: 15,
-        version: "1.2",
-        description: "System architecture overview"
-      },
-      {
-        id: 5,
-        name: "Meeting Notes.docx",
-        type: "document",
-        size: "0.8 MB",
-        uploadedBy: "Sarah Johnson",
-        uploadedDate: "2024-01-14",
-        lastModified: "2024-01-14",
-        folder: "Documents",
-        tags: ["meeting", "notes"],
-        isStarred: false,
-        isShared: true,
-        sharedWith: ["Team"],
-        downloadCount: 6,
-        version: "1.0",
-        description: "Weekly team meeting notes"
-      },
-      {
-        id: 6,
-        name: "Budget Spreadsheet.xlsx",
-        type: "spreadsheet",
-        size: "1.2 MB",
-        uploadedBy: "Emma Davis",
-        uploadedDate: "2024-01-11",
-        lastModified: "2024-01-15",
-        folder: "Finance",
-        tags: ["budget", "finance", "planning"],
-        isStarred: true,
-        isShared: false,
-        sharedWith: [],
-        downloadCount: 4,
-        version: "1.3",
-        description: "Project budget breakdown"
-      }
-    ]);
-
-    setFolders([
-      { id: 1, name: "Documents", itemCount: 2, color: "blue" },
-      { id: 2, name: "Design", itemCount: 1, color: "purple" },
-      { id: 3, name: "Media", itemCount: 1, color: "green" },
-      { id: 4, name: "Technical", itemCount: 1, color: "orange" },
-      { id: 5, name: "Finance", itemCount: 1, color: "red" }
-    ]);
-  }, [projectId]);
-
   const filteredAttachments = attachments.filter(attachment => {
-    const matchesSearch = attachment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         attachment.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         attachment.tags.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch = attachment.filename.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesType = typeFilter === "all" || attachment.type === typeFilter;
-    const matchesFolder = folderFilter === "all" || attachment.folder === folderFilter;
+    const matchesType = typeFilter === "all" || 
+      (typeFilter === "document" && (attachment.mimeType?.includes("document") || attachment.mimeType?.includes("pdf") || attachment.mimeType?.includes("text"))) ||
+      (typeFilter === "image" && attachment.mimeType?.startsWith("image/")) ||
+      (typeFilter === "video" && attachment.mimeType?.startsWith("video/")) ||
+      (typeFilter === "design" && (attachment.mimeType?.includes("image") || attachment.mimeType?.includes("svg"))) ||
+      (typeFilter === "spreadsheet" && (attachment.mimeType?.includes("spreadsheet") || attachment.mimeType?.includes("excel") || attachment.mimeType?.includes("csv")));
     
     const matchesTab = activeTab === "all" || 
-                      (activeTab === "starred" && attachment.isStarred) ||
-                      (activeTab === "shared" && attachment.isShared) ||
-                      (activeTab === "recent" && new Date(attachment.uploadedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+                      (activeTab === "recent" && new Date(attachment.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) ||
+                      (activeTab === "starred" && false) || // Starred functionality not yet implemented
+                      (activeTab === "shared" && false); // Shared functionality not yet implemented
     
-    return matchesSearch && matchesType && matchesFolder && matchesTab;
+    return matchesSearch && matchesType && matchesTab;
   });
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'document': return <FileText className="h-8 w-8 text-blue-500" />;
-      case 'image': return <FileImage className="h-8 w-8 text-green-500" />;
-      case 'video': return <FileVideo className="h-8 w-8 text-purple-500" />;
-      case 'design': return <FileImage className="h-8 w-8 text-pink-500" />;
-      case 'spreadsheet': return <FileText className="h-8 w-8 text-green-600" />;
-      default: return <File className="h-8 w-8 text-gray-500" />;
+  const handleFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      return;
     }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'document': return 'bg-blue-100 text-blue-800';
-      case 'image': return 'bg-green-100 text-green-800';
-      case 'video': return 'bg-purple-100 text-purple-800';
-      case 'design': return 'bg-pink-100 text-pink-800';
-      case 'spreadsheet': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+    
+    if (!projectId) {
+      toast.error('Project ID is required');
+      return;
     }
-  };
-
-  const getFolderColor = (color: string) => {
-    const colors: { [key: string]: string } = {
-      'blue': 'bg-blue-100 text-blue-800 border-blue-200',
-      'purple': 'bg-purple-100 text-purple-800 border-purple-200',
-      'green': 'bg-green-100 text-green-800 border-green-200',
-      'orange': 'bg-orange-100 text-orange-800 border-orange-200',
-      'red': 'bg-red-100 text-red-800 border-red-200'
-    };
-    return colors[color] || 'bg-gray-100 text-gray-800 border-gray-200';
-  };
-
-  const formatFileSize = (size: string) => {
-    return size;
-  };
-
-  const UploadForm = () => (
-    <div className="space-y-4">
-      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-        <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="text-lg font-medium mb-2">Drop files here or click to browse</p>
-        <p className="text-sm text-muted-foreground mb-4">Support for multiple file types up to 100MB each</p>
-        <Button variant="outline">
-          <Upload className="h-4 w-4 mr-2" />
-          Choose Files
-        </Button>
-      </div>
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      const fileArray = Array.from(files);
+      let successCount = 0;
+      let errorCount = 0;
       
-      {isUploading && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span>Uploading files...</span>
-            <span>{uploadProgress}%</span>
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        
+        // Validate file size (100MB limit)
+        const maxSize = 100 * 1024 * 1024; // 100MB in bytes
+        if (file.size > maxSize) {
+          toast.error(`File "${file.name}" exceeds 100MB limit`);
+          errorCount++;
+          continue;
+        }
+        
+        setUploadProgress(((i + 1) / fileArray.length) * 100);
+        
+        try {
+          await uploadAttachment.mutateAsync({
+            file,
+            metadata: { projectId },
+          });
+          successCount++;
+        } catch (error: any) {
+          console.error(`Failed to upload ${file.name}:`, error);
+          errorCount++;
+          toast.error(`Failed to upload "${file.name}": ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
+        }
+      }
+      
+      if (successCount > 0) {
+        // Close dialog after successful uploads
+        setIsUploadOpen(false);
+        // The mutation hook will show individual success toasts
+        if (successCount < fileArray.length) {
+          toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${errorCount} failed`);
+        }
+      } else if (errorCount > 0) {
+        // All files failed
+        toast.error(`Failed to upload ${errorCount} file${errorCount > 1 ? 's' : ''}`);
+      }
+      
+      setUploadProgress(0);
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to upload files');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  }, [projectId, uploadAttachment]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm('Are you sure you want to delete this file?')) return;
+    try {
+      await deleteAttachment.mutateAsync(id);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to delete file');
+    }
+  }, [deleteAttachment]);
+
+  const handleDownload = useCallback(async (id: string, filename: string) => {
+    try {
+      const blob = await downloadAttachment.mutateAsync(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to download file');
+    }
+  }, [downloadAttachment]);
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType?.startsWith('image/')) return <FileImage className="h-8 w-8 text-green-500" />;
+    if (mimeType?.startsWith('video/')) return <FileVideo className="h-8 w-8 text-purple-500" />;
+    if (mimeType?.includes('pdf') || mimeType?.includes('document') || mimeType?.includes('text')) return <FileText className="h-8 w-8 text-blue-500" />;
+    if (mimeType?.includes('spreadsheet') || mimeType?.includes('excel')) return <FileText className="h-8 w-8 text-green-600" />;
+    return <File className="h-8 w-8 text-gray-500" />;
+  };
+
+  const getTypeColor = (mimeType: string) => {
+    if (mimeType?.startsWith('image/')) return 'bg-green-100 text-green-800';
+    if (mimeType?.startsWith('video/')) return 'bg-purple-100 text-purple-800';
+    if (mimeType?.includes('pdf') || mimeType?.includes('document') || mimeType?.includes('text')) return 'bg-blue-100 text-blue-800';
+    if (mimeType?.includes('spreadsheet') || mimeType?.includes('excel')) return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+
+  const UploadForm = () => {
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFileUpload(files);
+      }
+    }, [handleFileUpload]);
+
+    return (
+      <div className="space-y-4">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="*/*"
+          className="hidden"
+          onChange={(e) => handleFileUpload(e.target.files)}
+        />
+        <div 
+          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+            isDragging 
+              ? 'border-primary bg-primary/5' 
+              : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+          }`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-lg font-medium mb-2">Drop files here or click to browse</p>
+          <p className="text-sm text-muted-foreground mb-4">Support for all file types (images, documents, videos, archives, etc.) up to 100MB each</p>
+          <Button variant="outline" type="button" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+            <Upload className="h-4 w-4 mr-2" />
+            Choose Files
+          </Button>
+        </div>
+      
+        {isUploading && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span>Uploading files...</span>
+              <span>{Math.round(uploadProgress)}%</span>
+            </div>
+            <Progress value={uploadProgress} className="h-2" />
           </div>
-          <Progress value={uploadProgress} className="h-2" />
-        </div>
-      )}
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="folder">Folder</Label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select folder" />
-            </SelectTrigger>
-            <SelectContent>
-              {folders.map((folder) => (
-                <SelectItem key={folder.id} value={folder.name}>{folder.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="tags">Tags</Label>
-          <Input id="tags" placeholder="Enter tags (comma separated)" />
+        )}
+        
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setIsUploadOpen(false)} disabled={isUploading}>Cancel</Button>
         </div>
       </div>
-      
-      <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea id="description" placeholder="File description (optional)" />
-      </div>
-      
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="shared" />
-          <Label htmlFor="shared">Share with team</Label>
-        </div>
-      </div>
-      
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
-        <Button onClick={() => {
-          setIsUploading(true);
-          // Simulate upload progress
-          let progress = 0;
-          const interval = setInterval(() => {
-            progress += 10;
-            setUploadProgress(progress);
-            if (progress >= 100) {
-              clearInterval(interval);
-              setIsUploading(false);
-              setUploadProgress(0);
-              toast.success("Files uploaded successfully!");
-              setIsUploadOpen(false);
-            }
-          }, 200);
-        }}>Upload Files</Button>
-      </div>
-    </div>
-  );
+    );
+  };
 
-  const CreateFolderForm = () => (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="folderName">Folder Name</Label>
-        <Input id="folderName" placeholder="Enter folder name" />
-      </div>
-      <div>
-        <Label htmlFor="folderColor">Color</Label>
-        <Select>
-          <SelectTrigger>
-            <SelectValue placeholder="Select color" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="blue">Blue</SelectItem>
-            <SelectItem value="purple">Purple</SelectItem>
-            <SelectItem value="green">Green</SelectItem>
-            <SelectItem value="orange">Orange</SelectItem>
-            <SelectItem value="red">Red</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="folderDescription">Description</Label>
-        <Textarea id="folderDescription" placeholder="Folder description (optional)" />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)}>Cancel</Button>
-        <Button onClick={() => {
-          toast.success("Folder created successfully!");
-          setIsCreateFolderOpen(false);
-        }}>Create Folder</Button>
-      </div>
-    </div>
-  );
 
   const AttachmentCard = ({ attachment }: { attachment: any }) => (
     <Card className="hover:shadow-md transition-shadow cursor-pointer group">
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {getFileIcon(attachment.type)}
+            {getFileIcon(attachment.mimeType)}
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold truncate">{attachment.name}</h3>
-              <p className="text-sm text-muted-foreground">{attachment.size}</p>
+              <h3 className="font-semibold truncate">{attachment.filename}</h3>
+              <p className="text-sm text-muted-foreground">{formatFileSize(attachment.sizeBytes)}</p>
             </div>
           </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {attachment.isStarred && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
-            <Button variant="ghost" size="sm">
-              <MoreHorizontal className="h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={() => handleDelete(attachment.id)}>
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
         
         <div className="flex items-center gap-2 mb-3">
-          <Badge className={getTypeColor(attachment.type)}>
-            {attachment.type}
+          <Badge className={getTypeColor(attachment.mimeType)}>
+            {attachment.mimeType?.split('/')[1] || 'file'}
           </Badge>
-          <Badge variant="outline" className="text-xs">
-            v{attachment.version}
-          </Badge>
-          {attachment.tags.slice(0, 2).map((tag: string, index: number) => (
-            <Badge key={index} variant="secondary" className="text-xs">
-              #{tag}
-            </Badge>
-          ))}
         </div>
-        
-        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-          {attachment.description}
-        </p>
         
         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-3">
           <div className="flex items-center gap-1">
-            <User className="h-3 w-3" />
-            <span>{attachment.uploadedBy}</span>
-          </div>
-          <div className="flex items-center gap-1">
             <Calendar className="h-3 w-3" />
-            <span>{attachment.uploadedDate}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Download className="h-3 w-3" />
-            <span>{attachment.downloadCount} downloads</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Folder className="h-3 w-3" />
-            <span>{attachment.folder}</span>
+            <span>{new Date(attachment.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
         
         <div className="flex justify-between items-center pt-3 border-t">
-          <div className="flex items-center gap-1">
-            {attachment.isShared && (
-              <>
-                <Share className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
-                  {attachment.sharedWith.length} shared
-                </span>
-              </>
-            )}
-          </div>
           <div className="flex gap-1">
             <Button size="sm" variant="ghost" onClick={() => {
               setSelectedAttachment(attachment);
@@ -406,11 +310,11 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
             }}>
               <Eye className="h-3 w-3" />
             </Button>
-            <Button size="sm" variant="ghost">
+            <Button size="sm" variant="ghost" onClick={() => handleDownload(attachment.id, attachment.filename)}>
               <Download className="h-3 w-3" />
             </Button>
-            <Button size="sm" variant="ghost">
-              <Share className="h-3 w-3" />
+            <Button size="sm" variant="ghost" onClick={() => handleDelete(attachment.id)}>
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         </div>
@@ -421,127 +325,86 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
   const AttachmentListItem = ({ attachment }: { attachment: any }) => (
     <div className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        {getFileIcon(attachment.type)}
+        {getFileIcon(attachment.mimeType)}
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate">{attachment.name}</h3>
-          <p className="text-sm text-muted-foreground">{attachment.description}</p>
+          <h3 className="font-medium truncate">{attachment.filename}</h3>
+          <p className="text-sm text-muted-foreground">{formatFileSize(attachment.sizeBytes)} • {new Date(attachment.createdAt).toLocaleDateString()}</p>
         </div>
       </div>
       
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span>{attachment.size}</span>
-        <span>{attachment.uploadedBy}</span>
-        <span>{attachment.uploadedDate}</span>
-        <Badge className={getTypeColor(attachment.type)}>
-          {attachment.type}
+        <Badge className={getTypeColor(attachment.mimeType)}>
+          {attachment.mimeType?.split('/')[1] || 'file'}
         </Badge>
       </div>
       
       <div className="flex items-center gap-1">
-        {attachment.isStarred && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onClick={() => {
+          setSelectedAttachment(attachment);
+          setIsPreviewOpen(true);
+        }}>
           <Eye className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onClick={() => handleDownload(attachment.id, attachment.filename)}>
           <Download className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm">
-          <MoreHorizontal className="h-3 w-3" />
+        <Button variant="ghost" size="sm" onClick={() => handleDelete(attachment.id)}>
+          <Trash2 className="h-3 w-3" />
         </Button>
       </div>
     </div>
   );
 
-  const FolderCard = ({ folder }: { folder: any }) => (
-    <Card className={`hover:shadow-md transition-shadow cursor-pointer border-2 ${getFolderColor(folder.color)}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3 mb-2">
-          <Folder className="h-8 w-8" />
-          <div>
-            <h3 className="font-semibold">{folder.name}</h3>
-            <p className="text-sm text-muted-foreground">{folder.itemCount} items</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   const AttachmentPreview = ({ attachment }: { attachment: any }) => (
     <div className="space-y-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          {getFileIcon(attachment.type)}
+          {getFileIcon(attachment.mimeType)}
           <div>
-            <h3 className="text-lg font-semibold">{attachment.name}</h3>
-            <p className="text-muted-foreground">{attachment.description}</p>
+            <h3 className="text-lg font-semibold">{attachment.filename}</h3>
+            <p className="text-muted-foreground">{attachment.mimeType}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={getTypeColor(attachment.type)}>
-            {attachment.type}
+          <Badge className={getTypeColor(attachment.mimeType)}>
+            {attachment.mimeType?.split('/')[1] || 'file'}
           </Badge>
-          <Badge variant="outline">v{attachment.version}</Badge>
         </div>
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
           <p className="text-muted-foreground">Size</p>
-          <p className="font-medium">{attachment.size}</p>
-        </div>
-        <div>
-          <p className="text-muted-foreground">Uploaded by</p>
-          <p className="font-medium">{attachment.uploadedBy}</p>
+          <p className="font-medium">{formatFileSize(attachment.sizeBytes || 0)}</p>
         </div>
         <div>
           <p className="text-muted-foreground">Upload date</p>
-          <p className="font-medium">{attachment.uploadedDate}</p>
+          <p className="font-medium">{new Date(attachment.createdAt).toLocaleDateString()}</p>
         </div>
         <div>
-          <p className="text-muted-foreground">Downloads</p>
-          <p className="font-medium">{attachment.downloadCount}</p>
+          <p className="text-muted-foreground">File type</p>
+          <p className="font-medium">{attachment.mimeType?.split('/')[0] || 'Unknown'}</p>
         </div>
-      </div>
-      
-      <div>
-        <h4 className="font-medium mb-2">Tags</h4>
-        <div className="flex flex-wrap gap-2">
-          {attachment.tags.map((tag: string, index: number) => (
-            <Badge key={index} variant="secondary">
-              #{tag}
-            </Badge>
-          ))}
-        </div>
-      </div>
-      
-      {attachment.isShared && (
         <div>
-          <h4 className="font-medium mb-2">Shared with</h4>
-          <div className="flex flex-wrap gap-2">
-            {attachment.sharedWith.map((person: string, index: number) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">{person.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm">{person}</span>
-              </div>
-            ))}
-          </div>
+          <p className="text-muted-foreground">ID</p>
+          <p className="font-medium text-xs truncate">{attachment.id}</p>
         </div>
-      )}
+      </div>
       
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button variant="outline">
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
-        </Button>
-        <Button variant="outline">
-          <Share className="h-4 w-4 mr-2" />
-          Share
-        </Button>
-        <Button>
+        <Button variant="outline" onClick={() => handleDownload(attachment.id, attachment.filename)}>
           <Download className="h-4 w-4 mr-2" />
           Download
+        </Button>
+        <Button variant="destructive" onClick={() => {
+          if (confirm('Are you sure you want to delete this file?')) {
+            handleDelete(attachment.id);
+            setIsPreviewOpen(false);
+          }
+        }}>
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
         </Button>
       </div>
     </div>
@@ -556,23 +419,6 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
           <p className="text-muted-foreground">Manage project files, documents, and media</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Folder className="h-4 w-4 mr-2" />
-                New Folder
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Folder</DialogTitle>
-                <DialogDescription>
-                  Organize your files with a new folder
-                </DialogDescription>
-              </DialogHeader>
-              <CreateFolderForm />
-            </DialogContent>
-          </Dialog>
           <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -594,7 +440,7 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
       </div>
 
       {/* Storage Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -612,7 +458,9 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Storage Used</p>
-                <p className="text-2xl font-bold">67.3 MB</p>
+                <p className="text-2xl font-bold">
+                  {totalSizeMB < 0.1 ? '0 MB' : totalSizeMB.toFixed(1) + ' MB'}
+                </p>
               </div>
               <HardDrive className="h-8 w-8 text-purple-500" />
             </div>
@@ -624,24 +472,13 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Shared Files</p>
-                <p className="text-2xl font-bold">{attachments.filter(a => a.isShared).length}</p>
+                <p className="text-2xl font-bold">{sharedFilesCount}</p>
               </div>
               <Share className="h-8 w-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Folders</p>
-                <p className="text-2xl font-bold">{folders.length}</p>
-              </div>
-              <Folder className="h-8 w-8 text-orange-500" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters and View Controls */}
@@ -669,17 +506,6 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
               <SelectItem value="spreadsheet">Spreadsheets</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={folderFilter} onValueChange={setFolderFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Folder" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Folders</SelectItem>
-              {folders.map((folder) => (
-                <SelectItem key={folder.id} value={folder.name}>{folder.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -699,15 +525,6 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
         </div>
       </div>
 
-      {/* Folders */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Folders</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {folders.map((folder) => (
-            <FolderCard key={folder.id} folder={folder} />
-          ))}
-        </div>
-      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-4 mb-4">
@@ -718,13 +535,23 @@ const ProjectAttachmentsView: React.FC<ProjectAttachmentsViewProps> = ({ project
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">
-          {filteredAttachments.length === 0 ? (
+          {isLoading ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Paperclip className="h-12 w-12 text-muted-foreground mb-4 animate-pulse" />
+                <h3 className="text-lg font-semibold mb-2">Loading attachments...</h3>
+                <p className="text-muted-foreground text-center">
+                  Please wait while we load your files
+                </p>
+              </CardContent>
+            </Card>
+          ) : filteredAttachments.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Paperclip className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No files found</h3>
                 <p className="text-muted-foreground text-center mb-4">
-                  {searchTerm || typeFilter !== "all" || folderFilter !== "all" 
+                  {searchTerm || typeFilter !== "all"
                     ? "Try adjusting your search or filter criteria"
                     : "Upload your first file to get started"
                   }

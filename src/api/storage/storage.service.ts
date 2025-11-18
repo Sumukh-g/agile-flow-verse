@@ -52,20 +52,38 @@ export class StorageService {
       // Save file to disk
       await writeFile(filePath, file.buffer);
       
+      // Validate that either noteId or projectId is provided
+      if (!metadata.noteId && !metadata.projectId) {
+        throw new BadRequestException('Either noteId or projectId must be provided');
+      }
+
       // Save metadata to database
       const attachment = await this.prisma.tx.attachment.create({
         data: {
           tenantId,
-          noteId: metadata.noteId,
+          noteId: metadata.noteId || null,
+          projectId: metadata.projectId || null,
           filename: file.originalname,
           mimeType: file.mimetype,
           sizeBytes: file.size,
           path: filePath,
+          uploadedBy: userId,
         },
       });
 
       // Clear cache
-      await this.clearAttachmentCache(tenantId, metadata.noteId);
+      if (metadata.noteId) {
+        await this.clearAttachmentCache(tenantId, metadata.noteId);
+      }
+      if (metadata.projectId) {
+        // Clear stats cache only (attachments are not cached in backend)
+        try {
+          await this.redis.del(`storage:stats:${tenantId}`);
+          this.logger.log(`Cleared stats cache for project ${metadata.projectId}`);
+        } catch (error) {
+          this.logger.warn('Failed to clear cache', error);
+        }
+      }
 
       this.logger.log(`File uploaded: ${file.originalname} (${file.size} bytes)`);
       
@@ -153,6 +171,58 @@ export class StorageService {
     return result;
   }
 
+  async getProjectAttachments(tenantId: string, projectId: string, query: AttachmentQueryDto) {
+    // Disable backend caching for attachments - React Query handles caching
+    // This ensures fresh data immediately after uploads
+    // Normalize query to ensure consistent cache keys (for potential future use)
+    const normalizedQuery = {
+      limit: query.limit || 25,
+      offset: query.offset || 0,
+      ...(query.mimeType && { mimeType: query.mimeType }),
+      ...(query.search && { search: query.search }),
+    };
+
+    const where: any = {
+      tenantId,
+      projectId,
+    };
+
+    if (query.mimeType) {
+      where.mimeType = {
+        contains: query.mimeType,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query.search) {
+      where.filename = {
+        contains: query.search,
+        mode: 'insensitive',
+      };
+    }
+
+    const attachments = await this.prisma.tx.attachment.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: normalizedQuery.limit || 25,
+      skip: normalizedQuery.offset || 0,
+    });
+
+    const total = await this.prisma.tx.attachment.count({ where });
+
+    const result = {
+      attachments,
+      total,
+      hasMore: attachments.length === (normalizedQuery.limit || 25),
+    };
+
+    // No backend caching - React Query handles all caching
+    // This ensures immediate visibility of uploaded files
+    this.logger.debug(`Fetched ${attachments.length} attachments for project ${projectId}`);
+
+    return result;
+  }
+
   async deleteAttachment(tenantId: string, attachmentId: string) {
     const attachment = await this.getAttachment(tenantId, attachmentId);
     
@@ -167,7 +237,17 @@ export class StorageService {
     });
 
     // Clear cache
-    await this.clearAttachmentCache(tenantId, attachment.noteId);
+    if (attachment.noteId) {
+      await this.clearAttachmentCache(tenantId, attachment.noteId);
+    }
+    if (attachment.projectId) {
+      // Clear stats cache only (attachments are not cached in backend)
+      try {
+        await this.redis.del(`storage:stats:${tenantId}`);
+      } catch (error) {
+        this.logger.warn('Failed to clear cache on delete', error);
+      }
+    }
 
     this.logger.log(`Attachment deleted: ${attachment.filename}`);
     

@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, Task as TaskType } from '@/hooks/useTasks';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Task {
   id: string;
@@ -53,8 +55,29 @@ interface ProjectTasksListProps {
 }
 
 const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Ensure projectId is available
+  if (!projectId) {
+    console.error('ProjectTasksList: projectId is required but was not provided');
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        Project ID is missing. Please navigate to a valid project.
+      </div>
+    );
+  }
+  
+  // Fetch real tasks from API
+  const { data: apiTasks = [], isLoading: tasksLoading } = useTasks(projectId);
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const queryClient = useQueryClient();
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('ProjectTasksList - projectId:', projectId);
+    console.log('ProjectTasksList - tasks count:', apiTasks.length);
+  }, [projectId, apiTasks.length]);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{
@@ -68,99 +91,26 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   
-  useEffect(() => {
-    // Fetch tasks for specific project
-    setTimeout(() => {
-      const mockTasks: Task[] = [
-        {
-          id: `${projectId}-t1`,
-          title: 'Design system components',
-          description: 'Create reusable UI components for the design system',
-          priority: 'High',
-          status: 'In Progress',
-          dueDate: '2024-02-10',
-          assignee: 'John Doe',
-          tags: ['Design', 'UI'],
-          estimatedHours: 16,
-          actualHours: 8,
-          createdDate: '2024-01-15',
-          updatedDate: '2024-01-16'
-        },
-        {
-          id: `${projectId}-t2`,
-          title: 'API integration for authentication',
-          description: 'Integrate OAuth and JWT authentication system',
-          priority: 'High',
-          status: 'To Do',
-          dueDate: '2024-02-15',
-          assignee: 'Alice Smith',
-          tags: ['Backend', 'API', 'Security'],
-          estimatedHours: 20,
-          actualHours: 0,
-          createdDate: '2024-01-14',
-          updatedDate: '2024-01-14'
-        },
-        {
-          id: `${projectId}-t3`,
-          title: 'User feedback analysis',
-          description: 'Analyze user feedback from beta testing phase',
-          priority: 'Medium',
-          status: 'To Do',
-          dueDate: '2024-02-20',
-          assignee: 'Bob Wilson',
-          tags: ['Research', 'UX', 'Analysis'],
-          estimatedHours: 12,
-          actualHours: 0,
-          createdDate: '2024-01-13',
-          updatedDate: '2024-01-13'
-        },
-        {
-          id: `${projectId}-t4`,
-          title: 'Mobile responsive layouts',
-          description: 'Implement responsive design for mobile devices',
-          priority: 'Medium',
-          status: 'In Progress',
-          dueDate: '2024-02-12',
-          assignee: 'Charlie Brown',
-          tags: ['Frontend', 'Mobile', 'CSS'],
-          estimatedHours: 14,
-          actualHours: 6,
-          createdDate: '2024-01-12',
-          updatedDate: '2024-01-15'
-        },
-        {
-          id: `${projectId}-t5`,
-          title: 'Documentation update',
-          description: 'Update API documentation and user guides',
-          priority: 'Low',
-          status: 'Done',
-          dueDate: '2024-02-05',
-          assignee: 'Diana Prince',
-          tags: ['Documentation', 'API'],
-          estimatedHours: 8,
-          actualHours: 7,
-          createdDate: '2024-01-10',
-          updatedDate: '2024-01-12'
-        },
-        {
-          id: `${projectId}-t6`,
-          title: 'Performance optimization',
-          description: 'Optimize application performance and loading times',
-          priority: 'High',
-          status: 'In Review',
-          dueDate: '2024-02-08',
-          assignee: 'Eve Adams',
-          tags: ['Performance', 'Frontend', 'Backend'],
-          estimatedHours: 18,
-          actualHours: 16,
-          createdDate: '2024-01-08',
-          updatedDate: '2024-01-14'
-        }
-      ];
-      setTasks(mockTasks);
-      setLoading(false);
-    }, 800);
-  }, [projectId]);
+  // Transform API tasks to local format
+  const tasks: Task[] = apiTasks.map(apiTask => ({
+    id: apiTask.id,
+    title: apiTask.title,
+    description: apiTask.description || '',
+    priority: apiTask.priority === 'critical' ? 'High' : apiTask.priority.charAt(0).toUpperCase() + apiTask.priority.slice(1),
+    status: apiTask.status === 'todo' ? 'To Do' : 
+            apiTask.status === 'in-progress' ? 'In Progress' : 
+            apiTask.status === 'review' ? 'In Review' : 
+            apiTask.status === 'done' ? 'Done' : apiTask.status,
+    dueDate: apiTask.dueDate ? new Date(apiTask.dueDate).toISOString().split('T')[0] : '',
+    assignee: 'Unassigned', // TODO: Get from assignees
+    tags: apiTask.tags || [],
+    estimatedHours: apiTask.estimatedHours || undefined,
+    actualHours: apiTask.actualHours || 0,
+    createdDate: apiTask.createdAt ? new Date(apiTask.createdAt).toISOString().split('T')[0] : '',
+    updatedDate: apiTask.updatedAt ? new Date(apiTask.updatedAt).toISOString().split('T')[0] : ''
+  }));
+  
+  const loading = tasksLoading;
   
   const handleSort = (key: keyof Task) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -218,78 +168,109 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     }
   };
   
-  const handleBulkAction = (action: string) => {
+  const handleBulkAction = async (action: string) => {
     if (selectedTasks.size === 0) {
       toast.error("No tasks selected");
       return;
     }
     
     if (action === 'delete') {
-      setTasks(prevTasks => prevTasks.filter(task => !selectedTasks.has(task.id)));
-      setSelectedTasks(new Set());
-      toast.success(`Deleted ${selectedTasks.size} tasks`);
+      try {
+        await Promise.all(Array.from(selectedTasks).map(id => deleteTask.mutateAsync(id)));
+        setSelectedTasks(new Set());
+        toast.success(`Deleted ${selectedTasks.size} tasks`);
+      } catch (error) {
+        toast.error('Failed to delete tasks');
+      }
     } else if (action === 'status') {
-      toast.success(`Updated status for ${selectedTasks.size} tasks`);
+      toast.info('Bulk status update coming soon');
     } else {
-      toast.success(`${action} applied to ${selectedTasks.size} tasks`);
+      toast.info(`${action} coming soon`);
     }
   };
 
-  const handleCreateTask = (taskData: any) => {
-    const newTask: Task = {
-      id: `${projectId}-t${Date.now()}`,
-      title: taskData.title,
-      description: taskData.description,
-      priority: taskData.priority,
-      status: taskData.status,
-      dueDate: taskData.dueDate,
-      assignee: taskData.assignee,
-      tags: taskData.tags?.split(',').map((tag: string) => tag.trim()) || [],
-      estimatedHours: parseInt(taskData.estimatedHours) || 0,
-      actualHours: 0,
-      createdDate: new Date().toISOString().split('T')[0],
-      updatedDate: new Date().toISOString().split('T')[0]
-    };
+  const handleCreateTask = async (taskData: any) => {
+    // Use projectId from props - it should always be available when called from project page
+    const currentProjectId = projectId;
+    
+    if (!currentProjectId) {
+      console.error('Project ID is missing:', { projectId, taskData });
+      toast.error('Project ID is required. Please refresh the page.');
+      return;
+    }
 
-    setTasks(prevTasks => [...prevTasks, newTask]);
-    toast.success('Task created successfully!');
-    setIsCreateTaskOpen(false);
+    try {
+      // Map UI status to API status format
+      const statusMap: Record<string, string> = {
+        'To Do': 'todo',
+        'In Progress': 'in-progress',
+        'In Review': 'review',
+        'Done': 'done',
+        'Blocked': 'blocked',
+        'Cancelled': 'cancelled'
+      };
+      
+      await createTask.mutateAsync({
+        title: taskData.title,
+        description: taskData.description,
+        priority: taskData.priority.toLowerCase(),
+        status: statusMap[taskData.status] || taskData.status.toLowerCase().replace(' ', '-'),
+        projectId: currentProjectId, // Use the projectId from props
+        dueDate: taskData.dueDate || undefined,
+        estimatedHours: taskData.estimatedHours ? parseFloat(taskData.estimatedHours) : undefined,
+      });
+      toast.success('Task created successfully!');
+      setIsCreateTaskOpen(false);
+    } catch (error: any) {
+      console.error('Task creation error:', error);
+      toast.error(error?.response?.data?.message || 'Failed to create task');
+    }
   };
 
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
   };
 
-  const handleUpdateTask = (taskData: any) => {
+  const handleUpdateTask = async (taskData: any) => {
     if (!editingTask) return;
 
-    const updatedTask: Task = {
-      ...editingTask,
-      title: taskData.title,
-      description: taskData.description,
-      priority: taskData.priority,
-      status: taskData.status,
-      dueDate: taskData.dueDate,
-      assignee: taskData.assignee,
-      tags: taskData.tags?.split(',').map((tag: string) => tag.trim()) || [],
-      estimatedHours: parseInt(taskData.estimatedHours) || 0,
-      actualHours: parseInt(taskData.actualHours) || 0,
-      updatedDate: new Date().toISOString().split('T')[0]
-    };
-
-    setTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === editingTask.id ? updatedTask : task
-      )
-    );
-
-    toast.success('Task updated successfully!');
-    setEditingTask(null);
+    try {
+      // Map UI status to API status format
+      const statusMap: Record<string, string> = {
+        'To Do': 'todo',
+        'In Progress': 'in-progress',
+        'In Review': 'review',
+        'Done': 'done',
+        'Blocked': 'blocked',
+        'Cancelled': 'cancelled'
+      };
+      
+      await updateTask.mutateAsync({
+        id: editingTask.id,
+        data: {
+          title: taskData.title,
+          description: taskData.description,
+          priority: taskData.priority.toLowerCase(),
+          status: statusMap[taskData.status] || taskData.status.toLowerCase().replace(' ', '-'),
+          dueDate: taskData.dueDate || undefined,
+          estimatedHours: taskData.estimatedHours ? parseFloat(taskData.estimatedHours) : undefined,
+          actualHours: taskData.actualHours ? parseFloat(taskData.actualHours) : undefined,
+        }
+      });
+      toast.success('Task updated successfully!');
+      setEditingTask(null);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to update task');
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-    toast.success('Task deleted successfully!');
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask.mutateAsync(taskId);
+      toast.success('Task deleted successfully!');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to delete task');
+    }
   };
   
   const getPriorityColor = (priority: string) => {

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsCuid, IsCuidArray } from '../common/validators/cuid.validator';
 
 export enum TaskStatus {
   Todo = 'todo',
@@ -70,29 +71,29 @@ export class CreateTaskDto {
   @Type(() => Number)
   actualHours?: number;
 
-  @ApiProperty({ description: 'Project ID', example: 'proj123' })
+  @ApiProperty({ description: 'Project ID', example: 'cmhxzdxo60009kn2al64xkxiu' })
   @IsString()
-  @IsUUID()
+  @IsCuid()
   projectId!: string;
 
   @ApiPropertyOptional({ 
     description: 'User IDs assigned to this task', 
     type: [String],
-    example: ['user123', 'user456']
+    example: ['cmhxlftcm000313xe0dk6dk08']
   })
   @IsOptional() 
   @IsArray()
-  @IsUUID(4, { each: true })
+  @IsCuidArray()
   assigneeIds?: string[];
 
   @ApiPropertyOptional({ 
     description: 'Task IDs this task depends on', 
     type: [String],
-    example: ['task123', 'task456']
+    example: ['cmhxzdxo60009kn2al64xkxiu']
   })
   @IsOptional() 
   @IsArray()
-  @IsUUID(4, { each: true })
+  @IsCuidArray()
   dependencyIds?: string[];
 
   @ApiPropertyOptional({ description: 'Task tags', example: ['frontend', 'auth'] })
@@ -169,21 +170,21 @@ export class UpdateTaskDto {
   @ApiPropertyOptional({ 
     description: 'User IDs assigned to this task', 
     type: [String],
-    example: ['user123', 'user789']
+    example: ['cmhxlftcm000313xe0dk6dk08']
   })
   @IsOptional() 
   @IsArray()
-  @IsUUID(4, { each: true })
+  @IsCuidArray()
   assigneeIds?: string[];
 
   @ApiPropertyOptional({ 
     description: 'Task IDs this task depends on', 
     type: [String],
-    example: ['task123', 'task789']
+    example: ['cmhxzdxo60009kn2al64xkxiu']
   })
   @IsOptional() 
   @IsArray()
-  @IsUUID(4, { each: true })
+  @IsCuidArray()
   dependencyIds?: string[];
 
   @ApiPropertyOptional({ description: 'Task tags', example: ['frontend', 'auth', 'urgent'] })
@@ -213,7 +214,7 @@ export class TaskQueryDto {
   @ApiPropertyOptional({ description: 'Filter by project ID' })
   @IsOptional()
   @IsString()
-  @IsUUID()
+  @IsCuid()
   projectId?: string;
 
   @ApiPropertyOptional({ 
@@ -235,7 +236,7 @@ export class TaskQueryDto {
   @ApiPropertyOptional({ description: 'Filter by assignee user ID' })
   @IsOptional()
   @IsString()
-  @IsUUID()
+  @IsCuid()
   assigneeId?: string;
 
   @ApiPropertyOptional({ description: 'Filter by due date (ISO string)' })
@@ -264,29 +265,29 @@ export class TaskQueryDto {
 }
 
 export class AddTaskAssigneeDto {
-  @ApiProperty({ description: 'User ID to assign to task', example: 'user123' })
+  @ApiProperty({ description: 'User ID to assign to task', example: 'cmhxlftcm000313xe0dk6dk08' })
   @IsString()
-  @IsUUID()
+  @IsCuid()
   userId: string;
 }
 
 export class RemoveTaskAssigneeDto {
-  @ApiProperty({ description: 'User ID to remove from task', example: 'user123' })
+  @ApiProperty({ description: 'User ID to remove from task', example: 'cmhxlftcm000313xe0dk6dk08' })
   @IsString()
-  @IsUUID()
+  @IsCuid()
   userId: string;
 }
 
 export class AddTaskDependencyDto {
-  @ApiProperty({ description: 'Task ID to add as dependency', example: 'task123' })
+  @ApiProperty({ description: 'Task ID to add as dependency', example: 'cmhxzdxo60009kn2al64xkxiu' })
   @IsString()
-  @IsUUID()
+  @IsCuid()
   taskId: string;
 }
 
 export class RemoveTaskDependencyDto {
-  @ApiProperty({ description: 'Task ID to remove as dependency', example: 'task123' })
+  @ApiProperty({ description: 'Task ID to remove as dependency', example: 'cmhxzdxo60009kn2al64xkxiu' })
   @IsString()
-  @IsUUID()
+  @IsCuid()
   taskId: string;
 } 

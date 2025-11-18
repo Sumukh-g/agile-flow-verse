@@ -15,7 +15,8 @@ export class TenantContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler) {
     const req = context.switchToHttp().getRequest();
     const traceId = (req as any).traceId;
-    const tenantId = (req.headers['x-tenant-id'] as string) || req.user?.tenantId;
+    // Prefer tenantId from the verified JWT. Only fall back to header for legacy/dev scenarios.
+    const tenantId = req.user?.tenantId || (req.headers['x-tenant-id'] as string);
     const userId = req.user?.userId || null;
     const roles: string[] = Array.isArray(req.user?.roles)
       ? req.user?.roles

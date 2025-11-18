@@ -70,7 +70,10 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
       return;
     }
 
-    if (!projectId) {
+    // Project ID is required for now (Prisma schema requirement)
+    // If defaultProjectId is set, use it as fallback
+    const finalProjectId = projectId || defaultProjectId;
+    if (!finalProjectId) {
       toast.error('Please select a project');
       return;
     }
@@ -81,7 +84,7 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
         description: description.trim() || undefined,
         status,
         priority,
-        projectId,
+        projectId: finalProjectId,
         dueDate: dueDate || undefined,
         estimatedHours: estimatedHours ? parseFloat(estimatedHours) : undefined,
       };
@@ -124,10 +127,10 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="project">Project *</Label>
-              <Select value={projectId} onValueChange={setProjectId} required>
+              <Label htmlFor="project">Project {!defaultProjectId && '*'}</Label>
+              <Select value={projectId || ''} onValueChange={setProjectId} required={!defaultProjectId}>
                 <SelectTrigger id="project">
-                  <SelectValue placeholder="Select a project" />
+                  <SelectValue placeholder={defaultProjectId ? "Select a project (optional)" : "Select a project"} />
                 </SelectTrigger>
                 <SelectContent>
                   {projects.map((project) => (

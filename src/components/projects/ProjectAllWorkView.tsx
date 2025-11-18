@@ -445,9 +445,27 @@ const ProjectAllWorkView: React.FC<ProjectAllWorkViewProps> = ({ projectId }) =>
       </div>
       
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button variant="outline">Edit</Button>
-        <Button variant="outline">Comment</Button>
-        <Button>Update Status</Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            setSelectedWorkItem(item);
+            setIsCreateWorkItemOpen(true);
+            toast.info(`Editing work item: ${item.title}`);
+          }}
+        >
+          Edit
+        </Button>
+        <Button 
+          variant="outline"
+          onClick={() => toast.info('Comment feature coming soon')}
+        >
+          Comment
+        </Button>
+        <Button
+          onClick={() => toast.info('Update status feature coming soon')}
+        >
+          Update Status
+        </Button>
       </div>
     </div>
   );
@@ -461,7 +479,10 @@ const ProjectAllWorkView: React.FC<ProjectAllWorkViewProps> = ({ projectId }) =>
           <p className="text-muted-foreground">Comprehensive view of all project work items</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Configure view settings coming soon')}
+          >
             <Settings className="h-4 w-4 mr-2" />
             Configure
           </Button>
@@ -599,7 +620,10 @@ const ProjectAllWorkView: React.FC<ProjectAllWorkViewProps> = ({ projectId }) =>
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline">
+        <Button 
+          variant="outline"
+          onClick={() => toast.info('Advanced filters coming soon')}
+        >
           <Filter className="h-4 w-4 mr-2" />
           Advanced Filters
         </Button>

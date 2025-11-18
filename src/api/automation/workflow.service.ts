@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiService } from '../ai/ai.service';
 
 export interface WorkflowTrigger {
   type: 'task_created' | 'task_updated' | 'task_completed' | 'task_assigned' | 'project_created' | 'due_date_approaching' | 'custom';
@@ -8,7 +9,7 @@ export interface WorkflowTrigger {
 }
 
 export interface WorkflowAction {
-  type: 'create_task' | 'update_task' | 'send_notification' | 'assign_user' | 'change_status' | 'send_email' | 'webhook' | 'custom';
+  type: 'create_task' | 'update_task' | 'send_notification' | 'assign_user' | 'change_status' | 'send_email' | 'webhook' | 'run_agent' | 'custom';
   parameters: Record<string, any>;
 }
 
@@ -35,6 +36,7 @@ export class WorkflowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly aiService: AiService,
   ) {
     // Listen to events
     this.setupEventListeners();
@@ -227,6 +229,9 @@ export class WorkflowService {
       case 'webhook':
         await this.webhookAction(action.parameters, contextData);
         break;
+      case 'run_agent':
+        await this.runAgentAction(tenantId, action.parameters, contextData);
+        break;
       default:
         this.logger.warn(`Unknown action type: ${action.type}`);
     }
@@ -325,6 +330,46 @@ export class WorkflowService {
       }
     } catch (error) {
       this.logger.error(`Webhook error:`, error);
+      throw error;
+    }
+  }
+
+  private async runAgentAction(tenantId: string, params: any, context: any) {
+    const agentId = params.agentId;
+    const inputTemplate = params.input || {};
+    
+    // Interpolate input values from context
+    const input: any = {};
+    for (const [key, value] of Object.entries(inputTemplate)) {
+      if (typeof value === 'string') {
+        input[key] = this.interpolate(value, context);
+      } else {
+        input[key] = value;
+      }
+    }
+
+    try {
+      const result = await this.aiService.runAgent(tenantId, agentId, input);
+      
+      this.logger.log(`Agent ${agentId} executed successfully in workflow`);
+      
+      // Optionally create a task or notification with the agent output
+      if (params.createTaskFromOutput && result.output) {
+        const taskData = {
+          tenantId,
+          projectId: this.interpolate(params.projectId, context) || context.projectId,
+          title: params.taskTitle || 'AI-Generated Task',
+          description: JSON.stringify(result.output, null, 2),
+          status: 'todo',
+          priority: params.taskPriority || 'medium',
+        };
+
+        await this.prisma.tx.task.create({ data: taskData });
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Agent action error:`, error);
       throw error;
     }
   }

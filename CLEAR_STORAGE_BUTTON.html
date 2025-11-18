@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CLEAR YOUR BROWSER STORAGE</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #ff6b6b;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 3rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 1rem;
+        }
+        button {
+            padding: 1.5rem 3rem;
+            font-size: 2rem;
+            font-weight: bold;
+            background: #4ecdc4;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            margin: 1rem;
+        }
+        button:hover {
+            background: #45b7af;
+            transform: scale(1.05);
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+        }
+        .instructions {
+            font-size: 1.5rem;
+            margin: 2rem 0;
+            line-height: 1.6;
+        }
+        .warning {
+            background: #ff9f43;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 2rem 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ FIX YOUR AUTH NOW</h1>
+        
+        <div class="instructions">
+            <p>Your browser has OLD BROKEN tokens.</p>
+            <p>This is why ALL your API calls fail with 401!</p>
+        </div>
+
+        <div class="warning">
+            Click this button to fix it:
+        </div>
+
+        <button onclick="clearEverything()">
+            🧹 CLEAR & FIX NOW
+        </button>
+
+        <div id="status" style="margin-top: 2rem; font-size: 1.5rem;"></div>
+    </div>
+
+    <script>
+        function clearEverything() {
+            const status = document.getElementById('status');
+            
+            // Clear everything
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Clear cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            status.innerHTML = '✅ CLEARED!<br>Redirecting to login...';
+            
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
+

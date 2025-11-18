@@ -43,18 +43,17 @@ class ApiClient {
         // Add required headers
         config.headers['X-Request-Id'] = uuidv4();
         
-        // Tenant ID should come from JWT token, not headers
-        // Only add if needed for backwards compatibility in development
-        if (import.meta.env.DEV) {
-          const tenantId = localStorage.getItem('tenantId');
-          if (tenantId) {
-            config.headers['X-Tenant-Id'] = tenantId;
-          }
-        }
+        // IMPORTANT: Tenant ID is derived from the JWT; do not send X-Tenant-Id
+        // This prevents mismatches between header and token tenant context
 
         // Add idempotency key for mutations
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method?.toUpperCase() || '')) {
           config.headers['Idempotency-Key'] = uuidv4();
+        }
+
+        // For FormData, don't set Content-Type - let browser set it with boundary
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
         }
 
         return config;
@@ -67,6 +66,20 @@ class ApiClient {
       (response: AxiosResponse) => response,
       async (error) => {
         const { response, config } = error;
+        
+        // Handle 401 Unauthorized - clear tokens and redirect to login
+        if (response?.status === 401) {
+          console.error('401 Unauthorized - clearing tokens and redirecting to login');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('tenantId');
+          
+          // Only redirect if not already on login page and not a login request
+          if (!window.location.pathname.includes('/login') && !config.url?.includes('/auth/login')) {
+            window.location.href = '/login';
+          }
+        }
         
         // Handle retryable errors
         if (response?.status && [502, 503, 504].includes(response.status) && this.retryCount < this.maxRetries) {

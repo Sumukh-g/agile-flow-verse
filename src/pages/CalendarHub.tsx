@@ -2,32 +2,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addDays, format } from 'date-fns';
+import { addDays, endOfDay, endOfMonth, endOfWeek, format, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { Calendar as CalendarIcon, Download, Filter, Focus, Globe, Layers, Moon, Plus, Star, Sun, Timer, User, Users, Zap } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
+import { useCalendarEvents } from '@/hooks/useCalendarEnhanced';
+import { useProjects } from '@/hooks/useProjectsEnhanced';
+import { useCreateTask, useDeleteTask } from '@/hooks/useTasks';
 
-// Mock data for demonstration
-const PROJECTS = [
-  { id: 'p1', name: 'Marketing Campaign' },
-  { id: 'p2', name: 'Website Redesign' },
-  { id: 'p3', name: 'Mobile App' },
-  { id: 'p4', name: 'Q3 Planning' }
-];
-const SECTION_CALENDARS = [
-  { id: 'tasks', name: 'Tasks' },
-  { id: 'approvals', name: 'Approvals' },
-  { id: 'forms', name: 'Forms' },
-  { id: 'boards', name: 'Boards' }
-];
-const ALL_TABS = [
-  { id: 'personal', label: 'Personal', icon: User },
-  { id: 'all', label: 'All Projects', icon: Globe },
-  ...PROJECTS.map(p => ({ id: p.id, label: p.name, icon: Layers })),
-  ...SECTION_CALENDARS.map(s => ({ id: s.id, label: s.name, icon: Star })),
-  { id: 'overlay', label: 'Combined', icon: Users }
-];
+// Tabs will be built dynamically from real projects
 
 // Helper for localStorage
 const getLastTab = () => localStorage.getItem('calendar_last_tab') || 'all';
@@ -40,7 +23,17 @@ const CalendarHub = () => {
   const [viewType, setViewType] = useState<'month' | 'week' | 'day' | 'year' | 'agenda'>(getLastView() as any);
   const [search, setSearch] = useState('');
   const [darkMode, setDarkMode] = useState(false);
-  // ...event state, etc. (mocked for now)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
+  const { data: apiProjects = [] } = useProjects({});
+  const projectTabs = useMemo(() => apiProjects.map(p => ({ id: p.id, label: p.name, icon: Layers })), [apiProjects]);
+  const allTabs = useMemo(() => ([
+    { id: 'personal', label: 'Personal', icon: User },
+    { id: 'all', label: 'All Projects', icon: Globe },
+    ...projectTabs,
+    { id: 'overlay', label: 'Combined', icon: Users },
+  ]), [projectTabs]);
 
   useEffect(() => {
     setLastTab(activeTab);
@@ -49,17 +42,29 @@ const CalendarHub = () => {
     setLastView(viewType);
   }, [viewType]);
 
-  // --- Render calendar for each tab ---
-  const renderCalendar = (tab: string) => (
-    <AdvancedCalendar
-      key={tab}
-      source={tab}
-      viewType={viewType}
-      setViewType={setViewType}
-      search={search}
-      darkMode={darkMode}
-    />
-  );
+  // derive current range
+  const [rangeStart, rangeEnd] = useMemo(() => {
+    switch (viewType) {
+      case 'week':
+        return [startOfWeek(selectedDate), endOfWeek(selectedDate)];
+      case 'day':
+        return [startOfDay(selectedDate), endOfDay(selectedDate)];
+      case 'year':
+      case 'agenda':
+      case 'month':
+      default:
+        return [startOfMonth(selectedDate), endOfMonth(selectedDate)];
+    }
+  }, [selectedDate, viewType]);
+  const startISO = useMemo(() => rangeStart.toISOString(), [rangeStart]);
+  const endISO = useMemo(() => rangeEnd.toISOString(), [rangeEnd]);
+  const selectedProjectId = useMemo(() => {
+    if (activeTab === 'personal' || activeTab === 'all' || activeTab === 'overlay') return undefined;
+    // if it's a project tab id
+    return projectTabs.find(t => t.id === activeTab)?.id;
+  }, [activeTab, projectTabs]);
+
+  const { data: events = [], isLoading } = useCalendarEvents(startISO, endISO, selectedProjectId);
 
   return (
     <div className={darkMode ? 'dark bg-gray-900 text-white min-h-screen' : 'bg-background min-h-screen'}>
@@ -74,7 +79,7 @@ const CalendarHub = () => {
       </div>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="flex flex-wrap gap-1 mb-4">
-          {ALL_TABS.map(tab => (
+          {allTabs.map(tab => (
             <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-1 text-xs">
               <tab.icon className="h-4 w-4" />
               {tab.label}
@@ -99,11 +104,40 @@ const CalendarHub = () => {
             <Button variant="outline" onClick={() => toast.info('Jump to date!')}><CalendarIcon className="h-4 w-4" /></Button>
           </div>
         </div>
-        {ALL_TABS.map(tab => (
-          <TabsContent key={tab.id} value={tab.id} className="space-y-6">
-            {renderCalendar(tab.id)}
-          </TabsContent>
-        ))}
+        <TabsContent key={activeTab} value={activeTab} className="space-y-6">
+          <AdvancedCalendar
+            source={activeTab}
+            viewType={viewType}
+            setViewType={setViewType}
+            search={search}
+            darkMode={darkMode}
+            events={events}
+            isLoading={isLoading}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            onCreate={(payload: { title: string; date: string; projectId?: string }) => {
+              if (!payload.title.trim()) {
+                toast.error('Title is required');
+                return;
+              }
+              createTask.mutate({
+                title: payload.title,
+                projectId: payload.projectId || apiProjects[0]?.id || undefined,
+                status: 'todo',
+                dueDate: payload.date,
+              } as any);
+            }}
+            onDelete={(eventId: string) => {
+              // Expect id like task-<uuid> from backend
+              if (eventId?.startsWith('task-')) {
+                const taskId = eventId.substring('task-'.length);
+                deleteTask.mutate(taskId);
+              } else {
+                toast.info('Only task-based events can be deleted from here');
+              }
+            }}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -180,9 +214,12 @@ function mergeAllEvents(tab: string) {
   return generateMockEvents(tab);
 }
 
-function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: any) {
-  const [events, setEvents] = useState(() => mergeAllEvents(source));
-  const [selectedDate, setSelectedDate] = useState(new Date());
+function AdvancedCalendar({
+  source, viewType, setViewType, search, darkMode,
+  events, isLoading, selectedDate, setSelectedDate,
+  onCreate, onDelete,
+}: any) {
+  const [localEvents, setLocalEvents] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
   const [focusMode, setFocusMode] = useState(false);
@@ -190,6 +227,22 @@ function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: a
   const [pomodoroTime, setPomodoroTime] = useState(25 * 60); // 25 min
   const [showMotivation, setShowMotivation] = useState(false);
   const [filterType, setFilterType] = useState('all');
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventDate, setNewEventDate] = useState<string>(() => new Date().toISOString().slice(0, 16));
+
+  useEffect(() => {
+    // Normalize backend events to local shape
+    const normalized = (events || []).map((ev: any) => ({
+      id: ev.id,
+      title: ev.title,
+      description: ev.description,
+      date: (ev.startDate || ev.start || '').slice(0, 16),
+      type: 'event',
+      priority: 'medium',
+      raw: ev,
+    }));
+    setLocalEvents(normalized);
+  }, [events]);
 
   // Pomodoro timer logic
   useEffect(() => {
@@ -204,7 +257,7 @@ function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: a
   }, [pomodoroActive, pomodoroTime]);
 
   // Filter/search events
-  const filteredEvents = events.filter(ev => {
+  const filteredEvents = localEvents.filter(ev => {
     if (filterType !== 'all' && ev.type !== filterType) return false;
     if (search && !(
       ev.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -215,25 +268,22 @@ function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: a
 
   // Event CRUD
   const handleCreateOrEdit = (event: any) => {
-    if (editingEvent) {
-      setEvents(prev => prev.map(ev => ev.id === editingEvent.id ? { ...event, id: editingEvent.id } : ev));
-      toast.success('Event updated');
-    } else {
-      setEvents(prev => [{ ...event, id: uuidv4() }, ...prev]);
-      toast.success('Event created');
+    // Delegate new event creation to external handler (creates a task)
+    if (!editingEvent) {
+      onCreate?.({ title: newEventTitle, date: newEventDate });
+      toast.success('Event creation requested');
     }
     setDialogOpen(false);
     setEditingEvent(null);
   };
   const handleDelete = (id: string) => {
-    setEvents(prev => prev.filter(ev => ev.id !== id));
-    toast.success('Event deleted');
+    onDelete?.(id);
+    toast.success('Event delete requested');
   };
 
   // Drag-and-drop (mocked)
   const handleDrag = (id: string, newDate: string) => {
-    setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, date: newDate } : ev));
-    toast.success('Event moved');
+    toast.info('Drag-and-drop move coming soon');
   };
 
   // Print/export (mocked)
@@ -292,6 +342,7 @@ function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: a
             <Button variant="outline" onClick={() => setShowMotivation(true)}><Star className="h-4 w-4 mr-1" />Motivate</Button>
             <Input placeholder="Filter by type..." value={filterType} onChange={e => setFilterType(e.target.value)} className="w-32" />
           </div>
+          {isLoading && <div className="p-2 text-sm text-muted-foreground">Loading events...</div>}
           {showMotivation && <div className="p-2 bg-gradient-to-r from-yellow-200 via-pink-100 to-blue-100 rounded text-center font-bold animate-pulse">“Stay focused and make today amazing!”</div>}
           {pomodoroActive && <div className="p-2 bg-red-100 rounded text-center font-bold">Pomodoro: {Math.floor(pomodoroTime/60)}:{String(pomodoroTime%60).padStart(2,'0')}</div>}
           {focusMode && <div className="p-2 bg-blue-100 rounded text-center font-bold">Focus Mode: Distraction-free calendar</div>}
@@ -303,6 +354,8 @@ function AdvancedCalendar({ source, viewType, setViewType, search, darkMode }: a
             event={editingEvent}
             onSave={handleCreateOrEdit}
             onClose={() => { setDialogOpen(false); setEditingEvent(null); }}
+            title={newEventTitle} setTitle={setNewEventTitle}
+            date={newEventDate} setDate={setNewEventDate}
           />
         )}
         {/* Event Details/Quick Edit */}
@@ -335,8 +388,26 @@ function AgendaView({ events, selectedDate, setSelectedDate, onEventClick }: any
 function YearView({ events, selectedDate, setSelectedDate, onEventClick }: any) {
   return <div className="p-4 bg-muted rounded">[Year view calendar grid will go here]</div>;
 }
-function EventDialog({ event, onSave, onClose }: any) {
-  return <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"><div className="bg-white dark:bg-gray-900 p-6 rounded shadow-xl w-full max-w-md">[Event create/edit dialog will go here]<button onClick={onClose} className="mt-4 btn">Close</button></div></div>;
+function EventDialog({ event, onSave, onClose, title, setTitle, date, setDate }: any) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-900 p-6 rounded shadow-xl w-full max-w-md space-y-4">
+        <div className="text-lg font-semibold">Add Event</div>
+        <div className="space-y-2">
+          <label className="text-sm">Title</label>
+          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title" />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm">Date & time</label>
+          <Input type="datetime-local" value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onSave({ title, date })}>Create</Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 function EventDetails({ event, onEdit, onDelete, onClose }: any) {
   return <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"><div className="bg-white dark:bg-gray-900 p-6 rounded shadow-xl w-full max-w-md">[Event details/quick edit will go here]<button onClick={onEdit} className="mt-4 btn">Edit</button><button onClick={onDelete} className="mt-4 btn">Delete</button><button onClick={onClose} className="mt-4 btn">Close</button></div></div>;

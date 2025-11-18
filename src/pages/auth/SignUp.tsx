@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 const SignUp: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, setUser } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -81,6 +81,7 @@ const SignUp: React.FC = () => {
         name: formData.name,
         email: formData.email,
         password: formData.password,
+        tenantName: 'My Company', // Optional tenant name
       });
 
       // Store tokens
@@ -89,14 +90,14 @@ const SignUp: React.FC = () => {
       localStorage.setItem('user', JSON.stringify(response.user));
       localStorage.setItem('tenantId', response.user.tenantId);
 
-      // Update auth context
-      setUser(response.user);
-
       toast.success("Account created successfully!");
-      navigate('/dashboard');
+      
+      // Reload page to trigger auth context to pick up new user
+      window.location.href = '/dashboard';
     } catch (error: any) {
       console.error('Signup error:', error);
-      toast.error(error.response?.data?.message || "Signup failed");
+      const message = error?.response?.data?.message || error?.message || "Signup failed";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -136,10 +137,12 @@ const SignUp: React.FC = () => {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <div className="bg-indigo-600 text-white p-2 rounded">PM</div>
-            <span className="font-semibold text-2xl">ProjectMaster</span>
-          </div>
+          <Link to="/" className="inline-block mb-4">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <div className="bg-indigo-600 text-white p-2 rounded">PM</div>
+              <span className="font-semibold text-2xl">ProjectMaster</span>
+            </div>
+          </Link>
           <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Enter your details to get started
@@ -229,6 +232,11 @@ const SignUp: React.FC = () => {
               Already have an account?{" "}
               <Link to="/login" className="text-primary hover:underline">
                 Sign in
+              </Link>
+            </div>
+            <div className="text-sm text-center text-muted-foreground pt-2 border-t">
+              <Link to="/" className="text-primary hover:underline">
+                ← Back to Home
               </Link>
             </div>
           </CardFooter>

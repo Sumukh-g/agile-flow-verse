@@ -16,6 +16,14 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useCreateProject, useDeleteProject, useProjects, useUpdateProject } from '@/hooks/useProjects';
+import { useQueryClient } from '@tanstack/react-query';
+import {
   Briefcase,
   Calendar,
   Check,
@@ -54,12 +62,19 @@ export const AppSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [projects, setProjects] = useState<Project[]>([
-    { id: 'p1', name: 'Marketing Campaign', status: 'active' },
-    { id: 'p2', name: 'Website Redesign', status: 'active' },
-    { id: 'p3', name: 'Mobile App', status: 'on-hold' },
-    { id: 'p4', name: 'Q3 Planning', status: 'completed' }
-  ]);
+  // Fetch real projects from API
+  const { data: apiProjects = [], isLoading: projectsLoading } = useProjects();
+  const queryClient = useQueryClient();
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  
+  // Transform API projects to sidebar format
+  const projects: Project[] = apiProjects.map(p => ({
+    id: p.id,
+    name: p.name,
+    status: (p.status === 'active' ? 'active' : p.status === 'completed' ? 'completed' : 'on-hold') as 'active' | 'completed' | 'on-hold'
+  }));
   const [newProject, setNewProject] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newProjectStatus, setNewProjectStatus] = useState<'active' | 'on-hold' | 'completed'>('active');
@@ -78,7 +93,7 @@ export const AppSidebar = () => {
   // Main navigation items
   const mainNavItems = [
     { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', isPrimary: true },
-    { title: 'Projects', icon: Briefcase, path: '/projects' },
+    { title: 'CRM', icon: Briefcase, path: '/projects' }, // Full CRM with Clients/Projects/Deals
     { title: 'Tasks', icon: CheckSquare, path: '/tasks' },
     { title: 'Boards', icon: Trello, path: '/boards' },
     { title: 'Calendar', icon: Calendar, path: '/calendar' },
@@ -108,22 +123,26 @@ export const AppSidebar = () => {
       : "text-sidebar-foreground hover:bg-sidebar-accent/50";
   };
 
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     if (!newProject.trim()) {
       toast.error('Project name is required');
       return;
     }
     
-    const newProjectItem: Project = {
-      id: `p${Date.now()}`,
-      name: newProject,
-      status: newProjectStatus
-    };
-    
-    setProjects(prev => [...prev, newProjectItem]);
-    setNewProject('');
-    setDialogOpen(false);
-    toast.success('Project added successfully');
+    try {
+      await createProject.mutateAsync({
+        name: newProject,
+        status: newProjectStatus === 'active' ? 'active' : newProjectStatus === 'completed' ? 'completed' : 'on-hold',
+        priority: 'medium',
+        progress: 0
+      });
+      
+      toast.success('Project added successfully');
+      setNewProject('');
+      setDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to create project');
+    }
   };
 
   const handleStarProject = (id: string) => {
@@ -135,9 +154,13 @@ export const AppSidebar = () => {
     toast.info(`Opening project ${projects.find(p => p.id === id)?.name}`);
   };
 
-  const handleDeleteProject = (id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    toast.success('Project removed');
+  const handleDeleteProject = async (id: string) => {
+    try {
+      await deleteProject.mutateAsync(id);
+      toast.success('Project removed');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to delete project');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -158,11 +181,18 @@ export const AppSidebar = () => {
     setEditingName(project.name);
   };
 
-  const handleSaveEdit = (id: string) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, name: editingName } : p));
-    setEditingProjectId(null);
-    setEditingName('');
-    toast.success('Project name updated');
+  const handleSaveEdit = async (id: string) => {
+    try {
+      await updateProject.mutateAsync({
+        id,
+        data: { name: editingName }
+      });
+      setEditingProjectId(null);
+      setEditingName('');
+      toast.success('Project name updated');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to update project name');
+    }
   };
 
   const handleCancelEdit = () => {
@@ -170,9 +200,17 @@ export const AppSidebar = () => {
     setEditingName('');
   };
 
-  const handleStatusChange = (id: string, status: Project['status']) => {
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-    toast.success('Project status updated');
+  const handleStatusChange = async (id: string, status: Project['status']) => {
+    try {
+      const apiStatus = status === 'active' ? 'active' : status === 'completed' ? 'completed' : 'on-hold';
+      await updateProject.mutateAsync({
+        id,
+        data: { status: apiStatus }
+      });
+      toast.success('Project status updated');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to update project status');
+    }
   };
 
   return (
@@ -180,43 +218,40 @@ export const AppSidebar = () => {
       className={collapsed ? "w-14" : "w-64"}
       collapsible="icon"
     >
-      <SidebarContent>
-
+      <SidebarContent className="pt-6">
         {/* Main Navigation */}
         <SidebarGroup>
           <SidebarGroupLabel className={collapsed ? "sr-only" : ""}>
-            Navigation
+            Main
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {/* HARD CODED DASHBOARD - FIRST ITEM */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink 
-                    to="/dashboard" 
-                    className={getNavClass}
-                  >
-                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                    <span>Dashboard</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              {/* REST OF NAVIGATION ITEMS */}
-              {mainNavItems.filter(item => item.title !== 'Dashboard').map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink 
-                      to={item.path} 
-                      className={getNavClass}
-                    >
-                      <item.icon className="mr-2 h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            <TooltipProvider>
+              <SidebarMenu>
+                {/* All navigation items */}
+                {mainNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton asChild>
+                          <NavLink 
+                            to={item.path} 
+                            className={getNavClass}
+                          >
+                            <item.icon className="mr-2 h-4 w-4" />
+                            {!collapsed && <span>{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {collapsed && (
+                        <TooltipContent side="right">
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </TooltipProvider>
           </SidebarGroupContent>
         </SidebarGroup>
 

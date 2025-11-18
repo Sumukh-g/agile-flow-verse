@@ -1,20 +1,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { initKeycloak, keycloak } from './keycloak';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from './api';
 
 interface User {
   id: string;
   email: string;
   name: string;
-  roles: string[];
+  tenantId: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: () => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
-  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,44 +22,34 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Check if there's a mock user in localStorage (for demo purposes)
+        const accessToken = localStorage.getItem('accessToken');
         const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-          const mockUser = JSON.parse(savedUser);
-          setUser({
-            id: mockUser.id,
-            email: mockUser.email,
-            name: mockUser.name,
-            roles: mockUser.roles || ['user'],
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Try to initialize Keycloak
-        const authenticated = await initKeycloak();
         
-        if (authenticated && keycloak.authenticated) {
+        if (accessToken && savedUser) {
           try {
-            const userInfo = await keycloak.loadUserInfo() as any;
-            setUser({
-              id: keycloak.subject || '',
-              email: userInfo.email || '',
-              name: userInfo.name || userInfo.preferred_username || '',
-              roles: keycloak.realmAccess?.roles || [],
-            });
+            // Parse saved user
+            const parsedUser = JSON.parse(savedUser);
+            setUser(parsedUser);
             
-            // Store tenant ID if available
-            if (userInfo.tenant_id) {
-              localStorage.setItem('tenantId', userInfo.tenant_id);
-            }
+            // Optionally verify token is still valid
+            // await api.auth.getProfile();
           } catch (error) {
-            console.error('Failed to load user info:', error);
+            console.error('Auth initialization error:', error);
+            // Clear invalid session and cache
+            queryClient.clear();
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('tenantId');
           }
+        } else {
+          // No saved session - clear cache to be safe
+          queryClient.clear();
         }
       } catch (error) {
         console.error('Auth initialization failed:', error);
@@ -71,54 +61,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
   }, []);
 
-  const login = () => {
+  const login = async (email: string, password: string) => {
     try {
-      // Only try Keycloak login if it's properly configured
-      if (keycloak && typeof keycloak.login === 'function') {
-        keycloak.login();
-      } else {
-        throw new Error('Keycloak not properly initialized');
-      }
-    } catch (error) {
-      console.error('Keycloak login failed:', error);
-      // Fallback to demo login
-      const mockUser = {
-        id: Date.now().toString(),
-        name: 'Demo User',
-        email: 'demo@example.com',
-        roles: ['user']
-      };
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('tenantId', 'dev');
-      setUser(mockUser);
+      // Clear cache before login to prevent showing previous user's data
+      queryClient.clear();
+      
+      const response = await api.auth.login({ email, password });
+      
+      // Store tokens and user
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('tenantId', response.user.tenantId);
+      
+      setUser(response.user);
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      throw error;
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     try {
-      // Only try Keycloak logout if it's properly initialized
-      if (keycloak.authenticated) {
-        keycloak.logout();
-      }
+      await api.auth.logout();
     } catch (error) {
-      console.error('Keycloak logout failed:', error);
+      console.error('Logout API call failed:', error);
+    } finally {
+      // Clear React Query cache to prevent data leakage between users
+      queryClient.clear();
+      
+      // Clear local state
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('tenantId');
+      setUser(null);
     }
-    
-    // Always clear local state regardless of Keycloak status
-    setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('tenantId');
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      login,
-      logout,
-      isAuthenticated: !!user,
-      setUser,
-    }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
@@ -126,8 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
-}; 
+};

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import jwt, { JwtHeader } from 'jsonwebtoken';
@@ -30,6 +30,8 @@ const jwksClient = jwksRsa({ jwksUri: JWKS_URI });
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
@@ -43,21 +45,40 @@ export class AuthService {
   async verifyToken(bearer: string): Promise<DecodedUser> {
     const token = bearer.replace(/^Bearer\s+/i, '');
     
+    // Check if JWT_SECRET is configured
+    if (!process.env.JWT_SECRET) {
+      this.logger.error('[AUTH ERROR] JWT_SECRET is not configured. Cannot verify tokens.');
+      throw new UnauthorizedException('Authentication service misconfigured: JWT_SECRET missing');
+    }
+    
+    console.log('[AUTH DEBUG] Verifying token, length:', token.length);
+    console.log('[AUTH DEBUG] JWT_SECRET set:', !!process.env.JWT_SECRET);
+    console.log('[AUTH DEBUG] Token preview:', token.substring(0, 50) + '...');
+    
     // Try local JWT verification first (HS256 with JWT_SECRET)
     try {
       const decoded = this.jwtService.verify(token) as any;
+      console.log('[AUTH DEBUG] Local JWT verification SUCCESS');
+      console.log('[AUTH DEBUG] Decoded payload:', JSON.stringify({ sub: decoded.sub, tenantId: decoded.tenantId, email: decoded.email }));
       
       // Local tokens have tenantId directly in payload
       const userId = decoded.sub || decoded.userId;
       const tenantId = decoded.tenantId || '';
       const roles = decoded.roles || [];
       
-      if (!userId || !tenantId) {
-        throw new UnauthorizedException('Token missing required fields');
+      if (!userId) {
+        console.error('[AUTH DEBUG] REJECTED: No userId in token');
+        throw new UnauthorizedException('Token missing userId');
+      }
+      
+      if (!tenantId) {
+        console.error('[AUTH DEBUG] REJECTED: No tenantId in token');
+        throw new UnauthorizedException('Token missing tenantId');
       }
 
       // Get user permissions from database
       const userPermissions = await this.getUserPermissions(userId, tenantId);
+      console.log('[AUTH DEBUG] User permissions loaded:', userPermissions.length);
 
       return {
         userId,
@@ -68,8 +89,31 @@ export class AuthService {
         name: decoded.name,
       };
     } catch (localError) {
+      const errorMessage = (localError as Error).message;
+      console.error('[AUTH DEBUG] Local JWT verification FAILED:', errorMessage);
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('secret') || errorMessage.includes('signature')) {
+        this.logger.error('[AUTH ERROR] Token signature verification failed. JWT_SECRET may be incorrect.');
+        throw new UnauthorizedException('Invalid token signature');
+      }
+      if (errorMessage.includes('expired')) {
+        throw new UnauthorizedException('Token expired');
+      }
+      if (errorMessage.includes('malformed') || errorMessage.includes('invalid')) {
+        throw new UnauthorizedException('Invalid token format');
+      }
+      
+      // Skip Keycloak if disabled
+      const enableKeycloak = process.env.ENABLE_KEYCLOAK === 'true';
+      if (!enableKeycloak) {
+        console.error('[AUTH DEBUG] Keycloak disabled, rejecting token');
+        throw new UnauthorizedException(`Invalid token: ${errorMessage}`);
+      }
+      
       // If local verification fails, try Keycloak (RS256 with JWKS)
       try {
+        console.log('[AUTH DEBUG] Trying Keycloak verification...');
         const decoded: any = await new Promise((resolve, reject) => {
           jwt.verify(
             token,
@@ -90,6 +134,7 @@ export class AuthService {
           );
         });
 
+        console.log('[AUTH DEBUG] Keycloak verification SUCCESS');
         // Map Keycloak claims -> app identity
         const userId = decoded.sub as string;
         const tenantId = (decoded['tenant_id'] as string) || (decoded['orgId'] as string) || '';
@@ -107,17 +152,26 @@ export class AuthService {
           name: decoded.name,
         };
       } catch (keycloakError) {
+        console.error('[AUTH DEBUG] Keycloak verification FAILED:', (keycloakError as Error).message);
         throw new UnauthorizedException('Invalid token');
       }
     }
   }
 
   async generateTokens(user: DecodedUser): Promise<AuthTokens> {
+    // Validate required fields
+    if (!user.userId) {
+      throw new Error('Cannot generate token: userId is required');
+    }
+    if (!user.tenantId) {
+      throw new Error('Cannot generate token: tenantId is required');
+    }
+
     const payload = {
       sub: user.userId,
       tenantId: user.tenantId,
-      roles: user.roles,
-      permissions: user.permissions,
+      roles: user.roles || [],
+      permissions: user.permissions || [],
       email: user.email,
       name: user.name,
     };
@@ -297,19 +351,33 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthTokens & { user: any }> {
+    // Check if JWT_SECRET is configured
+    if (!process.env.JWT_SECRET) {
+      this.logger.error('[AUTH ERROR] JWT_SECRET is not configured. Cannot generate tokens.');
+      throw new UnauthorizedException('Authentication service misconfigured: JWT_SECRET missing');
+    }
+
     // Find user
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email }
     });
 
     if (!user || !user.password) {
+      this.logger.warn(`[AUTH] Login attempt failed: User not found or no password set for ${dto.email}`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Verify password
     const valid = await bcrypt.compare(dto.password, user.password);
     if (!valid) {
+      this.logger.warn(`[AUTH] Login attempt failed: Invalid password for ${dto.email}`);
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Ensure user has tenantId
+    if (!user.tenantId) {
+      this.logger.error(`[AUTH ERROR] User ${user.id} has no tenantId. Cannot generate token.`);
+      throw new UnauthorizedException('User account misconfigured: missing tenant information');
     }
 
     // Generate tokens
@@ -321,6 +389,8 @@ export class AuthService {
       email: user.email,
       name: user.name,
     });
+
+    this.logger.log(`[AUTH] User ${user.email} logged in successfully`);
 
     return {
       user: {

@@ -20,8 +20,9 @@ import {
     Users,
     Video
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 
 interface ProjectCalendarViewProps {
   projectId: string | undefined;
@@ -35,81 +36,49 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
 
+  // Compute current month start/end
+  const monthRange = useMemo(() => {
+    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    // ISO strings
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+    };
+  }, [currentDate]);
+
   useEffect(() => {
-    // Mock calendar events
-    setEvents([
-      {
-        id: 1,
-        title: "Project Kickoff Meeting",
-        description: "Initial project planning and team introduction",
-        date: "2024-01-15",
-        time: "10:00 AM",
-        duration: "2 hours",
-        type: "meeting",
-        priority: "high",
-        attendees: ["John Smith", "Sarah Johnson", "Mike Wilson"],
-        location: "Conference Room A",
-        isOnline: false,
-        status: "confirmed"
-      },
-      {
-        id: 2,
-        title: "Design Review",
-        description: "Review initial design mockups and prototypes",
-        date: "2024-01-18",
-        time: "2:00 PM",
-        duration: "1.5 hours",
-        type: "review",
-        priority: "medium",
-        attendees: ["Sarah Johnson", "Lisa Brown"],
-        location: "Online",
-        isOnline: true,
-        status: "confirmed"
-      },
-      {
-        id: 3,
-        title: "Sprint Planning",
-        description: "Plan tasks for the upcoming sprint",
-        date: "2024-01-22",
-        time: "9:00 AM",
-        duration: "3 hours",
-        type: "planning",
-        priority: "high",
-        attendees: ["John Smith", "Mike Wilson", "Tom Davis"],
-        location: "Team Room",
-        isOnline: false,
-        status: "tentative"
-      },
-      {
-        id: 4,
-        title: "Client Presentation",
-        description: "Present progress and get feedback from client",
-        date: "2024-01-25",
-        time: "3:00 PM",
-        duration: "1 hour",
-        type: "presentation",
-        priority: "high",
-        attendees: ["John Smith", "Sarah Johnson", "Client Team"],
-        location: "Client Office",
-        isOnline: false,
-        status: "confirmed"
-      },
-      {
-        id: 5,
-        title: "Code Review Session",
-        description: "Review completed features and discuss improvements",
-        date: "2024-01-29",
-        time: "11:00 AM",
-        duration: "2 hours",
-        type: "review",
-        priority: "medium",
-        attendees: ["Mike Wilson", "Tom Davis"],
-        location: "Online",
-        isOnline: true,
-        status: "confirmed"
+    let cancelled = false;
+    async function load() {
+      try {
+        if (!projectId) {
+          setEvents([]);
+          return;
+        }
+        const raw = await api.calendar.getEvents(monthRange.start, monthRange.end, projectId);
+        if (cancelled) return;
+        const mapped = raw.map((e: any) => ({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          date: (e.startDate || e.start || '').slice(0, 10),
+          time: '',
+          duration: '',
+          type: e.type || 'task',
+          priority: e.priority || 'medium',
+          attendees: (e.assignees || []).map((a: any) => a.name || a.email).filter(Boolean),
+          location: e.project?.name || '',
+          isOnline: false,
+          status: e.status || 'confirmed',
+        }));
+        setEvents(mapped);
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message || 'Failed to load calendar events');
       }
-    ]);
-  }, [projectId]);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [projectId, monthRange.start, monthRange.end]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -251,9 +220,31 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => setIsAddEventOpen(false)}>Cancel</Button>
-        <Button onClick={() => {
-          toast.success("Event added successfully!");
-          setIsAddEventOpen(false);
+        <Button onClick={async () => {
+          // Create a task to appear on the calendar
+          const titleEl = document.getElementById('title') as HTMLInputElement | null;
+          const dateEl = document.getElementById('date') as HTMLInputElement | null;
+          const timeEl = document.getElementById('time') as HTMLInputElement | null;
+          const descriptionEl = document.getElementById('description') as HTMLTextAreaElement | null;
+          if (!titleEl?.value || !dateEl?.value) {
+            toast.error('Title and date are required');
+            return;
+          }
+          const dueDateIso = timeEl?.value ? `${dateEl.value}T${timeEl.value}:00.000Z` : new Date(dateEl.value).toISOString();
+          try {
+            await api.tasks.createTask({
+              title: titleEl.value,
+              description: descriptionEl?.value,
+              projectId,
+              dueDate: dueDateIso,
+              priority: 'medium',
+              status: 'todo',
+            } as any);
+            toast.success('Event added successfully!');
+            setIsAddEventOpen(false);
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Failed to add event');
+          }
         }}>Add Event</Button>
       </div>
     </div>
@@ -309,9 +300,38 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
       </div>
       
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button variant="outline">Edit</Button>
-        <Button variant="outline">Delete</Button>
-        <Button>Join Meeting</Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            setIsAddEventOpen(true);
+            toast.info(`Editing event: ${event.title}`);
+          }}
+        >
+          Edit
+        </Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            if (confirm('Are you sure you want to delete this event?')) {
+              setEvents(prev => prev.filter(e => e.id !== event.id));
+              toast.success('Event deleted successfully');
+              setIsEventDetailsOpen(false);
+            }
+          }}
+        >
+          Delete
+        </Button>
+        <Button
+          onClick={() => {
+            if (event.isOnline) {
+              toast.info(`Joining online meeting: ${event.title}`);
+            } else {
+              toast.info(`Event location: ${event.location}`);
+            }
+          }}
+        >
+          {event.isOnline ? 'Join Meeting' : 'View Location'}
+        </Button>
       </div>
     </div>
   );
@@ -325,11 +345,17 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
           <p className="text-muted-foreground">Schedule and track project events, meetings, and deadlines</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Filter events coming soon')}
+          >
             <Filter className="h-4 w-4 mr-2" />
             Filter
           </Button>
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => toast.info('Exporting calendar...')}
+          >
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>

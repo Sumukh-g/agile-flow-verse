@@ -81,8 +81,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:29092
-      JWT_SECRET: your-secret-key-change-in-production
-      JWT_REFRESH_SECRET: your-refresh-secret-key-change-in-production
+      JWT_SECRET: 5774fbfc1ffb475dbd38d75ab7c0a7800f167ad6b61a570d1c113955d0730e82
+      JWT_REFRESH_SECRET: a19f88d009dca7aebf56184feead6d0391a3a4582da57155a3576c21495e6499
     volumes:
       - ./uploads:/app/uploads
     healthcheck:

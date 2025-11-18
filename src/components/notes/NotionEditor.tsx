@@ -66,6 +66,30 @@ const NotionEditor: React.FC<NotionEditorProps> = ({ page, onUpdatePage }) => {
   
   const editorRef = useRef<HTMLDivElement>(null);
   const lastSavedRef = useRef<string>('');
+  const isUserTypingRef = useRef(false);
+  const lastPageContentRef = useRef<string>('');
+
+  // Initialize content from page
+  useEffect(() => {
+    if (editorRef.current && !content) {
+      editorRef.current.innerHTML = page.content || '';
+      setContent(page.content || '');
+      lastPageContentRef.current = page.content || '';
+    }
+  }, [page.id]);
+
+  // Sync content to editor when page changes externally (but not when user is typing)
+  useEffect(() => {
+    if (editorRef.current && !isUserTypingRef.current) {
+      const currentContent = editorRef.current.innerHTML;
+      // Only update if page content changed externally and differs from current
+      if (page.content !== lastPageContentRef.current && page.content !== currentContent) {
+        editorRef.current.innerHTML = page.content || '';
+        setContent(page.content || '');
+        lastPageContentRef.current = page.content || '';
+      }
+    }
+  }, [page.content]);
 
   // Auto-save functionality
   useEffect(() => {
@@ -418,16 +442,23 @@ const NotionEditor: React.FC<NotionEditorProps> = ({ page, onUpdatePage }) => {
             ref={editorRef}
             className="min-h-full outline-none"
             contentEditable={true}
-            onInput={(e) => setContent(e.currentTarget.innerHTML)}
+            suppressContentEditableWarning={true}
+            onInput={(e) => {
+              isUserTypingRef.current = true;
+              const newContent = e.currentTarget.innerHTML;
+              setContent(newContent);
+              // Reset flag after a short delay to allow external updates
+              setTimeout(() => {
+                isUserTypingRef.current = false;
+              }, 100);
+            }}
             onSelect={handleSelection}
             onKeyDown={handleKeyDown}
             style={{
               lineHeight: '1.6',
               fontSize: '16px'
             }}
-          >
-            {content}
-          </div>
+          />
           
           {/* Empty state */}
           {!content && (

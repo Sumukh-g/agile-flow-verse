@@ -1,5 +1,17 @@
-import { apiClient } from '@/lib/api-client';
+<<<<<<< Current (Your changes)
+import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
+
+export function useProjectCalendar(projectId: string | undefined, startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['calendar', { projectId, startDate, endDate }],
+    enabled: !!projectId,
+    queryFn: () => api.calendar.getEvents(startDate, endDate, projectId),
+    staleTime: 60_000,
+  });
+}
+
+import { apiClient } from '@/lib/api-client';
 
 export interface CalendarEvent {
   id: string;
@@ -64,3 +76,6 @@ export const useProjectCalendar = (projectId: string, startDate?: string, endDat
 
 
 
+=======
+ 
+>>>>>>> Incoming (Background Agent changes)

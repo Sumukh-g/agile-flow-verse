@@ -1,7 +1,5 @@
-import FlowchartBoard from '@/components/boards/FlowchartBoard';
 import GanttBoard from '@/components/boards/GanttBoard';
 import KanbanBoard from '@/components/boards/KanbanBoard';
-import MindmapBoard from '@/components/boards/MindmapBoard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
@@ -21,11 +19,9 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Brain,
     Calendar,
     Columns,
     Filter,
-    GitBranch,
     Grid,
     LayoutDashboard,
     List,
@@ -62,8 +58,6 @@ interface BoardCard {
 const BOARD_TYPES = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, description: 'Overview of all boards and projects' },
   { id: 'gantt', name: 'Gantt Chart', icon: Calendar, description: 'Timeline and project management' },
-  { id: 'mindmap', name: 'Mindmap', icon: Brain, description: 'Visual thinking and idea mapping' },
-  { id: 'flowchart', name: 'Flowchart', icon: GitBranch, description: 'Process flows and diagrams' },
   { id: 'kanban', name: 'Kanban', icon: Trello, description: 'Task management and workflows' }
 ];
 
@@ -534,8 +528,6 @@ const ProjectBoardView = ({ projectId = 'p1' }: ProjectBoardViewProps) => {
       
       {selectedBoardType === 'gantt' && <GanttBoard />}
       {selectedBoardType === 'kanban' && <KanbanBoard />}
-      {selectedBoardType === 'flowchart' && <FlowchartBoard />}
-      {selectedBoardType === 'mindmap' && <MindmapBoard />}
     </div>
   );
 };

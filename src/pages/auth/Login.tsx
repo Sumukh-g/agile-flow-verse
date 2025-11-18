@@ -19,7 +19,7 @@ import { toast } from "sonner";
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, setUser } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -62,57 +62,30 @@ const Login: React.FC = () => {
     setLoading(true);
     
     try {
-      // Call real login API
-      const response = await apiClient.post('/auth/login', {
-        email: formData.email,
-        password: formData.password,
-      });
-
-      // Store tokens
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      localStorage.setItem('tenantId', response.user.tenantId);
-
-      // Update auth context
-      setUser(response.user);
-
+      // Use auth context login
+      await login(formData.email, formData.password);
       toast.success("Login successful!");
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error(error.response?.data?.message || "Login failed");
+      const message = error?.response?.data?.message || error?.message || "Login failed";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDemoLogin = async () => {
+    // For demo: use a test account
+    setFormData({ email: 'demo@example.com', password: 'demo123' });
     setLoading(true);
     
     try {
-      // For demo purposes, create a mock user and bypass Keycloak
-      const mockUser = {
-        id: Date.now().toString(),
-        name: 'Demo User',
-        email: 'demo@example.com',
-        roles: ['user']
-      };
-      
-      // Store mock user in localStorage
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('tenantId', 'dev');
-      
-      // Update the auth context
-      setUser(mockUser);
-      
-      toast.success("Demo login successful! Redirecting...");
-      
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1000);
+      await login('demo@example.com', 'demo123');
+      toast.success("Demo login successful!");
+      navigate('/dashboard');
     } catch (error) {
-      toast.error("Demo login failed. Please try again.");
+      toast.error("Demo login failed. Please try manual login.");
     } finally {
       setLoading(false);
     }
@@ -122,10 +95,12 @@ const Login: React.FC = () => {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <div className="bg-indigo-600 text-white p-2 rounded">PM</div>
-            <span className="font-semibold text-2xl">ProjectMaster</span>
-          </div>
+          <Link to="/" className="inline-block mb-4">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <div className="bg-indigo-600 text-white p-2 rounded">PM</div>
+              <span className="font-semibold text-2xl">ProjectMaster</span>
+            </div>
+          </Link>
           <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Sign in to your account to continue
@@ -191,6 +166,11 @@ const Login: React.FC = () => {
               Don't have an account?{" "}
               <Link to="/signup" className="text-primary hover:underline">
                 Sign up
+              </Link>
+            </div>
+            <div className="text-sm text-center text-muted-foreground pt-2 border-t">
+              <Link to="/" className="text-primary hover:underline">
+                ← Back to Home
               </Link>
             </div>
           </CardFooter>
