@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     proxy: {
       '/v1': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       },
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => ({
         secure: false,
       },
       '/docs': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       }
