@@ -90,6 +90,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
 
       this.logger.log(`Client connected: ${client.id} (User: ${userId}, Tenant: ${tenantId})`);
 
+      // Broadcast user presence to tenant
+      this.broadcastToTenant(tenantId, 'user.presence', {
+        userId,
+        status: 'online',
+        timestamp: new Date().toISOString(),
+      });
+
       // Send welcome message
       client.emit('connected', {
         userId,
@@ -110,6 +117,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         sockets.delete(client.id);
         if (sockets.size === 0) {
           this.userSockets.delete(userInfo.userId);
+          
+          // Broadcast user offline status only if all sockets disconnected
+          this.broadcastToTenant(userInfo.tenantId, 'user.presence', {
+            userId: userInfo.userId,
+            status: 'offline',
+            timestamp: new Date().toISOString(),
+          });
         }
       }
       this.socketUsers.delete(client.id);
@@ -118,7 +132,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   }
 
   @SubscribeMessage('subscribe')
-  handleSubscribe(
+  async handleSubscribe(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { channels: string[] },
   ) {
@@ -127,15 +141,24 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     }
 
     const { channels } = data;
-    channels.forEach((channel) => {
-      // Validate channel format
+    const subscribed: string[] = [];
+
+    for (const channel of channels) {
+      if (channel.startsWith('project:')) {
+        const projectId = channel.split(':')[1];
+        const member = await this.prisma.projectMember.findFirst({
+          where: { projectId, userId: client.userId, tenantId: client.tenantId },
+        });
+        if (!member) continue;
+      }
+
       if (channel.startsWith('project:') || channel.startsWith('task:') || channel.startsWith('note:')) {
         client.join(channel);
-        this.logger.log(`Client ${client.id} subscribed to ${channel}`);
+        subscribed.push(channel);
       }
-    });
+    }
 
-    return { success: true, subscribed: channels };
+    return { success: true, subscribed };
   }
 
   @SubscribeMessage('unsubscribe')

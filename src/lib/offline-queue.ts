@@ -14,6 +14,16 @@ export interface QueuedRequest {
   maxRetries: number;
 }
 
+/** Never persist login/signup/refresh — they are not safe to replay from storage. */
+function isCredentialAuthUrl(url: string): boolean {
+  const u = url || '';
+  return (
+    u.includes('/auth/login') ||
+    u.includes('/auth/signup') ||
+    u.includes('/auth/refresh')
+  );
+}
+
 class OfflineQueue {
   private queue: QueuedRequest[] = [];
   private isOnline = navigator.onLine;
@@ -40,7 +50,14 @@ class OfflineQueue {
     try {
       const stored = localStorage.getItem(this.storageKey);
       if (stored) {
-        this.queue = JSON.parse(stored);
+        const parsed: QueuedRequest[] = JSON.parse(stored);
+        const filtered = Array.isArray(parsed)
+          ? parsed.filter((req) => !isCredentialAuthUrl(req.url))
+          : [];
+        this.queue = filtered;
+        if (Array.isArray(parsed) && filtered.length !== parsed.length) {
+          this.saveToStorage();
+        }
       }
     } catch (error) {
       console.error('[OfflineQueue] Failed to load from storage:', error);
@@ -56,6 +73,10 @@ class OfflineQueue {
   }
 
   add(request: Omit<QueuedRequest, 'id' | 'timestamp' | 'retries'>): string {
+    if (isCredentialAuthUrl(request.url)) {
+      console.warn('[OfflineQueue] Skipping queue for credential auth URL:', request.url);
+      return `skip-${Date.now()}`;
+    }
     const id = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const queuedRequest: QueuedRequest = {
       ...request,

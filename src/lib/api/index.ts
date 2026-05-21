@@ -15,6 +15,9 @@ export * from './calendar';
 export * from './dashboard';
 export * from './forms';
 export * from './issues';
+export * from './kanban';
+export * from './gantt';
+export * from './analytics';
 
 // Re-export for convenience
 import { authApi } from './auth';
@@ -31,7 +34,10 @@ import { formsApi } from './forms';
 import { storageApi } from './storage';
 import { issuesApi } from './issues';
 import { reportsApi } from './reports';
+import { analyticsApi } from './analytics';
 import { projectManagementApi } from './project-management';
+import { kanbanApi } from './kanban';
+import { ganttApi } from './gantt';
 
 export const api = {
   auth: authApi,
@@ -48,6 +54,9 @@ export const api = {
   storage: storageApi,
   issues: issuesApi,
   reports: reportsApi,
+  analytics: analyticsApi,
   projectManagement: projectManagementApi,
+  kanban: kanbanApi,
+  gantt: ganttApi,
 };
 

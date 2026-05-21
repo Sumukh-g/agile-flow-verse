@@ -34,6 +34,12 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, Task as TaskType } from '@/hooks/useTasks';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  getPriorityFromLabel,
+  getPriorityLabel,
+  getStatusFromLabel,
+  getStatusLabel,
+} from '@/lib/domain-utils/task-utils';
 
 interface Task {
   id: string;
@@ -96,11 +102,8 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     id: apiTask.id,
     title: apiTask.title,
     description: apiTask.description || '',
-    priority: apiTask.priority === 'critical' ? 'High' : apiTask.priority.charAt(0).toUpperCase() + apiTask.priority.slice(1),
-    status: apiTask.status === 'todo' ? 'To Do' : 
-            apiTask.status === 'in-progress' ? 'In Progress' : 
-            apiTask.status === 'review' ? 'In Review' : 
-            apiTask.status === 'done' ? 'Done' : apiTask.status,
+    priority: getPriorityLabel(apiTask.priority),
+    status: getStatusLabel(apiTask.status),
     dueDate: apiTask.dueDate ? new Date(apiTask.dueDate).toISOString().split('T')[0] : '',
     assignee: 'Unassigned', // TODO: Get from assignees
     tags: apiTask.tags || [],
@@ -200,21 +203,11 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     }
 
     try {
-      // Map UI status to API status format
-      const statusMap: Record<string, string> = {
-        'To Do': 'todo',
-        'In Progress': 'in-progress',
-        'In Review': 'review',
-        'Done': 'done',
-        'Blocked': 'blocked',
-        'Cancelled': 'cancelled'
-      };
-      
       await createTask.mutateAsync({
         title: taskData.title,
         description: taskData.description,
-        priority: taskData.priority.toLowerCase(),
-        status: statusMap[taskData.status] || taskData.status.toLowerCase().replace(' ', '-'),
+        priority: getPriorityFromLabel(taskData.priority),
+        status: getStatusFromLabel(taskData.status),
         projectId: currentProjectId, // Use the projectId from props
         dueDate: taskData.dueDate || undefined,
         estimatedHours: taskData.estimatedHours ? parseFloat(taskData.estimatedHours) : undefined,
@@ -235,23 +228,13 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     if (!editingTask) return;
 
     try {
-      // Map UI status to API status format
-      const statusMap: Record<string, string> = {
-        'To Do': 'todo',
-        'In Progress': 'in-progress',
-        'In Review': 'review',
-        'Done': 'done',
-        'Blocked': 'blocked',
-        'Cancelled': 'cancelled'
-      };
-      
       await updateTask.mutateAsync({
         id: editingTask.id,
         data: {
           title: taskData.title,
           description: taskData.description,
-          priority: taskData.priority.toLowerCase(),
-          status: statusMap[taskData.status] || taskData.status.toLowerCase().replace(' ', '-'),
+          priority: getPriorityFromLabel(taskData.priority),
+          status: getStatusFromLabel(taskData.status),
           dueDate: taskData.dueDate || undefined,
           estimatedHours: taskData.estimatedHours ? parseFloat(taskData.estimatedHours) : undefined,
           actualHours: taskData.actualHours ? parseFloat(taskData.actualHours) : undefined,
@@ -368,6 +351,8 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
                 <SelectItem value="In Progress">In Progress</SelectItem>
                 <SelectItem value="In Review">In Review</SelectItem>
                 <SelectItem value="Done">Done</SelectItem>
+                <SelectItem value="Blocked">Blocked</SelectItem>
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
           </div>

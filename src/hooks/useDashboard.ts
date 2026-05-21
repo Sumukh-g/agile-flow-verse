@@ -17,6 +17,18 @@ export interface DashboardData {
     done: number;
     overdue: number;
   };
+  crmStats: {
+    totalProjects: number;
+    totalClients: number;
+    totalDeals: number;
+    activeProjects: number;
+  };
+  analytics: {
+    tasksCreatedLast7Days: number;
+    tasksCreatedLast30Days: number;
+    projectsCreatedLast30Days: number;
+    completionRate: number;
+  };
   recentActivity: any[];
   notifications: any[];
   timestamp: string;
@@ -25,8 +37,15 @@ export interface DashboardData {
 export const useDashboard = () => {
   return useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => apiClient.get<DashboardData>('/dashboard'),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryFn: async () => {
+      const response = await apiClient.get<DashboardData>('/dashboard');
+      // apiClient.get already returns response.data, so response is already the data
+      return response as DashboardData;
+    },
+    staleTime: 0, // Always fetch fresh data to ensure accuracy
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
 };
 

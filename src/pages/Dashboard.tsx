@@ -1,20 +1,22 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCreateProject, useProjects } from '@/hooks/useProjects';
-import { useCreateTask, useTasks } from '@/hooks/useTasksEnhanced';
+import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/lib/auth-context';
+import { useDashboard } from '@/hooks/useDashboard';
 import {
     Briefcase,
-    CheckCircle2, // For Team Size
+    CheckCircle2,
     ClipboardList,
     Clock,
-    Plus, // For Project Types
-    TrendingUp, // For Company/Industry
+    TrendingUp,
     Users,
-    Zap
+    Zap,
+    Building2,
+    Target,
+    BarChart3,
+    Activity
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 interface UserSetupData {
   name?: string; // name is from user, not setup data for display here
@@ -31,20 +33,21 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [userSetupData, setUserSetupData] = useState<UserSetupData | null>(null);
   
-  // Use API hooks to fetch real data
+  // Use dashboard API for optimized data fetching
+  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard();
   const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useProjects();
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
-  
-  // Use mutation hooks for creating data
-  const createProject = useCreateProject();
-  const createTask = useCreateTask();
   
   // Debug logging
   React.useEffect(() => {
-    console.log('Dashboard projects:', projects);
-    console.log('Projects loading:', projectsLoading);
-    console.log('Projects error:', projectsError);
-  }, [projects, projectsLoading, projectsError]);
+    if (dashboardData) {
+      console.log('Dashboard data:', dashboardData);
+      console.log('Task stats:', dashboardData.taskStats);
+      console.log('CRM stats:', dashboardData.crmStats);
+    }
+    if (dashboardError) {
+      console.error('Dashboard error:', dashboardError);
+    }
+  }, [dashboardData, dashboardError]);
 
   useEffect(() => {
     const setupDataString = localStorage.getItem('userSetup');
@@ -58,63 +61,19 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Extract stats from dashboard data
+  const taskStats = dashboardData?.taskStats || { total: 0, todo: 0, inProgress: 0, done: 0, overdue: 0 };
+  const projectStats = dashboardData?.projectStats || { total: 0, active: 0, completed: 0, onHold: 0 };
+  const crmStats = dashboardData?.crmStats || { totalProjects: 0, totalClients: 0, totalDeals: 0, activeProjects: 0 };
+  const analytics = dashboardData?.analytics || { tasksCreatedLast7Days: 0, tasksCreatedLast30Days: 0, projectsCreatedLast30Days: 0, completionRate: 0 };
+  const recentTasks = dashboardData?.recentTasks || [];
+
   // Calculate dashboard stats
-  const totalProjects = projects.length;
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'done').length;
-  const pendingTasks = tasks.filter(t => t.status === 'todo').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
-
-  const createTestData = async () => {
-    try {
-      // Create a test project
-      const project = await createProject.mutateAsync({
-        name: `Test Project ${Date.now()}`,
-        description: 'This is a test project created from the dashboard',
-        status: 'active',
-        priority: 'medium',
-        progress: 0
-      });
-
-      // Wait a moment for project to be created
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Create some test tasks for the project
-      if (project && project.id) {
-        await createTask.mutateAsync({
-          title: 'Complete project setup',
-          description: 'Set up the initial project structure',
-          status: 'todo',
-          priority: 'high',
-          projectId: project.id
-        });
-
-        await createTask.mutateAsync({
-          title: 'Design user interface',
-          description: 'Create wireframes and mockups',
-          status: 'in-progress',
-          priority: 'medium',
-          projectId: project.id
-        });
-
-        await createTask.mutateAsync({
-          title: 'Write documentation',
-          description: 'Document the project requirements',
-          status: 'done',
-          priority: 'low',
-          projectId: project.id
-        });
-
-        toast.success('Test data created successfully!');
-        // Refresh projects and tasks after creation
-        await refetchProjects();
-      }
-    } catch (error: any) {
-      console.error('Failed to create test data:', error);
-      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to create test data';
-      toast.error(errorMsg);
-    }
-  };
+  const totalProjects = projectStats.total;
+  const totalTasks = taskStats.total;
+  const completedTasks = taskStats.done;
+  const pendingTasks = taskStats.todo;
+  const inProgressTasks = taskStats.inProgress;
 
   return (
     <div className="space-y-6">
@@ -126,14 +85,17 @@ const Dashboard = () => {
               Welcome back, {user?.name || 'User'}! Here's an overview of your workspace.
             </p>
           </div>
-          <Button 
-            onClick={createTestData} 
-            disabled={createProject.isPending || createTask.isPending}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            {createProject.isPending || createTask.isPending ? 'Creating...' : 'Create Test Data'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => refetchDashboard()} 
+              disabled={dashboardLoading}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Activity className="h-4 w-4" />
+              {dashboardLoading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -183,6 +145,17 @@ const Dashboard = () => {
         </Card>
       )}
 
+      {/* Error Message */}
+      {dashboardError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <p className="text-sm text-red-600">
+              Error loading dashboard data. Please try refreshing.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -191,14 +164,9 @@ const Dashboard = () => {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{projectsLoading ? '...' : totalProjects}</div>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : totalProjects}</div>
             <p className="text-xs text-muted-foreground">
-              {projectsError && (
-                <span className="text-red-500">Error loading projects</span>
-              )}
-              {!projectsError && !projectsLoading && (
-                <span>active projects</span>
-              )}
+              {projectStats.active} active
             </p>
           </CardContent>
         </Card>
@@ -209,7 +177,7 @@ const Dashboard = () => {
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tasksLoading ? '...' : totalTasks}</div>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : totalTasks}</div>
             <p className="text-xs text-muted-foreground">
               {completedTasks} completed
             </p>
@@ -222,7 +190,7 @@ const Dashboard = () => {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tasksLoading ? '...' : inProgressTasks}</div>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : inProgressTasks}</div>
             <p className="text-xs text-muted-foreground">
               {pendingTasks} pending
             </p>
@@ -236,7 +204,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tasksLoading || totalTasks === 0 ? '0' : Math.round((completedTasks / totalTasks) * 100)}%
+              {dashboardLoading || totalTasks === 0 ? '0' : analytics.completionRate}%
             </div>
             <p className="text-xs text-muted-foreground">
               of tasks completed
@@ -244,6 +212,90 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* CRM Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">CRM Projects</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : crmStats.totalProjects}</div>
+            <p className="text-xs text-muted-foreground">
+              {crmStats.activeProjects} active
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">CRM Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : crmStats.totalClients}</div>
+            <p className="text-xs text-muted-foreground">
+              total clients
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Deals</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : crmStats.totalDeals}</div>
+            <p className="text-xs text-muted-foreground">
+              in pipeline
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardLoading ? '...' : taskStats.overdue}</div>
+            <p className="text-xs text-muted-foreground">
+              need attention
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Analytics Overview
+          </CardTitle>
+          <CardDescription>
+            Activity metrics and trends
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Tasks Created (7 days)</p>
+              <p className="text-2xl font-bold">{dashboardLoading ? '...' : analytics.tasksCreatedLast7Days}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Tasks Created (30 days)</p>
+              <p className="text-2xl font-bold">{dashboardLoading ? '...' : analytics.tasksCreatedLast30Days}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Projects Created (30 days)</p>
+              <p className="text-2xl font-bold">{dashboardLoading ? '...' : analytics.projectsCreatedLast30Days}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Projects */}
       <Card>
@@ -287,27 +339,29 @@ const Dashboard = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {tasksLoading ? (
+          {dashboardLoading ? (
             <div className="text-center py-4">Loading tasks...</div>
-          ) : tasks.length === 0 ? (
+          ) : recentTasks.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground">
               No tasks yet. Create your first task to get started!
             </div>
           ) : (
             <div className="space-y-4">
-              {tasks.slice(0, 5).map((task) => (
+              {recentTasks.slice(0, 5).map((task: any) => (
                 <div key={task.id} className="flex items-center space-x-4">
                   <div className="flex-1">
                     <h4 className="text-sm font-medium">{task.title}</h4>
-                    <p className="text-sm text-muted-foreground">{task.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {task.project?.name ? `Project: ${task.project.name}` : task.description || 'No description'}
+                    </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className={`px-2 py-1 text-xs rounded-full ${
-                      task.status === 'DONE' ? 'bg-green-100 text-green-800' :
-                      task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                      task.status === 'done' ? 'bg-green-100 text-green-800' :
+                      task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {task.status}
+                      {task.status?.toUpperCase() || 'TODO'}
                     </span>
                   </div>
                 </div>

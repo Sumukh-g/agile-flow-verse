@@ -1,733 +1,1012 @@
+import React, { useState, useMemo } from 'react';
+import { toast } from 'sonner';
+import {
+  AlertCircle, ArrowRight, Bell, CheckCircle2, ChevronDown, ChevronRight,
+  Clock, Code2, Edit2, GitBranch, Globe, History, Info, Layers,
+  Mail, MoreHorizontal, Pause, Play, Plus, RefreshCw, Search,
+  Trash2, Webhook, Workflow, Zap, FlaskConical, RotateCcw,
+  ActivitySquare, ListChecks, XCircle
+} from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle
+} from '@/components/ui/card';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select';
+import {
+  Sheet, SheetContent, SheetDescription, SheetFooter,
+  SheetHeader, SheetTitle
+} from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    AlertTriangle,
-    BarChart3,
-    Brain,
-    Calendar,
-    CheckCircle2,
-    Clock,
-    Code,
-    Copy,
-    Download,
-    Edit,
-    Eye,
-    FileText,
-    GitBranch,
-    Link as LinkIcon,
-    Mail,
-    MessageSquare,
-    Pause,
-    Play,
-    Plus,
-    RefreshCw,
-    Sparkles,
-    Target,
-    TrendingUp,
-    Workflow,
-    Zap
-} from 'lucide-react';
-import React, { useState } from 'react';
-import { toast } from 'sonner';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
-interface AutomationRule {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  action: string;
-  status: 'active' | 'paused' | 'draft';
-  executions: number;
-  lastRun: string;
-  successRate: number;
-  category: 'workflow' | 'notification' | 'integration' | 'ai';
+import {
+  useAutomationRules,
+  useAutomationExecutions,
+  useAutomationExecution,
+  useCreateRule,
+  useUpdateRule,
+  useDeleteRule,
+  useToggleRule,
+  useDryRunRule,
+  useReplayExecution,
+  AutomationRule,
+  AutomationExecution,
+  CreateRuleDto,
+  TriggerKey,
+  ActionKey,
+  ActionLeaf,
+  TRIGGER_META,
+  ACTION_META,
+  getTriggerLabel,
+  getActionLabel,
+} from '@/hooks/useAutomations';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TRIGGER_KEYS = Object.keys(TRIGGER_META) as TriggerKey[];
+const ACTION_KEYS = Object.keys(ACTION_META) as ActionKey[];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(ms?: number | null): string {
+  if (!ms) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
-const AutomationsPage: React.FC = () => {
-  const [automationRules, setAutomationRules] = useState<AutomationRule[]>([
-    {
-      id: '1',
-      name: 'Auto-assign based on expertise',
-      description: 'Automatically assign tasks to team members based on their skills and workload',
-      trigger: 'Task created with specific tags',
-      action: 'Assign to best-fit team member',
-      status: 'active',
-      executions: 156,
-      lastRun: '2 hours ago',
-      successRate: 94,
-      category: 'ai'
-    },
-    {
-      id: '2',
-      name: 'Sprint burndown alerts',
-      description: 'Send alerts when sprint progress falls behind schedule',
-      trigger: 'Daily at 9 AM',
-      action: 'Send Slack notification to team',
-      status: 'active',
-      executions: 23,
-      lastRun: '1 day ago',
-      successRate: 100,
-      category: 'notification'
-    },
-    {
-      id: '3',
-      name: 'Code review reminders',
-      description: 'Remind reviewers about pending pull requests',
-      trigger: 'PR open for 24+ hours',
-      action: 'Send email reminder',
-      status: 'paused',
-      executions: 89,
-      lastRun: '3 days ago',
-      successRate: 87,
-      category: 'workflow'
-    },
-    {
-      id: '4',
-      name: 'Jira sync integration',
-      description: 'Sync task status changes with Jira tickets',
-      trigger: 'Task status changed',
-      action: 'Update Jira ticket status',
-      status: 'active',
-      executions: 342,
-      lastRun: '15 minutes ago',
-      successRate: 98,
-      category: 'integration'
-    }
-  ]);
+function timeAgo(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
-  const [selectedRule, setSelectedRule] = useState<AutomationRule | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newRuleName, setNewRuleName] = useState('');
-  const [newRuleDescription, setNewRuleDescription] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
-
-  const handleToggleRule = (id: string) => {
-    setAutomationRules(prev => prev.map(rule => 
-      rule.id === id 
-        ? { ...rule, status: rule.status === 'active' ? 'paused' : 'active' }
-        : rule
-    ));
-    toast.success('Automation rule updated');
+function statusConfig(status: string) {
+  const map: Record<string, { label: string; className: string; Icon: React.FC<{ className?: string }> }> = {
+    SUCCESS: { label: 'Success',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: CheckCircle2 },
+    FAILED:  { label: 'Failed',   className: 'bg-red-50 text-red-700 border-red-200',             Icon: XCircle },
+    RUNNING: { label: 'Running',  className: 'bg-blue-50 text-blue-700 border-blue-200',          Icon: RefreshCw },
+    PENDING: { label: 'Pending',  className: 'bg-gray-50 text-gray-600 border-gray-200',          Icon: Clock },
+    SKIPPED: { label: 'Skipped',  className: 'bg-amber-50 text-amber-700 border-amber-200',       Icon: GitBranch },
+    DRY_RUN: { label: 'Dry Run',  className: 'bg-violet-50 text-violet-700 border-violet-200',    Icon: FlaskConical },
   };
+  return map[status] ?? map.PENDING;
+}
 
-  const handleRunRule = (id: string) => {
-    const rule = automationRules.find(r => r.id === id);
-    toast.success(`Running automation: ${rule?.name}`);
-  };
+// ─── Execution Detail Modal ──────────────────────────────────────────────────
 
-  const handleCreateRule = () => {
-    if (!newRuleName.trim()) {
-      toast.error('Please enter a rule name');
-      return;
-    }
-
-    const newRule: AutomationRule = {
-      id: Date.now().toString(),
-      name: newRuleName,
-      description: newRuleDescription,
-      trigger: 'Manual trigger',
-      action: 'Custom action',
-      status: 'draft',
-      executions: 0,
-      lastRun: 'Never',
-      successRate: 0,
-      category: 'workflow'
-    };
-
-    setAutomationRules(prev => [newRule, ...prev]);
-    setNewRuleName('');
-    setNewRuleDescription('');
-    setIsCreating(false);
-    toast.success('Automation rule created');
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'ai': return <Brain className="w-4 h-4" />;
-      case 'workflow': return <Workflow className="w-4 h-4" />;
-      case 'notification': return <MessageSquare className="w-4 h-4" />;
-      case 'integration': return <LinkIcon className="w-4 h-4" />;
-      default: return <Zap className="w-4 h-4" />;
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'ai': return 'bg-purple-100 text-purple-800';
-      case 'workflow': return 'bg-blue-100 text-blue-800';
-      case 'notification': return 'bg-green-100 text-green-800';
-      case 'integration': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'paused': return 'bg-yellow-100 text-yellow-800';
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+const ExecutionDetailModal: React.FC<{
+  executionId: string;
+  open: boolean;
+  onClose: () => void;
+}> = ({ executionId, open, onClose }) => {
+  const { data, isLoading } = useAutomationExecution(executionId);
+  const replay = useReplayExecution();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center">
-          <Zap className="mr-3 h-7 w-7 text-primary" />
-            Automation Center
-        </h1>
-          <p className="text-muted-foreground mt-1">
-            Intelligent automation that adapts to your workflow patterns
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Import Rules
-          </Button>
-          <Button onClick={() => setIsCreating(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Automation
-          </Button>
-        </div>
-      </div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ActivitySquare className="h-5 w-5 text-muted-foreground" />
+            Execution Detail
+          </DialogTitle>
+          <DialogDescription>
+            Step-by-step audit trail for this automation run
+          </DialogDescription>
+        </DialogHeader>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="rules">Rules</TabsTrigger>
-          <TabsTrigger value="builder">Builder</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-blue-600">Active Rules</p>
-                    <p className="text-2xl font-bold">{automationRules.filter(r => r.status === 'active').length}</p>
-                    <p className="text-xs text-muted-foreground">+2 this week</p>
-                  </div>
-                  <Zap className="w-8 h-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-green-600">Total Executions</p>
-                    <p className="text-2xl font-bold">{automationRules.reduce((sum, rule) => sum + rule.executions, 0)}</p>
-                    <p className="text-xs text-muted-foreground">+15% from last month</p>
-                  </div>
-                  <TrendingUp className="w-8 h-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-purple-600">Success Rate</p>
-                    <p className="text-2xl font-bold">94%</p>
-                    <p className="text-xs text-muted-foreground">Above target</p>
-                  </div>
-                  <Target className="w-8 h-8 text-purple-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-orange-50 to-red-50 border-orange-200">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-orange-600">Time Saved</p>
-                    <p className="text-2xl font-bold">24h</p>
-                    <p className="text-xs text-muted-foreground">This week</p>
-                  </div>
-                  <Clock className="w-8 h-8 text-orange-600" />
-                </div>
-              </CardContent>
-            </Card>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-
-          {/* AI Suggestions */}
-          <Card className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-blue-50">
-        <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-purple-600" />
-                AI-Powered Automation Suggestions
-              </CardTitle>
-          <CardDescription>
-                Based on your workflow patterns, here are some automation opportunities
-          </CardDescription>
-        </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="p-4 bg-white rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    <span className="font-medium text-sm">Smart Task Prioritization</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Automatically prioritize tasks based on deadlines, dependencies, and team capacity
-                  </p>
-                  <Button size="sm" variant="outline">Create Rule</Button>
-                </div>
-                
-                <div className="p-4 bg-white rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MessageSquare className="w-4 h-4 text-blue-600" />
-                    <span className="font-medium text-sm">Daily Standup Prep</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Generate daily standup summaries with completed tasks and blockers
-                  </p>
-                  <Button size="sm" variant="outline">Create Rule</Button>
-                </div>
-          </div>
-        </CardContent>
-      </Card>
-
-          {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-              <CardTitle>Recent Automation Activity</CardTitle>
-        </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {automationRules.slice(0, 5).map((rule) => (
-                  <div key={rule.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      {getCategoryIcon(rule.category)}
-          <div>
-                        <div className="font-medium text-sm">{rule.name}</div>
-                        <div className="text-xs text-muted-foreground">Last run: {rule.lastRun}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={getStatusColor(rule.status)}>
-                        {rule.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{rule.executions} runs</span>
-                    </div>
+        ) : data ? (
+          <ScrollArea className="flex-1 pr-2">
+            <div className="space-y-4">
+              {/* Header info */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {[
+                  ['Rule', data.rule?.name ?? data.ruleId],
+                  ['Trigger', data.rule?.triggerKey ?? '—'],
+                  ['Duration', formatDuration(data.durationMs)],
+                  ['Started', timeAgo(data.startedAt)],
+                  ['Chain Depth', String(data.chainDepth)],
+                  ['Dry Run', data.isDryRun ? 'Yes' : 'No'],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">{k}</span>
+                    <span className="font-medium truncate">{v}</span>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="rules" className="space-y-6">
-          {isCreating && (
-            <Card className="border-2 border-blue-200">
-              <CardHeader>
-                <CardTitle>Create New Automation Rule</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="rule-name">Rule Name</Label>
-                    <Input
-                      id="rule-name"
-                      value={newRuleName}
-                      onChange={(e) => setNewRuleName(e.target.value)}
-                      placeholder="Enter rule name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rule-category">Category</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="workflow">Workflow</SelectItem>
-                        <SelectItem value="notification">Notification</SelectItem>
-                        <SelectItem value="integration">Integration</SelectItem>
-                        <SelectItem value="ai">AI-Powered</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {data.errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <span className="font-medium">Error: </span>{data.errorMessage}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rule-description">Description</Label>
-                  <Textarea
-                    id="rule-description"
-                    value={newRuleDescription}
-                    onChange={(e) => setNewRuleDescription(e.target.value)}
-                    placeholder="Describe what this automation does"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleCreateRule}>Create Rule</Button>
-                  <Button variant="outline" onClick={() => setIsCreating(false)}>Cancel</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
 
-          <div className="grid gap-4">
-            {automationRules.map((rule) => (
-              <Card key={rule.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-                        {getCategoryIcon(rule.category)}
-                        <div>
-                          <h3 className="font-semibold">{rule.name}</h3>
-                          <p className="text-sm text-muted-foreground">{rule.description}</p>
+              <Separator />
+
+              {/* Step logs */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold">Step Logs ({data.stepLogs?.length ?? 0})</h4>
+                {(data.stepLogs ?? []).map((log) => {
+                  const cfg = statusConfig(log.status);
+                  return (
+                    <div key={log.id} className="border rounded-lg overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-muted/40">
+                        <cfg.Icon className="h-3.5 w-3.5" />
+                        <span className="text-xs font-mono font-medium flex-1">{log.stepKey}</span>
+                        <Badge variant="outline" className={`text-xs ${cfg.className}`}>
+                          {cfg.label}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{formatDuration(log.durationMs)}</span>
+                      </div>
+                      {log.errorMessage && (
+                        <div className="px-3 py-2 text-xs text-red-600 bg-red-50 border-t border-red-100">
+                          {log.errorMessage}
                         </div>
-                      </div>
+                      )}
                     </div>
-                    
-                    <div className="flex items-center gap-4">
-                      <div className="text-right text-sm">
-                        <div className="font-medium">{rule.executions} executions</div>
-                        <div className="text-muted-foreground">{rule.successRate}% success rate</div>
+                  );
+                })}
+                {(!data.stepLogs || data.stepLogs.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No step logs recorded</p>
+                )}
+              </div>
             </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={getCategoryColor(rule.category)}>
-                          {rule.category}
-                        </Badge>
-                        <Badge variant="outline" className={getStatusColor(rule.status)}>
-                          {rule.status}
-                        </Badge>
-          </div>
+          </ScrollArea>
+        ) : null}
 
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleToggleRule(rule.id)}
-                        >
-                          {rule.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRunRule(rule.id)}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 grid gap-2 md:grid-cols-2 text-sm">
-          <div>
-                      <span className="font-medium">Trigger: </span>
-                      <span className="text-muted-foreground">{rule.trigger}</span>
-                    </div>
-              <div>
-                      <span className="font-medium">Action: </span>
-                      <span className="text-muted-foreground">{rule.action}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="builder" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Workflow className="w-5 h-5 text-blue-600" />
-                Visual Automation Builder
-              </CardTitle>
-              <CardDescription>
-                Drag and drop interface to create complex automation workflows
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="min-h-[400px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <GitBranch className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">Visual Workflow Builder</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create sophisticated automation workflows with our drag-and-drop interface
-                  </p>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Start Building
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Workflow Templates</CardTitle>
-                <CardDescription>Pre-built automation templates for common scenarios</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div className="font-medium">Sprint Planning Automation</div>
-                  <div className="text-sm text-muted-foreground">Automatically create sprint tasks from backlog</div>
-                </div>
-                <div className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div className="font-medium">Bug Triage Workflow</div>
-                  <div className="text-sm text-muted-foreground">Auto-assign bugs based on severity and component</div>
-                </div>
-                <div className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div className="font-medium">Release Pipeline</div>
-                  <div className="text-sm text-muted-foreground">Automated testing and deployment workflow</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Custom Scripts</CardTitle>
-                <CardDescription>Write custom automation logic with JavaScript</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="// Write your custom automation script here
-function onTaskCreated(task) {
-  if (task.priority === 'high') {
-    notify.team('High priority task created');
-  }
-}"
-                  className="font-mono text-sm min-h-[120px]"
-                />
-                <div className="flex gap-2">
-                  <Button size="sm">
-                    <Play className="w-4 h-4 mr-1" />
-                    Test Script
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Download className="w-4 h-4 mr-1" />
-                    Save
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Automation Performance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">Success Rate</span>
-                      <span className="text-sm text-muted-foreground">94%</span>
-                    </div>
-                    <Progress value={94} className="h-2" />
-                  </div>
-                  
-              <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">Execution Speed</span>
-                      <span className="text-sm text-muted-foreground">1.2s avg</span>
-                    </div>
-                    <Progress value={85} className="h-2" />
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">Error Rate</span>
-                      <span className="text-sm text-muted-foreground">2.1%</span>
-                    </div>
-                    <Progress value={21} className="h-2" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Time Savings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600 mb-2">24.5 hours</div>
-                  <div className="text-sm text-muted-foreground mb-4">Saved this week</div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="font-medium">Daily Average</div>
-                      <div className="text-muted-foreground">3.5 hours</div>
-                    </div>
-                    <div>
-                      <div className="font-medium">Monthly Total</div>
-                      <div className="text-muted-foreground">98 hours</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Automation Insights</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="p-4 bg-blue-50 rounded-lg text-center">
-                  <BarChart3 className="w-8 h-8 mx-auto mb-2 text-blue-600" />
-                  <div className="font-semibold">Most Used</div>
-                  <div className="text-sm text-muted-foreground">Auto-assign tasks</div>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg text-center">
-                  <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-600" />
-                  <div className="font-semibold">Highest Success</div>
-                  <div className="text-sm text-muted-foreground">Sprint alerts (100%)</div>
-                </div>
-                <div className="p-4 bg-orange-50 rounded-lg text-center">
-                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-orange-600" />
-                  <div className="font-semibold">Needs Attention</div>
-                  <div className="text-sm text-muted-foreground">Code review reminders</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="integrations" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Card className="border-2 border-green-200 bg-green-50">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-green-600 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                  <MessageSquare className="w-6 h-6 text-white" />
-                </div>
-                <h4 className="font-semibold mb-1">Slack</h4>
-                <p className="text-sm text-muted-foreground mb-3">Send notifications and updates</p>
-                <Badge variant="default" className="bg-green-100 text-green-800">Connected</Badge>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-blue-200 bg-blue-50">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-blue-600 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                  <Code className="w-6 h-6 text-white" />
-                </div>
-                <h4 className="font-semibold mb-1">GitHub</h4>
-                <p className="text-sm text-muted-foreground mb-3">Sync with repositories and PRs</p>
-                <Badge variant="default" className="bg-blue-100 text-blue-800">Connected</Badge>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-purple-200 bg-purple-50">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-purple-600 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-white" />
-                </div>
-                <h4 className="font-semibold mb-1">Jira</h4>
-                <p className="text-sm text-muted-foreground mb-3">Sync issues and project data</p>
-                <Badge variant="default" className="bg-purple-100 text-purple-800">Connected</Badge>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-orange-200 bg-orange-50">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-orange-600 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                  <Mail className="w-6 h-6 text-white" />
-                </div>
-                <h4 className="font-semibold mb-1">Email</h4>
-                <p className="text-sm text-muted-foreground mb-3">Send automated email notifications</p>
-                <Badge variant="default" className="bg-orange-100 text-orange-800">Connected</Badge>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-gray-200 bg-gray-50">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-gray-600 rounded-lg mx-auto mb-3 flex items-center justify-center">
-                  <Calendar className="w-6 h-6 text-white" />
-            </div>
-                <h4 className="font-semibold mb-1">Google Calendar</h4>
-                <p className="text-sm text-muted-foreground mb-3">Sync deadlines and meetings</p>
-                <Badge variant="outline">Not Connected</Badge>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 cursor-pointer transition-colors">
-              <CardContent className="p-6 text-center">
-                <Plus className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-                <h4 className="font-semibold mb-1">Add Integration</h4>
-                <p className="text-sm text-muted-foreground">Connect more tools</p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Webhook Configuration</CardTitle>
-              <CardDescription>
-                Set up webhooks to trigger automations from external systems
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="webhook-url">Webhook URL</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input id="webhook-url" value="https://api.agileflow.com/webhooks/abc123" readOnly className="font-mono" />
-                    <Button size="sm" variant="outline">Copy</Button>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="webhook-secret">Secret Key</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input id="webhook-secret" value="sk_live_..." readOnly className="font-mono" />
-                    <Button size="sm" variant="outline">Regenerate</Button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <Button variant="outline">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Documentation
-                </Button>
-                <Button variant="outline">
-                  <Eye className="w-4 h-4 mr-2" />
-                  Test Webhook
-                </Button>
-                <Button variant="outline">
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  View Logs
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => replay.mutate({ id: executionId, dryRun: true })}
+            disabled={replay.isPending}
+          >
+            <FlaskConical className="h-4 w-4 mr-2" />
+            Replay (Dry Run)
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => replay.mutate({ id: executionId, dryRun: false })}
+            disabled={replay.isPending}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Replay
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
-export default AutomationsPage;
+// ─── Rule Form (Create / Edit) in a Sheet ────────────────────────────────────
+
+interface RuleFormProps {
+  open: boolean;
+  onClose: () => void;
+  rule?: AutomationRule | null;
+}
+
+const DEFAULT_ACTION: ActionLeaf = {
+  type: 'action',
+  key: 'notification.create',
+  params: { recipients: 'assignees', title: 'Automation triggered', message: '{{entityId}} was updated.' },
+};
+
+const RuleFormSheet: React.FC<RuleFormProps> = ({ open, onClose, rule }) => {
+  const createRule = useCreateRule();
+  const updateRule = useUpdateRule();
+  const dryRun = useDryRunRule();
+
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [triggerKey, setTriggerKey] = useState<TriggerKey>('task.status.changed');
+  const [triggerParams, setTriggerParams] = useState('{}');
+  const [actions, setActions] = useState<ActionLeaf[]>([{ ...DEFAULT_ACTION }]);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Sync state when editing
+  React.useEffect(() => {
+    if (open && rule) {
+      setName(rule.name);
+      setDescription(rule.description ?? '');
+      setTriggerKey(rule.triggerKey as TriggerKey);
+      setTriggerParams(rule.triggerParams ? JSON.stringify(rule.triggerParams, null, 2) : '{}');
+      const existing = (rule.steps ?? []).filter((s): s is ActionLeaf => s.type === 'action');
+      setActions(existing.length ? existing : [{ ...DEFAULT_ACTION }]);
+    } else if (open && !rule) {
+      setName('');
+      setDescription('');
+      setTriggerKey('task.status.changed');
+      setTriggerParams('{}');
+      setActions([{ ...DEFAULT_ACTION }]);
+      setStep(1);
+    }
+  }, [open, rule]);
+
+  const addAction = () =>
+    setActions((prev) => [...prev, { type: 'action', key: 'notification.create', params: {} }]);
+
+  const removeAction = (i: number) =>
+    setActions((prev) => prev.filter((_, idx) => idx !== i));
+
+  const updateActionKey = (i: number, key: ActionKey) =>
+    setActions((prev) => prev.map((a, idx) => idx === i ? { ...a, key } : a));
+
+  const updateActionParams = (i: number, raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+      setActions((prev) => prev.map((a, idx) => idx === i ? { ...a, params: parsed } : a));
+    } catch {/* keep previous on parse error */}
+  };
+
+  const buildPayload = (): CreateRuleDto | null => {
+    if (!name.trim()) { toast.error('Rule name is required'); return null; }
+    let parsedTriggerParams: Record<string, unknown> = {};
+    try { parsedTriggerParams = JSON.parse(triggerParams); } catch { toast.error('Trigger params must be valid JSON'); return null; }
+    return {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      triggerKey,
+      triggerParams: parsedTriggerParams,
+      steps: actions,
+      isActive: true,
+    };
+  };
+
+  const handleSave = async () => {
+    const payload = buildPayload();
+    if (!payload) return;
+    try {
+      if (rule) {
+        await updateRule.mutateAsync({ id: rule.id, ...payload });
+        toast.success('Rule updated successfully');
+      } else {
+        await createRule.mutateAsync(payload);
+        toast.success('Automation rule created!');
+      }
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to save rule');
+    }
+  };
+
+  const handleDryRun = async () => {
+    if (!rule) { toast.info('Save the rule first, then dry-run it'); return; }
+    try {
+      const r = await dryRun.mutateAsync({ id: rule.id });
+      toast.success(`Dry run dispatched — ${r.executionIds.length} execution(s) queued`);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Dry run failed');
+    }
+  };
+
+  const isSaving = createRule.isPending || updateRule.isPending;
+
+  const STEPS = ['Trigger', 'Actions', 'Details'] as const;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+        {/* Header */}
+        <SheetHeader className="px-6 py-5 border-b shrink-0">
+          <SheetTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-amber-500" />
+            {rule ? 'Edit Automation Rule' : 'New Automation Rule'}
+          </SheetTitle>
+          <SheetDescription>
+            Define when this automation triggers and what actions it performs
+          </SheetDescription>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-1 pt-2">
+            {STEPS.map((label, i) => {
+              const s = (i + 1) as 1 | 2 | 3;
+              const active = step === s;
+              const done = step > s;
+              return (
+                <React.Fragment key={label}>
+                  <button
+                    onClick={() => setStep(s)}
+                    className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full transition-colors ${
+                      active ? 'bg-primary text-primary-foreground' :
+                      done   ? 'bg-emerald-100 text-emerald-700' :
+                               'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    <span className="font-bold">{done ? '✓' : s}</span>
+                    {label}
+                  </button>
+                  {i < STEPS.length - 1 && (
+                    <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </SheetHeader>
+
+        {/* Body */}
+        <ScrollArea className="flex-1 px-6 py-5">
+
+          {/* ── Step 1: Trigger ─────────────────────────────────────────── */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Choose a trigger event</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {TRIGGER_KEYS.map((key) => {
+                  const meta = TRIGGER_META[key];
+                  const active = triggerKey === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setTriggerKey(key)}
+                      className={`text-left p-3 rounded-lg border transition-all ${
+                        active
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/40 hover:bg-muted/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${meta.color}`}>
+                          {meta.label}
+                        </span>
+                        {active && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{meta.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {triggerKey === 'task.status.changed' && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs font-semibold">Filter: Only fire when status changes to</Label>
+                  <Select
+                    value={(JSON.parse(triggerParams || '{}').toStatus) ?? '__any__'}
+                    onValueChange={(v) =>
+                      setTriggerParams(v === '__any__' ? '{}' : JSON.stringify({ toStatus: v }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Any status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">Any status</SelectItem>
+                      {['todo', 'in_progress', 'review', 'done', 'cancelled'].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <Button className="w-full mt-4" onClick={() => setStep(2)}>
+                Next: Actions <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          )}
+
+          {/* ── Step 2: Actions ─────────────────────────────────────────── */}
+          {step === 2 && (
+            <div className="space-y-5">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Configure actions ({actions.length})
+              </h3>
+
+              {actions.map((action, i) => (
+                <div key={i} className="border rounded-lg overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
+                    <span className="text-base">
+                      {ACTION_META[action.key]?.icon ?? '⚡'}
+                    </span>
+                    <span className="text-sm font-medium flex-1">Action {i + 1}</span>
+                    {actions.length > 1 && (
+                      <button
+                        onClick={() => removeAction(i)}
+                        className="text-destructive hover:text-destructive/70 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-3">
+                    <div>
+                      <Label className="text-xs mb-1.5 block">Action type</Label>
+                      <Select value={action.key} onValueChange={(v) => updateActionKey(i, v as ActionKey)}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACTION_KEYS.map((k) => (
+                            <SelectItem key={k} value={k}>
+                              <span className="flex items-center gap-2">
+                                <span>{ACTION_META[k].icon}</span>
+                                {ACTION_META[k].label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">{ACTION_META[action.key]?.description}</p>
+
+                    <div>
+                      <Label className="text-xs mb-1.5 block">
+                        Parameters (JSON)
+                        <span className="text-muted-foreground ml-1 font-normal">
+                          — use {'{{entityId}}'}, {'{{title}}'} etc.
+                        </span>
+                      </Label>
+                      <Textarea
+                        className="font-mono text-xs min-h-[90px]"
+                        defaultValue={JSON.stringify(action.params, null, 2)}
+                        onBlur={(e) => updateActionParams(i, e.target.value)}
+                        placeholder='{"recipients": "assignees", "title": "{{title}} done"}'
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <Button variant="outline" size="sm" className="w-full" onClick={addAction}>
+                <Plus className="h-4 w-4 mr-2" /> Add another action
+              </Button>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
+                  ← Back
+                </Button>
+                <Button onClick={() => setStep(3)} className="flex-1">
+                  Next: Details <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: Details ─────────────────────────────────────────── */}
+          {step === 3 && (
+            <div className="space-y-5">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Name & description</h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="rule-name">Rule name *</Label>
+                <Input
+                  id="rule-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Notify team when task is done"
+                  className="h-9"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="rule-desc">Description</Label>
+                <Textarea
+                  id="rule-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What does this automation do?"
+                  rows={3}
+                />
+              </div>
+
+              {/* Summary */}
+              <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p>
+                <div className="flex items-center gap-2 flex-wrap text-sm">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TRIGGER_META[triggerKey]?.color}`}>
+                    {getTriggerLabel(triggerKey)}
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {actions.map((a, i) => (
+                    <React.Fragment key={i}>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+                        {ACTION_META[a.key]?.icon} {getActionLabel(a.key)}
+                      </span>
+                      {i < actions.length - 1 && <span className="text-muted-foreground">+</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
+                  ← Back
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving || !name.trim()}
+                  className="flex-1"
+                >
+                  {isSaving ? (
+                    <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Saving…</>
+                  ) : (
+                    <>{rule ? 'Update Rule' : 'Create Rule'}</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </ScrollArea>
+
+        {/* Footer dry-run shortcut */}
+        {rule && (
+          <SheetFooter className="px-6 py-4 border-t shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDryRun}
+              disabled={dryRun.isPending}
+              className="w-full text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+            >
+              <FlaskConical className="h-4 w-4 mr-2" />
+              Dry-run this rule (no side effects)
+            </Button>
+          </SheetFooter>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+};
+
+// ─── Rule Card ────────────────────────────────────────────────────────────────
+
+const RuleCard: React.FC<{
+  rule: AutomationRule;
+  onEdit: () => void;
+}> = ({ rule, onEdit }) => {
+  const toggleRule = useToggleRule();
+  const deleteRule = useDeleteRule();
+  const dryRun = useDryRunRule();
+
+  const handleToggle = () =>
+    toggleRule.mutate(
+      { id: rule.id, isActive: !rule.isActive },
+      {
+        onSuccess: () =>
+          toast.success(rule.isActive ? 'Rule paused' : 'Rule activated'),
+        onError: () => toast.error('Failed to toggle rule'),
+      }
+    );
+
+  const handleDelete = () =>
+    deleteRule.mutate(rule.id, {
+      onSuccess: () => toast.success('Rule deleted'),
+      onError: () => toast.error('Failed to delete rule'),
+    });
+
+  const handleDryRun = () =>
+    dryRun.mutate(
+      { id: rule.id },
+      {
+        onSuccess: (r) =>
+          toast.success(`Dry-run dispatched — ${r.executionIds.length} execution(s) queued`),
+        onError: () => toast.error('Dry run failed'),
+      }
+    );
+
+  const triggerMeta = TRIGGER_META[rule.triggerKey as TriggerKey];
+  const steps = (rule.steps ?? []) as Array<{ type: string; key?: string }>;
+  const actionSteps = steps.filter((s) => s.type === 'action' && s.key);
+
+  return (
+    <Card className={`group transition-all hover:shadow-md ${!rule.isActive ? 'opacity-70' : ''}`}>
+      <CardContent className="p-5">
+        <div className="flex items-start gap-4">
+          {/* Icon */}
+          <div className={`mt-0.5 p-2.5 rounded-lg shrink-0 ${rule.isActive ? 'bg-amber-100' : 'bg-muted'}`}>
+            <Zap className={`h-4 w-4 ${rule.isActive ? 'text-amber-600' : 'text-muted-foreground'}`} />
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="font-semibold truncate">{rule.name}</span>
+              <Badge
+                variant="outline"
+                className={rule.isActive
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-xs'
+                  : 'bg-gray-50 text-gray-500 border-gray-200 text-xs'
+                }
+              >
+                {rule.isActive ? '● Active' : '○ Paused'}
+              </Badge>
+              {rule._count?.executions != null && (
+                <span className="text-xs text-muted-foreground">
+                  {rule._count.executions} run{rule._count.executions !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {rule.description && (
+              <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
+                {rule.description}
+              </p>
+            )}
+
+            {/* Flow pills */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {triggerMeta && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${triggerMeta.color}`}>
+                  {triggerMeta.label}
+                </span>
+              )}
+              {actionSteps.length > 0 && (
+                <>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  {actionSteps.slice(0, 3).map((s, i) => (
+                    <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold border border-blue-100">
+                      {ACTION_META[s.key as ActionKey]?.icon} {getActionLabel(s.key as ActionKey)}
+                    </span>
+                  ))}
+                  {actionSteps.length > 3 && (
+                    <span className="text-xs text-muted-foreground">+{actionSteps.length - 3} more</span>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <span>v{rule.version}</span>
+              <span>·</span>
+              <span>{timeAgo(rule.createdAt)}</span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleToggle}
+              disabled={toggleRule.isPending}
+              title={rule.isActive ? 'Pause' : 'Activate'}
+            >
+              {rule.isActive
+                ? <Pause className="h-4 w-4 text-amber-600" />
+                : <Play  className="h-4 w-4 text-emerald-600" />
+              }
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={onEdit}>
+                  <Edit2 className="h-4 w-4 mr-2" /> Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDryRun}>
+                  <FlaskConical className="h-4 w-4 mr-2" /> Dry Run
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// ─── Execution History Tab ────────────────────────────────────────────────────
+
+const ExecutionHistoryTab: React.FC = () => {
+  const { data: executions = [], isLoading, refetch } = useAutomationExecutions(undefined, 100);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const grouped = useMemo(() => {
+    const map: Record<string, { ruleId: string; name: string; executions: AutomationExecution[] }> = {};
+    for (const e of executions) {
+      const key = e.ruleId;
+      if (!map[key]) {
+        map[key] = { ruleId: key, name: e.rule?.name ?? key, executions: [] };
+      }
+      map[key].executions.push(e);
+    }
+    return Object.values(map);
+  }, [executions]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-muted-foreground">{executions.length} total executions</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : executions.length === 0 ? (
+        <div className="text-center py-16">
+          <History className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+          <p className="text-sm font-medium">No executions yet</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Executions appear here after a rule is triggered or dry-run
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {executions.map((e) => {
+            const cfg = statusConfig(e.status);
+            return (
+              <button
+                key={e.id}
+                onClick={() => setSelectedId(e.id)}
+                className="w-full text-left border rounded-lg px-4 py-3 hover:bg-muted/40 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <cfg.Icon className={`h-4 w-4 shrink-0 ${e.status === 'RUNNING' ? 'animate-spin' : ''}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium truncate">
+                        {e.rule?.name ?? e.ruleId}
+                      </span>
+                      <Badge variant="outline" className={`text-xs ${cfg.className}`}>
+                        {cfg.label}
+                      </Badge>
+                      {e.isDryRun && (
+                        <Badge variant="outline" className="text-xs bg-violet-50 text-violet-600 border-violet-200">
+                          Dry Run
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                      <span>{timeAgo(e.createdAt)}</span>
+                      <span>·</span>
+                      <span>{formatDuration(e.durationMs)}</span>
+                      {e.errorMessage && (
+                        <>
+                          <span>·</span>
+                          <span className="text-red-500 truncate max-w-[200px]">{e.errorMessage}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedId && (
+        <ExecutionDetailModal
+          executionId={selectedId}
+          open={!!selectedId}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
+    </>
+  );
+};
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function AutomationsPage() {
+  const { data: rules = [], isLoading, isError, refetch } = useAutomationRules();
+  const [search, setSearch] = useState('');
+  const [filterTrigger, setFilterTrigger] = useState<string>('all');
+  const [editingRule, setEditingRule] = useState<AutomationRule | null | undefined>(undefined);
+  // undefined = closed, null = create new, AutomationRule = edit existing
+
+  const filteredRules = useMemo(() => {
+    let list = rules;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.description?.toLowerCase().includes(q) ||
+          r.triggerKey.includes(q)
+      );
+    }
+    if (filterTrigger !== 'all') {
+      list = list.filter((r) => r.triggerKey === filterTrigger);
+    }
+    return list;
+  }, [rules, search, filterTrigger]);
+
+  const stats = useMemo(() => ({
+    total: rules.length,
+    active: rules.filter((r) => r.isActive).length,
+    totalRuns: rules.reduce((sum, r) => sum + (r._count?.executions ?? 0), 0),
+  }), [rules]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* ── Page header ───────────────────────────────────────────────── */}
+      <div className="border-b bg-background px-6 py-5">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Zap className="h-6 w-6 text-amber-500" />
+              Automations
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Automate repetitive work with event-driven rules
+            </p>
+          </div>
+          <Button onClick={() => setEditingRule(null)} className="gap-2">
+            <Plus className="h-4 w-4" /> New Rule
+          </Button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 mt-5">
+          {[
+            { label: 'Total Rules',  value: stats.total,    icon: ListChecks,    color: 'text-primary' },
+            { label: 'Active',       value: stats.active,   icon: ActivitySquare,color: 'text-emerald-600' },
+            { label: 'Total Runs',   value: stats.totalRuns,icon: History,       color: 'text-blue-600' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="border shadow-none bg-muted/30">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Icon className={`h-5 w-5 shrink-0 ${color}`} />
+                <div>
+                  <p className="text-xl font-bold">{value}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Tabs ──────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden">
+        <Tabs defaultValue="rules" className="h-full flex flex-col">
+          <div className="px-6 border-b">
+            <TabsList className="h-10 bg-transparent gap-0 p-0">
+              <TabsTrigger
+                value="rules"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent h-10"
+              >
+                <ListChecks className="h-4 w-4 mr-1.5" /> Rules
+              </TabsTrigger>
+              <TabsTrigger
+                value="history"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent h-10"
+              >
+                <History className="h-4 w-4 mr-1.5" /> Execution History
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* ── Rules tab ───────────────────────────────────────────────── */}
+          <TabsContent value="rules" className="flex-1 overflow-hidden m-0">
+            <ScrollArea className="h-full">
+              <div className="px-6 py-5 space-y-5">
+                {/* Search + filter */}
+                <div className="flex gap-3 flex-wrap">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9 h-9"
+                      placeholder="Search rules…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <Select value={filterTrigger} onValueChange={setFilterTrigger}>
+                    <SelectTrigger className="h-9 w-48">
+                      <SelectValue placeholder="All triggers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All triggers</SelectItem>
+                      {TRIGGER_KEYS.map((k) => (
+                        <SelectItem key={k} value={k}>{TRIGGER_META[k].label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Rule list */}
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-3 text-sm text-muted-foreground">Loading rules…</span>
+                  </div>
+                ) : isError ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <AlertCircle className="h-8 w-8 text-destructive" />
+                    <p className="text-sm font-medium">Failed to load automation rules</p>
+                    <Button variant="outline" size="sm" onClick={() => refetch()}>
+                      <RefreshCw className="h-4 w-4 mr-2" /> Retry
+                    </Button>
+                  </div>
+                ) : filteredRules.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <div className="p-4 bg-amber-50 rounded-full">
+                      <Zap className="h-8 w-8 text-amber-500" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-lg">
+                        {search || filterTrigger !== 'all'
+                          ? 'No rules match your search'
+                          : 'No automation rules yet'}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                        {search || filterTrigger !== 'all'
+                          ? 'Try adjusting your filters'
+                          : 'Create your first rule to automate tasks, notifications, and more'}
+                      </p>
+                    </div>
+                    {!search && filterTrigger === 'all' && (
+                      <Button onClick={() => setEditingRule(null)} className="gap-2">
+                        <Plus className="h-4 w-4" /> Create your first rule
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredRules.map((rule) => (
+                      <RuleCard
+                        key={rule.id}
+                        rule={rule}
+                        onEdit={() => setEditingRule(rule)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── History tab ─────────────────────────────────────────────── */}
+          <TabsContent value="history" className="flex-1 overflow-hidden m-0">
+            <ScrollArea className="h-full">
+              <div className="px-6 py-5">
+                <ExecutionHistoryTab />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* ── Create/Edit sheet ─────────────────────────────────────────── */}
+      <RuleFormSheet
+        open={editingRule !== undefined}
+        onClose={() => setEditingRule(undefined)}
+        rule={editingRule}
+      />
+    </div>
+  );
+}

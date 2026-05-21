@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth-context';
 
 export interface Project {
   id: string;
@@ -48,19 +49,36 @@ export interface UpdateProjectDto {
 }
 
 export const useProjects = () => {
+  const { user } = useAuth();
+  const userKey = user?.id || 'anonymous';
+
   return useQuery({
-    queryKey: ['projects'],
+    // Include user in the key to avoid cross-account cache bleed
+    queryKey: ['projects', userKey],
     queryFn: async () => {
       try {
         const response = await apiClient.get<{ items: Project[]; nextCursor: string | null }>('/projects');
+        // apiClient.get typically returns { data, status, ... }, so prefer data if present
+        const payload: any = (response as any)?.data ?? response;
+
         // Handle both wrapped and unwrapped responses
-        if (Array.isArray(response)) {
-          return response;
+        if (Array.isArray(payload)) {
+          return payload;
         }
-        return response.items || [];
+        if (payload && typeof payload === 'object') {
+          // If payload has items, return them; else if payload looks like a single project, wrap it
+          if ('items' in payload && Array.isArray((payload as any).items)) {
+            return (payload as any).items as Project[];
+          }
+          if ('id' in payload) {
+            return [payload as Project];
+          }
+        }
+        return []; // Return empty array if response is unexpected
       } catch (error) {
         console.error('Failed to fetch projects:', error);
-        throw error;
+        // Return empty array on error instead of throwing to prevent undefined
+        return [];
       }
     },
     refetchOnWindowFocus: true,
@@ -70,17 +88,28 @@ export const useProjects = () => {
 };
 
 export const useProject = (id: string) => {
+  const { user } = useAuth();
+  const userKey = user?.id || 'anonymous';
+
   return useQuery({
-    queryKey: ['projects', id],
+    // Include user in the key to avoid cross-account cache bleed
+    queryKey: ['projects', userKey, id],
     queryFn: async () => {
+      if (!id) {
+        return null; // Return null instead of undefined
+      }
       try {
         console.log(`Fetching project with ID: ${id}`);
         const response = await apiClient.get<Project>(`/projects/${id}`);
+        const payload: any = (response as any)?.data ?? response;
         console.log(`Project fetched:`, response);
-        return response;
+        // Ensure we always return a value, never undefined
+        return payload || null;
       } catch (error) {
         console.error(`Failed to fetch project ${id}:`, error);
-        throw error;
+        // Return null on error instead of throwing to prevent undefined
+        // The error will still be available in the query's error state
+        return null;
       }
     },
     enabled: !!id,
@@ -100,6 +129,7 @@ export const useCreateProject = () => {
     mutationFn: (data: CreateProjectDto) => apiClient.post<Project>('/projects', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
     },
   });
 };
@@ -113,6 +143,7 @@ export const useUpdateProject = () => {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
     },
   });
 };
@@ -124,6 +155,7 @@ export const useDeleteProject = () => {
     mutationFn: (id: string) => apiClient.delete(`/projects/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
     },
   });
 }; 

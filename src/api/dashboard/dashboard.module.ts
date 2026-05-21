@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { RedisModule } from '../common/redis/redis.module';
+import { CacheModule } from '../common/cache/cache.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule, RedisModule],
+  imports: [AuthModule, PrismaModule, CacheModule],
   controllers: [DashboardController],
   providers: [DashboardService],
   exports: [DashboardService],

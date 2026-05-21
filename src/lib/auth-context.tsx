@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import { safeSetItem, safeGetItem, safeRemoveItem, clearAuthStorage } from './storage-utils';
 
 interface User {
   id: string;
@@ -27,8 +28,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const accessToken = localStorage.getItem('accessToken');
-        const savedUser = localStorage.getItem('user');
+        const accessToken = safeGetItem('accessToken');
+        const savedUser = safeGetItem('user');
         
         if (accessToken && savedUser) {
           try {
@@ -42,10 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Auth initialization error:', error);
             // Clear invalid session and cache
             queryClient.clear();
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            localStorage.removeItem('tenantId');
+            clearAuthStorage();
           }
         } else {
           // No saved session - clear cache to be safe
@@ -68,11 +66,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const response = await api.auth.login({ email, password });
       
-      // Store tokens and user
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      localStorage.setItem('tenantId', response.user.tenantId);
+      // Store tokens and user with safe storage
+      const success = 
+        safeSetItem('accessToken', response.accessToken) &&
+        safeSetItem('refreshToken', response.refreshToken) &&
+        safeSetItem('user', JSON.stringify(response.user)) &&
+        safeSetItem('tenantId', response.user.tenantId);
+      
+      if (!success) {
+        throw new Error('Failed to store authentication data. Please clear your browser storage and try again.');
+      }
       
       setUser(response.user);
     } catch (error: any) {
@@ -91,10 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       queryClient.clear();
       
       // Clear local state
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('tenantId');
+      clearAuthStorage();
       setUser(null);
     }
   };

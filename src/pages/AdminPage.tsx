@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useTenantUsers, useWorkspaceStats, useUpdateUser, useResetUserPassword } from '@/hooks/useTenantUsers';
 import {
     Activity,
     AlertTriangle,
@@ -55,76 +56,102 @@ interface SystemMetric {
   trend: 'up' | 'down' | 'stable';
 }
 
+/**
+ * Admin Page Component
+ * 
+ * Comprehensive admin panel for workspace management including:
+ * - User management (list, update, reset password)
+ * - Workspace statistics
+ * - Security settings
+ * - System health monitoring
+ * - Billing and subscription management
+ * 
+ * All data is fetched from real API endpoints with proper error handling.
+ * 
+ * @component
+ */
 const AdminPage: React.FC = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [showApiKey, setShowApiKey] = useState(false);
 
-  // Mock data - in real app, this would come from API
-  const [users] = useState<User[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@company.com',
-      role: 'admin',
-      status: 'active',
-      lastActive: '2 minutes ago',
-      projects: 12,
-      tasks: 45
-    },
-    {
-      id: '2',
-      name: 'Sarah Wilson',
-      email: 'sarah@company.com',
-      role: 'manager',
-      status: 'active',
-      lastActive: '1 hour ago',
-      projects: 8,
-      tasks: 32
-    },
-    {
-      id: '3',
-      name: 'Mike Johnson',
-      email: 'mike@company.com',
-      role: 'member',
-      status: 'inactive',
-      lastActive: '3 days ago',
-      projects: 3,
-      tasks: 18
-    },
-    {
-      id: '4',
-      name: 'Emily Chen',
-      email: 'emily@company.com',
-      role: 'viewer',
-      status: 'pending',
-      lastActive: 'Never',
-      projects: 0,
-      tasks: 0
-    }
-  ]);
+  // Fetch real data from API
+  const { data: usersData, isLoading: usersLoading, error: usersError } = useTenantUsers();
+  const { data: workspaceStatsData, isLoading: statsLoading, error: statsError } = useWorkspaceStats();
+  const updateUserMutation = useUpdateUser();
+  const resetPasswordMutation = useResetUserPassword();
 
-  const systemMetrics: SystemMetric[] = [
-    { name: 'CPU Usage', value: 45, unit: '%', status: 'healthy', trend: 'stable' },
-    { name: 'Memory Usage', value: 72, unit: '%', status: 'warning', trend: 'up' },
-    { name: 'Disk Usage', value: 34, unit: '%', status: 'healthy', trend: 'down' },
-    { name: 'API Response Time', value: 142, unit: 'ms', status: 'healthy', trend: 'stable' },
-    { name: 'Database Connections', value: 23, unit: '', status: 'healthy', trend: 'stable' },
-    { name: 'Active Sessions', value: 156, unit: '', status: 'healthy', trend: 'up' }
-  ];
+  // Transform API data to match component interface
+  const users: User[] = usersData?.users?.map((user: any) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role || 'member',
+    status: user.status || 'active',
+    lastActive: user.lastActive || 'Never',
+    projects: 0, // Will be fetched from user details if needed
+    tasks: 0, // Will be fetched from user details if needed
+  })) || [];
 
-  const workspaceStats = {
-    totalUsers: 24,
-    activeUsers: 18,
-    totalProjects: 45,
-    activeProjects: 32,
-    totalTasks: 1247,
-    completedTasks: 892,
-    storageUsed: 2.4,
+  // Use real workspace stats from API, with fallback defaults
+  const workspaceStats = workspaceStatsData || {
+    totalUsers: 0,
+    activeUsers: 0,
+    totalProjects: 0,
+    activeProjects: 0,
+    totalTasks: 0,
+    completedTasks: 0,
+    storageUsed: 0,
     storageLimit: 10,
-    apiCalls: 12847,
-    apiLimit: 50000
+    apiCalls: 0,
+    apiLimit: 50000,
   };
+
+  // System metrics (simplified - in production, these would come from monitoring service)
+  // For now, we'll use calculated values from workspace stats
+  const systemMetrics: SystemMetric[] = [
+    { 
+      name: 'Active Users', 
+      value: workspaceStats.activeUsers, 
+      unit: '', 
+      status: workspaceStats.activeUsers > 0 ? 'healthy' : 'warning', 
+      trend: 'stable' 
+    },
+    { 
+      name: 'Active Projects', 
+      value: workspaceStats.activeProjects, 
+      unit: '', 
+      status: workspaceStats.activeProjects > 0 ? 'healthy' : 'warning', 
+      trend: 'stable' 
+    },
+    { 
+      name: 'Task Completion Rate', 
+      value: workspaceStats.totalTasks > 0 
+        ? Math.round((workspaceStats.completedTasks / workspaceStats.totalTasks) * 100) 
+        : 0, 
+      unit: '%', 
+      status: workspaceStats.totalTasks > 0 ? 'healthy' : 'warning', 
+      trend: 'stable' 
+    },
+    { 
+      name: 'Storage Usage', 
+      value: workspaceStats.storageLimit > 0 
+        ? Math.round((workspaceStats.storageUsed / workspaceStats.storageLimit) * 100) 
+        : 0, 
+      unit: '%', 
+      status: workspaceStats.storageUsed / workspaceStats.storageLimit < 0.8 ? 'healthy' : 'warning', 
+      trend: 'stable' 
+    },
+    { 
+      name: 'API Usage', 
+      value: workspaceStats.apiLimit > 0 
+        ? Math.round((workspaceStats.apiCalls / workspaceStats.apiLimit) * 100) 
+        : 0, 
+      unit: '%', 
+      status: workspaceStats.apiCalls / workspaceStats.apiLimit < 0.8 ? 'healthy' : 'warning', 
+      trend: 'stable' 
+    },
+  ];
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -154,11 +181,34 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  const handleUserAction = (action: string, userId: string) => {
-    toast({
-      title: "Action Completed",
-      description: `${action} action performed for user ${userId}`,
-    });
+  /**
+   * Handle user actions (update, reset password, etc.)
+   * 
+   * @param action - The action to perform
+   * @param userId - The user ID
+   * @param data - Optional data for the action
+   */
+  const handleUserAction = async (action: string, userId: string, data?: any) => {
+    try {
+      switch (action) {
+        case 'update':
+          if (data) {
+            await updateUserMutation.mutateAsync({ userId, data });
+          }
+          break;
+        case 'reset-password':
+          await resetPasswordMutation.mutateAsync(userId);
+          break;
+        default:
+          toast({
+            title: "Action Completed",
+            description: `${action} action performed for user ${userId}`,
+          });
+      }
+    } catch (error) {
+      // Error handling is done in the mutation hooks
+      console.error('User action error:', error);
+    }
   };
 
   const handleSystemAction = (action: string) => {
@@ -203,20 +253,45 @@ const AdminPage: React.FC = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* Workspace Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Loading State */}
+          {(statsLoading || usersLoading) && (
             <Card>
               <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-                    <p className="text-2xl font-bold">{workspaceStats.totalUsers}</p>
-                    <p className="text-xs text-green-600">+2 this week</p>
-                  </div>
-                  <Users className="h-8 w-8 text-muted-foreground" />
+                <div className="flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading workspace data...</span>
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Error State */}
+          {(statsError || usersError) && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center text-red-600">
+                  <AlertTriangle className="h-6 w-6 mr-2" />
+                  <span className="text-sm">Failed to load workspace data. Please try again.</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Workspace Stats */}
+          {!statsLoading && !statsError && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Total Users</p>
+                      <p className="text-2xl font-bold">{workspaceStats.totalUsers}</p>
+                      <p className="text-xs text-green-600">{workspaceStats.activeUsers} active</p>
+                    </div>
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -234,7 +309,11 @@ const AdminPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Task Completion</p>
-                    <p className="text-2xl font-bold">{Math.round((workspaceStats.completedTasks / workspaceStats.totalTasks) * 100)}%</p>
+                    <p className="text-2xl font-bold">
+                      {workspaceStats.totalTasks > 0 
+                        ? Math.round((workspaceStats.completedTasks / workspaceStats.totalTasks) * 100) 
+                        : 0}%
+                    </p>
                     <p className="text-xs text-green-600">{workspaceStats.completedTasks} of {workspaceStats.totalTasks}</p>
                   </div>
                   <CheckCircle className="h-8 w-8 text-muted-foreground" />
@@ -254,6 +333,7 @@ const AdminPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* System Health */}
           <Card>
@@ -339,68 +419,101 @@ const AdminPage: React.FC = () => {
             </Button>
           </div>
 
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b">
-                    <tr>
-                      <th className="text-left p-4 font-medium">User</th>
-                      <th className="text-left p-4 font-medium">Role</th>
-                      <th className="text-left p-4 font-medium">Status</th>
-                      <th className="text-left p-4 font-medium">Last Active</th>
-                      <th className="text-left p-4 font-medium">Projects</th>
-                      <th className="text-left p-4 font-medium">Tasks</th>
-                      <th className="text-left p-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b">
-                        <td className="p-4">
-                          <div>
-                            <p className="font-medium">{user.name}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <Badge className={getRoleColor(user.role)}>
-                            {user.role}
-                          </Badge>
-                        </td>
-                        <td className="p-4">
-                          <Badge className={getStatusColor(user.status)}>
-                            {user.status}
-                          </Badge>
-                        </td>
-                        <td className="p-4 text-sm text-muted-foreground">{user.lastActive}</td>
-                        <td className="p-4 text-sm">{user.projects}</td>
-                        <td className="p-4 text-sm">{user.tasks}</td>
-                        <td className="p-4">
-                          <div className="flex space-x-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleUserAction('Edit user', user.id)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleUserAction('Delete user', user.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Loading State */}
+          {usersLoading && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading users...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Error State */}
+          {usersError && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center text-red-600">
+                  <AlertTriangle className="h-6 w-6 mr-2" />
+                  <span className="text-sm">Failed to load users. Please try again.</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Users Table */}
+          {!usersLoading && !usersError && (
+            <Card>
+              <CardContent className="p-0">
+                {users.length === 0 ? (
+                  <div className="p-6 text-center text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-sm">No users found in this workspace.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b">
+                        <tr>
+                          <th className="text-left p-4 font-medium">User</th>
+                          <th className="text-left p-4 font-medium">Role</th>
+                          <th className="text-left p-4 font-medium">Status</th>
+                          <th className="text-left p-4 font-medium">Last Active</th>
+                          <th className="text-left p-4 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((user) => (
+                          <tr key={user.id} className="border-b hover:bg-muted/50 transition-colors">
+                            <td className="p-4">
+                              <div>
+                                <p className="font-medium">{user.name}</p>
+                                <p className="text-sm text-muted-foreground">{user.email}</p>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge className={getRoleColor(user.role)}>
+                                {user.role}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              <Badge className={getStatusColor(user.status)}>
+                                {user.status}
+                              </Badge>
+                            </td>
+                            <td className="p-4 text-sm text-muted-foreground">{user.lastActive}</td>
+                            <td className="p-4">
+                              <div className="flex space-x-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleUserAction('Edit user', user.id)}
+                                  title="Edit user"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleUserAction('reset-password', user.id)}
+                                  title="Reset password"
+                                  disabled={resetPasswordMutation.isPending}
+                                >
+                                  <Key className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="security" className="space-y-6">

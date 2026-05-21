@@ -42,5 +42,5 @@ EXPOSE 3000
 
 ENV PORT 3000
 
-CMD ["node", "dist-api/main.js"]
+CMD ["node", "dist-api/api/main.js"]
 

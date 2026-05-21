@@ -1,73 +1,102 @@
-# Welcome to your Lovable project
+# Agile Flow Verse
 
-## Project info
+Agile Flow Verse is a full-stack, multi-tenant work management platform for agile teams.  
+It combines project planning, task execution, sprint workflows, notes, automation, analytics, and reporting in one system.
 
-**URL**: https://lovable.dev/projects/6f05f431-6b6b-4bdc-b763-afc49d455225
+## Highlights
 
-## How can I edit this code?
+- Multi-tenant architecture with tenant-scoped access controls
+- Auth with JWT, refresh token flow, OAuth providers, and optional 2FA
+- Scrum and delivery workflows (projects, tasks, backlog, sprints, epics, kanban, gantt)
+- Collaboration features (notes, comments, notifications, calendar)
+- Automation engine with rule execution tracking
+- AI-assisted capabilities for planning, estimation, and summaries
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+### Frontend
+- React 19 + TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Tailwind CSS + Radix UI components
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/6f05f431-6b6b-4bdc-b763-afc49d455225) and start prompting.
+### Backend
+- NestJS 10 (modular architecture)
+- Prisma ORM
+- PostgreSQL
+- Redis (cache/rate limiting/idempotency support)
+- Socket.IO (real-time updates)
+- Swagger/OpenAPI docs
 
-Changes made via Lovable will be committed automatically to this repo.
+### Infrastructure
+- Docker / Docker Compose
+- Kafka and outbox support in backend modules
 
-**Use your preferred IDE**
+## Repository Structure
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- `src/` - Frontend application
+- `src/api/` - NestJS backend API
+- `src/shared/` - Shared types and DTO schemas
+- `prisma/` - Database schema and migrations
+- `scripts/` - Data migration and maintenance scripts
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Getting Started
 
-Follow these steps:
-
+### 1) Install dependencies
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 2) Configure environment
+Copy `env.example` to `.env` and update values for your machine.
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 3) Start local infrastructure (recommended)
+```sh
+docker-compose up -d postgres redis
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 4) Generate Prisma client and run migrations
+```sh
+npx prisma generate
+npx prisma migrate dev
+```
+
+### 5) Run frontend and backend
+In one terminal:
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+In another terminal:
+```sh
+npm run api:dev
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Frontend runs on `http://localhost:5173` and backend on `http://localhost:3000` by default.
 
-**Use GitHub Codespaces**
+## API Docs
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+When running in non-production mode, Swagger UI is available at:
 
-## What technologies are used for this project?
+- `http://localhost:3000/v1/docs`
 
-This project is built with:
+## Testing
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```sh
+npm test
+npm run test:coverage
+```
 
-## How can I deploy this project?
+## Full Stack via Docker
 
-Simply open [Lovable](https://lovable.dev/projects/6f05f431-6b6b-4bdc-b763-afc49d455225) and click on Share -> Publish.
+To run most services with one command:
 
-## Can I connect a custom domain to my Lovable project?
+```sh
+docker-compose up -d
+```
 
-Yes, you can!
+## Notes
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- This repository currently contains active feature work and migration scripts.
+- Review pending changes before production deployment and keep secrets in `.env` only.

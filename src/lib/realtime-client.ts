@@ -51,6 +51,14 @@ class RealtimeClient {
         resolve();
       });
 
+      this.socket.on('reconnect', (attemptNumber: number) => {
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        console.log(`[Realtime] Reconnected after ${attemptNumber} attempts`);
+        // Emit custom reconnect event for handlers
+        this.handleEvent('reconnect' as RealtimeEvent, { attemptNumber });
+      });
+
       this.socket.on('connected', (data) => {
         console.log('[Realtime] Authenticated', data);
       });

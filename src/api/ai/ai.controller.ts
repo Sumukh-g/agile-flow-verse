@@ -47,7 +47,7 @@ export class AiController {
     @Body() body: { noteIds: string[] },
     @Request() req: any,
   ) {
-    const result = await this.aiService.runSummarizerAgent({
+    const result = await this.aiService.runSummarizerAgent(req.user.tenantId, {
       type: 'notes',
       ids: body.noteIds,
     });

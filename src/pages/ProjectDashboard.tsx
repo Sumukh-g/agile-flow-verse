@@ -11,6 +11,8 @@ import ProjectPagesView from "@/components/projects/ProjectPagesView";
 import ProjectReportsView from "@/components/projects/ProjectReportsView";
 import ProjectTasksList from "@/components/projects/ProjectTasksList";
 import ProjectTimelineView from "@/components/projects/ProjectTimelineView";
+import { ProjectMembersView } from "@/components/projects/ProjectMembersView";
+import FinanceBoard from "@/components/finance/FinanceBoard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +25,7 @@ import {
     CheckSquare,
     ClipboardList,
     Clock,
+    DollarSign,
     FileText,
     FormInput,
     Layers,
@@ -274,7 +277,7 @@ const ProjectDashboard = () => {
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-6 lg:grid-cols-14 mb-4 h-auto p-1">
+        <TabsList className="grid grid-cols-6 lg:grid-cols-16 mb-4 h-auto p-1">
           <TabsTrigger value="summary" className="flex items-center gap-1 text-xs">
             <BarChart3 className="h-3 w-3" />
             Summary
@@ -319,6 +322,10 @@ const ProjectDashboard = () => {
             <Users className="h-3 w-3" />
             All work
           </TabsTrigger>
+          <TabsTrigger value="members" className="flex items-center gap-1 text-xs">
+            <Users className="h-3 w-3" />
+            Members
+          </TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-1 text-xs">
             <BarChart3 className="h-3 w-3" />
             Reports
@@ -330,6 +337,10 @@ const ProjectDashboard = () => {
           <TabsTrigger value="issuetracker" className="flex items-center gap-1 text-xs">
             <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 7l-1.5 1.5M5 7l1.5 1.5M12 3v2m0 14v2m7-7h2m-18 0h2m15.07-4.93l-1.41 1.41M6.34 17.66l-1.41-1.41M17.66 17.66l-1.41-1.41M6.34 6.34l-1.41 1.41"/><circle cx="12" cy="12" r="7"/></svg>
             Issue Tracker
+          </TabsTrigger>
+          <TabsTrigger value="finance" className="flex items-center gap-1 text-xs">
+            <DollarSign className="h-3 w-3" />
+            Finance
           </TabsTrigger>
         </TabsList>
         
@@ -540,6 +551,10 @@ const ProjectDashboard = () => {
           <ProjectAllWorkView projectId={projectId} />
         </TabsContent>
         
+        <TabsContent value="members">
+          <ProjectMembersView projectId={projectId} />
+        </TabsContent>
+        
         <TabsContent value="reports">
           <ProjectReportsView projectId={projectId} />
         </TabsContent>
@@ -550,6 +565,10 @@ const ProjectDashboard = () => {
         
         <TabsContent value="issuetracker">
           <ProjectIssueTracker projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="finance">
+          <FinanceBoard projectId={projectId} projectName={displayProject.name} />
         </TabsContent>
       </Tabs>
     </div>

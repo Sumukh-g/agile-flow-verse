@@ -71,10 +71,11 @@ export class CreateTaskDto {
   @Type(() => Number)
   actualHours?: number;
 
-  @ApiProperty({ description: 'Project ID', example: 'cmhxzdxo60009kn2al64xkxiu' })
+  @ApiPropertyOptional({ description: 'Project ID (optional for personal tasks)', example: 'cmhxzdxo60009kn2al64xkxiu' })
+  @IsOptional()
   @IsString()
   @IsCuid()
-  projectId!: string;
+  projectId?: string;
 
   @ApiPropertyOptional({ 
     description: 'User IDs assigned to this task', 
@@ -211,10 +212,9 @@ export class TaskQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by project ID' })
+  @ApiPropertyOptional({ description: 'Filter by project ID. Use "personal" to filter personal tasks (no project)' })
   @IsOptional()
   @IsString()
-  @IsCuid()
   projectId?: string;
 
   @ApiPropertyOptional({ 

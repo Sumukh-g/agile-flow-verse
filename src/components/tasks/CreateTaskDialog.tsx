@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useCreateTask } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
+import { User } from 'lucide-react';
 
 interface CreateTaskDialogProps {
   onTaskCreate?: () => void; // Optional callback
-  projectId?: string; // Required project ID
+  projectId?: string; // Optional project ID (can be undefined for personal tasks)
   statusColumn?: string;
 }
 
@@ -71,17 +72,14 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, proje
       return;
     }
 
-    const finalProjectId = selectedProjectId || projectId;
-    if (!finalProjectId) {
-      toast.error("Please select a project");
-      return;
-    }
+    // Allow personal tasks (no projectId) or project tasks
+    const finalProjectId = selectedProjectId === 'personal' ? undefined : (selectedProjectId || projectId);
 
     try {
       await createTask.mutateAsync({
         title,
         description,
-        projectId: finalProjectId,
+        projectId: finalProjectId, // Can be undefined for personal tasks
         status: mapStatus(status),
         priority: mapPriority(priority),
         dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
@@ -143,21 +141,33 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ onTaskCreate, proje
             />
           </div>
 
-          {!projectId && (
-            <div className="space-y-2">
-              <Label htmlFor="project">Project *</Label>
-              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                <SelectTrigger id="project">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="project">Project</Label>
+            <Select 
+              value={selectedProjectId || (projectId || 'personal')} 
+              onValueChange={(value) => {
+                setSelectedProjectId(value === 'personal' ? 'personal' : value);
+              }}
+            >
+              <SelectTrigger id="project">
+                <SelectValue placeholder="Select project or personal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="personal">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    <span>Personal</span>
+                  </div>
+                </SelectItem>
+                {projects.map(project => (
+                  <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Select "Personal" to create a task without a project
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

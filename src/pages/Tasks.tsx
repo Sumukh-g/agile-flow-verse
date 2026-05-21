@@ -24,6 +24,9 @@ import TaskReportView from '@/components/tasks/TaskReportView';
 import TaskDetailsPanel from '@/components/tasks/TaskDetailsPanel';
 import { toast } from 'sonner';
 import { useTasks, Task as ApiTask } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { User } from 'lucide-react';
 
 // Task data
 const INITIAL_TASKS = {
@@ -157,9 +160,13 @@ const Tasks = () => {
   ]);
   const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
   
   // Fetch tasks from API
-  const { data: apiTasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: apiTasks = [], isLoading: tasksLoading } = useTasks(
+    selectedProjectFilter === 'all' ? undefined : selectedProjectFilter
+  );
+  const { data: projects = [] } = useProjects();
   
   // Transform API tasks to local format for compatibility
   const tasksByStatus = React.useMemo(() => {
@@ -369,6 +376,27 @@ const Tasks = () => {
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
+          {/* Project Filter */}
+          <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tasks</SelectItem>
+              <SelectItem value="personal">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  <span>Personal Tasks</span>
+                </div>
+              </SelectItem>
+              {projects.map(project => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           {selectedTasks.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

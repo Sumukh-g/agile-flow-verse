@@ -1,5 +1,10 @@
--- AlterTable
-ALTER TABLE "notifications" ALTER COLUMN "updatedAt" DROP DEFAULT;
+-- AlterTable (only if notifications table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications') THEN
+        ALTER TABLE "notifications" ALTER COLUMN "updatedAt" DROP DEFAULT;
+    END IF;
+END$$;
 
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN     "password" TEXT;

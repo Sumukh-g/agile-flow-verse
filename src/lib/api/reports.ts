@@ -42,6 +42,32 @@ export const reportsApi = {
       responseType: format === 'csv' ? 'text' : 'json',
     });
   },
+
+  async getProjectSummary(projectId: string) {
+    return apiClient.get(`/reports/projects/${projectId}/summary`);
+  },
+
+  async generateEmailReport(projectId: string, recipients: string[], reportType: 'summary' | 'full' = 'summary', format: 'html' = 'html') {
+    return apiClient.post(`/reports/projects/${projectId}/email`, {
+      recipients,
+      reportType,
+      format,
+    });
+  },
+
+  async generateComprehensiveReport(projectId: string, options: {
+    category?: string;
+    type?: string;
+    dataSource?: string;
+    includeTasks?: boolean;
+    includeIssues?: boolean;
+    includeApprovals?: boolean;
+    includeTeam?: boolean;
+    includeBudget?: boolean;
+    includeTimeTracking?: boolean;
+  }) {
+    return apiClient.post(`/reports/projects/${projectId}/generate`, options);
+  },
 };
 
 

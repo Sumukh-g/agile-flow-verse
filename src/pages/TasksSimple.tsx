@@ -25,7 +25,9 @@ const TasksSimple: React.FC = () => {
     const matchesSearch =
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProject = filterProject === 'all' || task.projectId === filterProject;
+    const matchesProject = 
+      filterProject === 'all' || 
+      (filterProject === 'personal' ? !task.projectId : task.projectId === filterProject);
     const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
     return matchesSearch && matchesProject && matchesStatus;
   });
@@ -76,7 +78,8 @@ const TasksSimple: React.FC = () => {
     }
   };
 
-  const getProjectName = (projectId: string) => {
+  const getProjectName = (projectId?: string) => {
+    if (!projectId) return 'Personal Task';
     const project = projects.find((p) => p.id === projectId);
     return project?.name || 'Unknown Project';
   };
@@ -123,7 +126,8 @@ const TasksSimple: React.FC = () => {
             <SelectValue placeholder="All Projects" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="all">All Tasks</SelectItem>
+            <SelectItem value="personal">Personal Tasks</SelectItem>
             {projects.map((project) => (
               <SelectItem key={project.id} value={project.id}>
                 {project.name}

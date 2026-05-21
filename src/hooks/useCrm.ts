@@ -32,6 +32,7 @@ export function useCreateCrmClient() {
       queryClient.invalidateQueries({ queryKey: crmKeys.clients() });
       queryClient.invalidateQueries({ queryKey: crmKeys.projects() });
       queryClient.invalidateQueries({ queryKey: crmKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('Client created');
     },
   });
@@ -91,6 +92,7 @@ export function useCreateCrmProject() {
       queryClient.invalidateQueries({ queryKey: crmKeys.projects() });
       queryClient.invalidateQueries({ queryKey: crmKeys.clients() });
       queryClient.invalidateQueries({ queryKey: crmKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('CRM project created');
     },
   });
@@ -106,6 +108,7 @@ export function useUpdateCrmProject() {
       queryClient.invalidateQueries({ queryKey: crmKeys.clients() });
       queryClient.invalidateQueries({ queryKey: crmKeys.deals() });
       queryClient.invalidateQueries({ queryKey: crmKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('CRM project updated');
     },
   });
@@ -142,6 +145,7 @@ export function useCreateCrmDeal() {
       queryClient.invalidateQueries({ queryKey: crmKeys.clients() });
       queryClient.invalidateQueries({ queryKey: crmKeys.projects() });
       queryClient.invalidateQueries({ queryKey: crmKeys.summary() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('Deal created');
     },
   });

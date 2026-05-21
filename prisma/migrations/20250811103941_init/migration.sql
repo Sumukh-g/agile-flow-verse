@@ -1,6 +1,23 @@
 -- Enable extensions (must be first for vector type)
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: These require superuser privileges. If running as non-superuser,
+-- run setup-extensions.sql as postgres superuser first, or skip these lines.
+-- The extensions will be created automatically if they don't exist and user has privileges.
+
+-- Try to create pg_stat_statements extension (optional, for performance monitoring)
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Could not create pg_stat_statements extension (optional): %', SQLERRM;
+END $$;
+
+-- Try to create vector extension (optional, for embeddings - may not be installed)
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS vector;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Could not create vector extension (optional, may not be installed): %', SQLERRM;
+END $$;
 
 -- CreateTable
 CREATE TABLE "tenants" (
@@ -153,7 +170,6 @@ CREATE TABLE "notes" (
     "tenantId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "embedding" vector,
 
     CONSTRAINT "notes_pkey" PRIMARY KEY ("id")
 );
@@ -384,15 +400,25 @@ ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_tenantId_fkey" FOREIGN KEY (
 -- AddForeignKey
 ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "agents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Add vector column to notes if missing
+-- Add vector column to notes if missing (only if vector extension is available)
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'notes' AND column_name = 'embedding'
+  -- Check if vector extension exists
+  IF EXISTS (
+    SELECT 1 FROM pg_extension WHERE extname = 'vector'
   ) THEN
-    ALTER TABLE notes ADD COLUMN embedding vector(1536);
+    -- Check if column doesn't exist
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'notes' AND column_name = 'embedding'
+    ) THEN
+      ALTER TABLE notes ADD COLUMN embedding vector(1536);
+    END IF;
+  ELSE
+    RAISE NOTICE 'Vector extension not available, skipping embedding column creation';
   END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Could not add embedding column (vector extension may not be installed): %', SQLERRM;
 END$$;
 
 -- Enable RLS for tenant-scoped tables

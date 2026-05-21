@@ -9,8 +9,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { safeSetItem } from "@/lib/storage-utils";
+import { OAuthButton } from "@/components/auth/OAuthButton";
+import { getAvailableOAuthProviders } from "@/lib/oauth";
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
@@ -25,6 +29,7 @@ const SignUp: React.FC = () => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const availableProviders = getAvailableOAuthProviders();
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -84,11 +89,18 @@ const SignUp: React.FC = () => {
         tenantName: 'My Company', // Optional tenant name
       });
 
-      // Store tokens
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      localStorage.setItem('tenantId', response.user.tenantId);
+      // Store tokens with safe storage (handles quota errors)
+      const storageSuccess = 
+        safeSetItem('accessToken', response.accessToken) &&
+        safeSetItem('refreshToken', response.refreshToken) &&
+        safeSetItem('user', JSON.stringify(response.user)) &&
+        safeSetItem('tenantId', response.user.tenantId);
+
+      if (!storageSuccess) {
+        toast.error("Account created but failed to save session. Please clear your browser storage and try logging in.");
+        navigate('/login');
+        return;
+      }
 
       toast.success("Account created successfully!");
       
@@ -98,36 +110,6 @@ const SignUp: React.FC = () => {
       console.error('Signup error:', error);
       const message = error?.response?.data?.message || error?.message || "Signup failed";
       toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoSignup = async () => {
-    setLoading(true);
-    
-    try {
-      // Create a demo user
-      const mockUser = {
-        id: Date.now().toString(),
-        name: 'Demo User',
-        email: 'demo@example.com',
-        roles: ['user']
-      };
-      
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('tenantId', 'dev');
-      
-      // Update the auth context
-      setUser(mockUser);
-      
-      toast.success("Demo account created! Redirecting to dashboard...");
-      
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1000);
-    } catch (error) {
-      toast.error("Demo signup failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -214,18 +196,28 @@ const SignUp: React.FC = () => {
                 {loading ? "Creating account..." : "Create account"}
               </Button>
             </form>
-            
-            <div className="mt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleDemoSignup}
-                disabled={loading}
-              >
-                {loading ? "Creating account..." : "Demo Signup (Skip Registration)"}
-              </Button>
-            </div>
+
+            {/* OAuth Providers */}
+            {availableProviders.length > 0 && (
+              <>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-muted-foreground">
+                      Or continue with
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {availableProviders.map((provider) => (
+                    <OAuthButton key={provider} provider={provider} />
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
             <div className="text-sm text-center text-muted-foreground">

@@ -60,7 +60,7 @@ export class StorageController {
   @ApiOperation({ summary: 'Get attachment metadata' })
   @ApiResponse({ status: 200, description: 'Attachment metadata retrieved successfully' })
   async getAttachment(@Param('id') id: string, @Request() req: any) {
-    return this.storageService.getAttachment(req.user.tenantId, id);
+    return this.storageService.getAttachment(req.user.tenantId, req.user.userId, id);
   }
 
   @Get('attachments/:id/download')
@@ -73,6 +73,7 @@ export class StorageController {
   ) {
     const { attachment, stream } = await this.storageService.getAttachmentFile(
       req.user.tenantId,
+      req.user.userId,
       id,
     );
 
@@ -119,7 +120,7 @@ export class StorageController {
   @ApiOperation({ summary: 'Delete attachment' })
   @ApiResponse({ status: 200, description: 'Attachment deleted successfully' })
   async deleteAttachment(@Param('id') id: string, @Request() req: any) {
-    return this.storageService.deleteAttachment(req.user.tenantId, id);
+    return this.storageService.deleteAttachment(req.user.tenantId, req.user.userId, id);
   }
 
   @Get('stats')

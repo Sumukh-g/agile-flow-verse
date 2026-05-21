@@ -24,7 +24,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    const tenantId = (req.headers['x-tenant-id'] as string) || 'unknown';
+    const tenantId = req.user?.tenantId || 'unknown';
     const redisKey = `idem:${tenantId}:${keyHeader}`;
 
     return from(this.handleIdempotency(redisKey, next, res));

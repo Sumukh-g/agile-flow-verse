@@ -1,25 +1,34 @@
+/**
+ * Header Component
+ * 
+ * Responsive header with hamburger menu for mobile sidebar toggle.
+ */
+
 import { Button } from '@/components/ui/button';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useAuth } from '@/lib/auth-context';
 import {
-    Bell,
-    Briefcase,
-    CheckSquare,
-    LogOut,
-    Menu,
-    PlusCircle,
-    Search,
-    StickyNote,
-    User
+  Bell,
+  Briefcase,
+  CheckSquare,
+  LogOut,
+  Menu,
+  PanelLeft,
+  PanelLeftClose,
+  PlusCircle,
+  Search,
+  StickyNote,
+  User,
+  X
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -27,27 +36,28 @@ import { toast } from 'sonner';
 
 interface HeaderProps {
   toggleMobileSidebar: () => void;
+  toggleDesktopSidebar: () => void;
+  isMobileSidebarOpen: boolean;
+  isMobile: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
-  const { setOpen, open } = useSidebar();
+export const Header: React.FC<HeaderProps> = ({ 
+  toggleMobileSidebar, 
+  isMobileSidebarOpen,
+}) => {
+  const { open, setOpen } = useSidebar();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   
-  // Sample notifications
   const notifications = [
     { id: 1, title: "Project assigned", description: "You've been assigned to Website Redesign project", time: "5 minutes ago" },
     { id: 2, title: "New task created", description: "New task 'Create mockup' was created", time: "1 hour ago" },
     { id: 3, title: "Meeting reminder", description: "Team standup in 30 minutes", time: "25 minutes ago" }
   ];
-  
-  // Use setOpen to toggle the sidebar state
-  const toggleSidebar = () => {
-    setOpen(!open);
-  };
   
   const handleLogout = () => {
     logout();
@@ -57,7 +67,6 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
 
   const handleCreateItem = (type: string) => {
     setCreateMenuOpen(false);
-    
     switch (type) {
       case 'task':
         toast.info('Creating new task');
@@ -71,8 +80,6 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
         toast.info('Creating new note');
         navigate('/notes');
         break;
-      default:
-        break;
     }
   };
 
@@ -80,32 +87,43 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       toast.info(`Searching for "${searchQuery}"`);
-      // navigate(`/search?q=${searchQuery}`); // Optional: navigate to a search results page
+      setMobileSearchOpen(false);
     }
   };
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 flex h-16 items-center px-4 md:px-6">
-      <div className="flex items-center gap-2 md:gap-4 w-full">
+    <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 flex h-14 sm:h-16 items-center px-3 sm:px-4 md:px-6 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 md:gap-4 w-full">
+        
+        {/* Mobile Menu Toggle - Only visible on mobile */}
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
+          className="flex-shrink-0 md:hidden"
           onClick={toggleMobileSidebar}
+          aria-label={isMobileSidebarOpen ? 'Close menu' : 'Open menu'}
         >
-          <Menu className="h-5 w-5" />
+          {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         
+        {/* Desktop Sidebar Toggle - Only visible on desktop */}
         <Button
           variant="ghost"
           size="icon"
-          className="hidden md:flex"
-          onClick={toggleSidebar}
+          className="flex-shrink-0 hidden md:flex"
+          onClick={() => setOpen(!open)}
+          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          <Menu className="h-5 w-5" />
+          {open ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
         </Button>
 
-        <div className="flex-1 max-w-md">
+        {/* Mobile Logo */}
+        <Link to="/dashboard" className="font-bold text-lg text-primary flex-shrink-0 md:hidden">
+          AgileFlow
+        </Link>
+
+        {/* Desktop Search Bar */}
+        <div className="hidden md:block flex-1 max-w-md">
           <form onSubmit={handleSearch} className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -113,18 +131,39 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-9"
             />
           </form>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Spacer for mobile */}
+        <div className="flex-1 md:hidden" />
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          
+          {/* Mobile Search Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="flex-shrink-0 md:hidden"
+            onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+
           {/* Create Menu */}
           <DropdownMenu open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="icon" className="flex-shrink-0 md:hidden">
+                <PlusCircle className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="hidden md:flex flex-shrink-0">
                 <PlusCircle className="h-4 w-4 mr-2" />
-                Create
+                <span>Create</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -148,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
           {/* Notifications */}
           <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative flex-shrink-0">
                 <Bell className="h-5 w-5" />
                 {notifications.length > 0 && (
                   <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
@@ -157,13 +196,13 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuContent align="end" className="w-72 sm:w-80">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {notifications.map((notification) => (
                 <DropdownMenuItem key={notification.id} className="flex flex-col items-start p-3">
-                  <div className="font-medium">{notification.title}</div>
-                  <div className="text-sm text-muted-foreground">{notification.description}</div>
+                  <div className="font-medium text-sm">{notification.title}</div>
+                  <div className="text-xs text-muted-foreground">{notification.description}</div>
                   <div className="text-xs text-muted-foreground mt-1">{notification.time}</div>
                 </DropdownMenuItem>
               ))}
@@ -173,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="flex-shrink-0">
                 <User className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -206,6 +245,23 @@ export const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Mobile Search Bar - Expandable */}
+      {mobileSearchOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border-b p-3 z-20 md:hidden">
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+              autoFocus
+            />
+          </form>
+        </div>
+      )}
     </header>
   );
 };

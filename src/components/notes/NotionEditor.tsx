@@ -68,19 +68,34 @@ const NotionEditor: React.FC<NotionEditorProps> = ({ page, onUpdatePage }) => {
   const lastSavedRef = useRef<string>('');
   const isUserTypingRef = useRef(false);
   const lastPageContentRef = useRef<string>('');
+  const lastPageIdRef = useRef<string>('');
 
-  // Initialize content from page
+  // Reset content when page ID changes (new page selected)
   useEffect(() => {
-    if (editorRef.current && !content) {
-      editorRef.current.innerHTML = page.content || '';
-      setContent(page.content || '');
-      lastPageContentRef.current = page.content || '';
+    // If page ID changed, reset everything for the new page
+    if (page.id !== lastPageIdRef.current) {
+      const newPageContent = page.content || '';
+      
+      // Reset all refs and state for the new page
+      lastPageIdRef.current = page.id;
+      lastPageContentRef.current = newPageContent;
+      lastSavedRef.current = newPageContent;
+      isUserTypingRef.current = false;
+      
+      // Reset editor content
+      if (editorRef.current) {
+        editorRef.current.innerHTML = newPageContent;
+      }
+      
+      // Reset content state
+      setContent(newPageContent);
     }
-  }, [page.id]);
+  }, [page.id, page.content]);
 
-  // Sync content to editor when page changes externally (but not when user is typing)
+  // Sync content to editor when page content changes externally (but not when user is typing or page ID changed)
   useEffect(() => {
-    if (editorRef.current && !isUserTypingRef.current) {
+    // Skip if this is a page ID change (handled above) or user is typing
+    if (page.id === lastPageIdRef.current && editorRef.current && !isUserTypingRef.current) {
       const currentContent = editorRef.current.innerHTML;
       // Only update if page content changed externally and differs from current
       if (page.content !== lastPageContentRef.current && page.content !== currentContent) {
@@ -89,7 +104,7 @@ const NotionEditor: React.FC<NotionEditorProps> = ({ page, onUpdatePage }) => {
         lastPageContentRef.current = page.content || '';
       }
     }
-  }, [page.content]);
+  }, [page.content, page.id]);
 
   // Auto-save functionality
   useEffect(() => {

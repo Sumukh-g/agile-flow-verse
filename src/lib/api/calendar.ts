@@ -11,30 +11,60 @@ import {
 
 export const calendarApi = {
   /**
-   * Get calendar events
+   * Get calendar events with filtering
    */
-  async getEvents(startDate?: string, endDate?: string, projectId?: string): Promise<CalendarEvent[]> {
-    // Backend exposes /v1/calendar/events for general feed and /v1/calendar/projects endpoints for project calendars
-    const raw = projectId
-      ? await apiClient.get<any[]>(`/calendar/projects/${projectId}`, { params: { startDate, endDate } })
-      : await apiClient.get<any[]>(`/calendar/events`, { params: { startDate, endDate } });
-    // Normalize payload to CalendarEvent (backend may return start/end instead of startDate/endDate)
+  async getEvents(
+    startDate?: string,
+    endDate?: string,
+    projectId?: string,
+    scope: 'personal' | 'all' | 'project' | 'overlay' | 'global' | 'section' = 'global',
+  ): Promise<CalendarEvent[]> {
+    const params: any = {
+      from: startDate,
+      to: endDate,
+    };
+    
+    // Map frontend scopes to backend scopes
+    if (scope === 'personal') {
+      params.scope = 'global'; // Backend uses global but filters projectId: null
+      params.personalOnly = true; // Send as boolean, not string
+    } else if (scope === 'all') {
+      params.scope = 'global'; // All projects but exclude personal
+      params.excludePersonal = true; // Send as boolean, not string
+    } else if (scope === 'overlay') {
+      params.scope = 'global'; // Include everything (no filters)
+    } else if (scope === 'project' && projectId) {
+      params.scope = 'project';
+      params.projectId = projectId;
+    } else {
+      params.scope = scope || 'global';
+      if (projectId) params.projectId = projectId;
+    }
+
+    const raw = await apiClient.get<any[]>(`/calendar/events`, { params });
+    
+    // Normalize payload to CalendarEvent
     return (raw || []).map((e: any) => ({
       id: e.id,
       title: e.title,
-      description: e.description,
-      startDate: e.start || e.startDate,
-      endDate: e.end || e.endDate,
+      description: e.description || '',
+      startDate: e.startAt || e.start || e.startDate,
+      endDate: e.endAt || e.end || e.endDate,
       allDay: !!e.allDay,
       projectId: e.projectId || e.project?.id,
-      taskId:
-        e.taskId ||
-        (typeof e.id === 'string' && e.id.startsWith('task-') ? e.id.substring('task-'.length) : undefined),
+      sectionId: e.sectionId,
+      type: e.type || 'OTHER',
+      sourceType: e.sourceType,
+      sourceId: e.sourceId,
+      taskId: e.sourceType === 'TASK' ? e.sourceId : undefined,
+      issueId: e.sourceType === 'ISSUE' ? e.sourceId : undefined,
+      noteId: e.sourceType === 'NOTE' ? e.sourceId : undefined,
       tenantId: e.tenantId || '',
       createdAt: e.createdAt || '',
       updatedAt: e.updatedAt || '',
+      reminderMinutesBefore: e.reminderMinutesBefore,
       project: e.project,
-      task: e.task,
+      creator: e.creator,
     }));
   },
 
@@ -42,28 +72,35 @@ export const calendarApi = {
    * Get a single event by ID
    */
   async getEvent(id: string): Promise<CalendarEvent> {
-    return apiClient.get(`/calendar/${id}`);
+    return apiClient.get(`/calendar/events/${id}`);
   },
 
   /**
    * Create a new calendar event
    */
   async createEvent(data: CreateCalendarEventDto): Promise<CalendarEvent> {
-    return apiClient.post('/calendar', data);
+    return apiClient.post('/calendar/events', data);
   },
 
   /**
    * Update an existing calendar event
    */
   async updateEvent(id: string, data: UpdateCalendarEventDto): Promise<CalendarEvent> {
-    return apiClient.put(`/calendar/${id}`, data);
+    return apiClient.patch(`/calendar/events/${id}`, data);
   },
 
   /**
    * Delete a calendar event
    */
   async deleteEvent(id: string): Promise<void> {
-    return apiClient.delete(`/calendar/${id}`);
+    return apiClient.delete(`/calendar/events/${id}`);
+  },
+
+  /**
+   * Legacy: Get project calendar events (backward compatibility)
+   */
+  async getProjectEvents(projectId: string, startDate?: string, endDate?: string): Promise<CalendarEvent[]> {
+    return this.getEvents(startDate, endDate, projectId, 'project');
   },
 };
 

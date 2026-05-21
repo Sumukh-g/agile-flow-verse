@@ -10,20 +10,40 @@ import { api, type CalendarEvent, type CreateCalendarEventDto, type UpdateCalend
 export const calendarKeys = {
   all: ['calendar'] as const,
   lists: () => [...calendarKeys.all, 'list'] as const,
-  list: (filters: { startDate?: string; endDate?: string; projectId?: string }) =>
+  list: (filters: { startDate?: string; endDate?: string; projectId?: string; scope?: string }) =>
     [...calendarKeys.lists(), filters] as const,
   details: () => [...calendarKeys.all, 'detail'] as const,
   detail: (id: string) => [...calendarKeys.details(), id] as const,
 };
 
 /**
- * Get calendar events
+ * Get calendar events with scope support
  */
-export function useCalendarEvents(startDate?: string, endDate?: string, projectId?: string) {
+export function useCalendarEvents(
+  startDate?: string, 
+  endDate?: string, 
+  projectId?: string,
+  scope: 'personal' | 'all' | 'project' | 'overlay' = 'all'
+) {
   return useQuery({
-    queryKey: calendarKeys.list({ startDate, endDate, projectId }),
-    queryFn: () => api.calendar.getEvents(startDate, endDate, projectId),
+    queryKey: calendarKeys.list({ startDate, endDate, projectId, scope }),
+    queryFn: () => {
+      if (scope === 'personal') {
+        // Personal events only (projectId is null)
+        return api.calendar.getEvents(startDate, endDate, undefined, 'personal');
+      } else if (scope === 'project' && projectId) {
+        // Specific project events
+        return api.calendar.getEvents(startDate, endDate, projectId, 'project');
+      } else if (scope === 'all') {
+        // All projects events (but not personal)
+        return api.calendar.getEvents(startDate, endDate, undefined, 'all');
+      } else {
+        // Overlay: combine personal + all projects
+        return api.calendar.getEvents(startDate, endDate, undefined, 'overlay');
+      }
+    },
     staleTime: 30000,
+    enabled: scope !== 'project' || !!projectId,
   });
 }
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { requestContext } from '../common/tenant/request-context';
+import { logPrismaQuery } from '../common/query-performance';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -23,10 +24,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     // Query logging (only in development)
     if (process.env.NODE_ENV === 'development') {
-      this.$on('query' as never, (e: any) => {
+      this.$on('query' as never, (e: Prisma.QueryEvent) => {
         if (parseInt(process.env.PRISMA_QUERY_LOG || '0')) {
           this.logger.debug(`Query: ${e.query} - Duration: ${e.duration}ms`);
         }
+        // Log slow queries automatically
+        logPrismaQuery(e);
       });
     }
 

@@ -44,6 +44,21 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BOARD_TEMPLATES, CARD_TEMPLATES } from './KanbanTemplates';
+import { toast } from 'sonner';
+import {
+  useKanbanColumns,
+  useKanbanCards,
+  useCreateKanbanCard,
+  useUpdateKanbanCard,
+  useDeleteKanbanCard,
+  useMoveKanbanCard,
+  useCreateKanbanColumn,
+  useUpdateKanbanColumn,
+  useDeleteKanbanColumn,
+  KanbanCard as ApiKanbanCard,
+  KanbanColumn as ApiKanbanColumn,
+} from '@/hooks/useKanban';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Enhanced Types
 export type KanbanColumn = {
@@ -145,7 +160,6 @@ export type BoardFilter = {
   storyPointsRange: { min?: number; max?: number };
 };
 
-export type BoardView = 'kanban' | 'list' | 'calendar' | 'timeline' | 'analytics' | 'swimlanes';
 
 export type BoardAnalytics = {
   totalCards: number;
@@ -179,26 +193,184 @@ const PRIORITY_COLORS = {
   'Critical': '#dc2626'
 };
 
+/**
+ * KanbanBoard Component
+ * 
+ * A fully-featured Kanban board with:
+ * - Real-time data synchronization across all views
+ * - Drag-and-drop card management
+ * - Column creation, editing, and deletion
+ * - WIP limits and column collapse
+ * - Rich card details with subtasks, comments, and attachments
+ */
 const KanbanBoard: React.FC<{
+  projectId?: string;
   initialColumns?: KanbanColumn[];
   initialCards?: KanbanCard[];
   onExtractToProject?: (cards: KanbanCard[], columns: KanbanColumn[]) => void;
   onExtractToCustomDashboard?: (cards: KanbanCard[], columns: KanbanColumn[]) => void;
   onSaveAsTemplate?: (cards: KanbanCard[], columns: KanbanColumn[]) => void;
 }> = ({
+  projectId,
   initialColumns = DEFAULT_COLUMNS,
   initialCards = [],
   onExtractToProject,
   onExtractToCustomDashboard,
   onSaveAsTemplate
 }) => {
-  // Core State
+  const queryClient = useQueryClient();
+  
+  // Fetch Kanban data from API with automatic refetching
+  const { data: apiColumns = [], isLoading: columnsLoading, error: columnsError } = useKanbanColumns(projectId);
+  const { data: apiCards = [], isLoading: cardsLoading, error: cardsError } = useKanbanCards(projectId);
+
+  // Note: We no longer manually refetch on mount since React Query's refetchOnMount: 'always' 
+  // handles this automatically. Removing the manual refetch prevents potential infinite loops
+  // when refetch functions are recreated on each render.
+  
+  // Mutation hooks
+  const createCard = useCreateKanbanCard();
+  const updateCard = useUpdateKanbanCard();
+  const deleteCard = useDeleteKanbanCard();
+  const moveCard = useMoveKanbanCard();
+  const createColumn = useCreateKanbanColumn();
+  const updateColumn = useUpdateKanbanColumn();
+  const deleteColumn = useDeleteKanbanColumn();
+
+  // Core State - sync with API data
   const [columns, setColumns] = useState<KanbanColumn[]>(initialColumns);
   const [cards, setCards] = useState<KanbanCard[]>(initialCards);
+
+  // Sync columns from API
+  // Use a ref to track the last known good column count to detect incomplete responses
+  const lastColumnCountRef = useRef<number>(0);
+  
+  useEffect(() => {
+    // Only update columns when we have valid API data and we're not in a loading state
+    // This prevents columns from disappearing during refetches
+    if (!columnsLoading && apiColumns && Array.isArray(apiColumns)) {
+      if (apiColumns.length > 0) {
+        const convertedColumns: KanbanColumn[] = apiColumns.map((col: ApiKanbanColumn) => ({
+          id: col.id,
+          name: col.name,
+          color: col.color,
+          position: col.position,
+          wipLimit: col.wipLimit,
+          collapsed: col.collapsed,
+          description: col.description,
+        }));
+        
+        // Sort by position to ensure correct order
+        convertedColumns.sort((a, b) => a.position - b.position);
+        
+        // Defensive update: Check if we're losing columns unexpectedly
+        setColumns(prevColumns => {
+          // If we had columns before and the new data has fewer columns,
+          // it might be an incomplete response - preserve existing columns and merge
+          if (prevColumns.length > 0 && convertedColumns.length < prevColumns.length) {
+            // Fewer columns than before - likely incomplete response or race condition
+            // Merge: keep all existing, add/update from new data
+            const merged = [...prevColumns];
+            const newIds = new Set(convertedColumns.map(c => c.id));
+            
+            convertedColumns.forEach(newCol => {
+              const index = merged.findIndex(c => c.id === newCol.id);
+              if (index >= 0) {
+                merged[index] = newCol; // Update existing
+              } else {
+                merged.push(newCol); // Add new
+              }
+            });
+            
+            merged.sort((a, b) => a.position - b.position);
+            lastColumnCountRef.current = merged.length;
+            console.log('[KanbanBoard] Preserved columns during merge:', {
+              prevCount: prevColumns.length,
+              newCount: convertedColumns.length,
+              mergedCount: merged.length
+            });
+            return merged;
+          }
+          
+          // Normal case: use API data as source of truth
+          // This handles: initial load, complete updates, and adding new columns
+          lastColumnCountRef.current = convertedColumns.length;
+          return convertedColumns;
+        });
+      } else if (apiColumns.length === 0 && projectId) {
+        // Only clear columns if we're sure there are none (not during initial load)
+        setColumns(prevColumns => {
+          // Only clear if we had no columns before and still have none
+          if (prevColumns.length === 0) {
+            // Refetch to get the auto-created columns
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: ['kanban', 'columns', projectId] });
+            }, 1000);
+            return prevColumns; // Keep empty state
+          }
+          // Preserve existing columns if API returns empty (might be a temporary issue)
+          return prevColumns;
+        });
+      }
+    }
+    // Note: During loading, we preserve existing columns to prevent flickering
+  }, [apiColumns, columnsLoading, projectId, queryClient]);
+
+  // Sync cards from API
+  useEffect(() => {
+    if (apiCards && apiCards.length > 0) {
+      const convertedCards: KanbanCard[] = apiCards.map((card: ApiKanbanCard) => ({
+        id: card.id,
+        title: card.title,
+        description: card.description || '',
+        status: card.status,
+        priority: (card.priority as 'Low' | 'Medium' | 'High' | 'Critical') || 'Medium',
+        duration: card.estimatedHours ? Math.ceil(card.estimatedHours / 8) : 1,
+        estimatedHours: card.estimatedHours || 0,
+        actualHours: card.actualHours || 0,
+        dueDate: card.dueDate || '',
+        startDate: card.startDate || card.createdAt,
+        notes: card.description || '',
+        assignee: card.assignees?.[0] || '',
+        assignees: card.assignees || [],
+        labels: card.labels || [],
+        subtasks: card.subtasks || [],
+        checklists: card.checklists || [],
+        attachments: card.attachments || [],
+        comments: card.comments || [],
+        cover: '',
+        dependencies: card.dependencies || [],
+        blockedBy: card.blockedBy || [],
+        blocking: card.blocking || [],
+        recurring: false,
+        watchers: [],
+        votes: 0,
+        voters: [],
+        columnId: card.columnId,
+        archived: card.archived || false,
+        createdAt: card.createdAt,
+        updatedAt: card.updatedAt,
+        createdBy: card.createdBy,
+        customFields: card.customFields || {},
+        timeEntries: [],
+        isTemplate: false,
+        aiSuggestions: [],
+        riskLevel: 'Low',
+        businessValue: 0,
+        storyPoints: 0,
+        testCases: [],
+        acceptanceCriteria: [],
+        definition_of_done: [],
+        position: card.position || 0,
+      }));
+      setCards(convertedCards);
+    } else if (!cardsLoading && (!apiCards || apiCards.length === 0)) {
+      setCards([]);
+    }
+  }, [apiCards, cardsLoading]);
   const [boardTitle, setBoardTitle] = useState('My Kanban Board');
   const [boardStarred, setBoardStarred] = useState(false);
   const [boardDescription, setBoardDescription] = useState('');
-  const [boardView, setBoardView] = useState<BoardView>('kanban');
   
   // Dialog States
   const [showNewCardDialog, setShowNewCardDialog] = useState(false);
@@ -321,7 +493,7 @@ const KanbanBoard: React.FC<{
       suggestions.push("Set a due date to track progress");
     }
     
-    if (card.subtasks.length === 0 && card.description.length > 100) {
+    if ((!card.subtasks || card.subtasks.length === 0) && card.description && card.description.length > 100) {
       suggestions.push("Break this large task into smaller subtasks");
     }
     
@@ -329,7 +501,7 @@ const KanbanBoard: React.FC<{
       suggestions.push("High priority task should be moved to active work");
     }
     
-    if (card.dependencies.length > 0) {
+    if (card.dependencies && card.dependencies.length > 0) {
       suggestions.push("Check if dependencies are completed before starting");
     }
     
@@ -374,72 +546,85 @@ const KanbanBoard: React.FC<{
   };
   
   // Card creation with enhanced features
-  const handleCreateCard = () => {
-    if (!newCard.title || !newCard.columnId) return;
+  const handleCreateCard = async () => {
+    if (!newCard.title || !newCard.columnId || !projectId) {
+      toast.error('Please fill in required fields');
+      return;
+    }
+
+    // Ensure we have columns loaded
+    if (columns.length === 0) {
+      toast.error('Please wait for columns to load');
+      return;
+    }
     
-    const base = { ...CARD_TEMPLATES['task'] };
-    const now = new Date().toISOString();
-    
-    const card: KanbanCard = {
-      id: generateId(),
-      title: newCard.title,
-      description: newCard.description || '',
-      status: newCard.status || base.status,
-      priority: (newCard.priority as any) || 'Medium',
-      duration: typeof newCard.duration === 'number' ? newCard.duration : base.duration,
-      estimatedHours: newCard.estimatedHours || 0,
-      actualHours: 0,
-      dueDate: newCard.dueDate || '',
-      startDate: newCard.startDate || '',
-      notes: newCard.notes || base.notes,
-      assignee: newCard.assignee || '',
-      assignees: newCard.assignees || [],
-      labels: newCard.labels || base.labels,
-      subtasks: [],
-      checklists: [],
-      attachments: [],
-      comments: [],
-      cover: '',
-      dependencies: [],
-      blockedBy: [],
-      blocking: [],
-      recurring: false,
-      watchers: [],
-      votes: 0,
-      voters: [],
-      columnId: newCard.columnId as string,
-      archived: false,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: 'current-user',
-      customFields: {},
-      timeEntries: [],
-      isTemplate: false,
-      aiSuggestions: [],
-      riskLevel: 'Low',
-      businessValue: newCard.businessValue || 0,
-      storyPoints: newCard.storyPoints || 0,
-      epic: newCard.epic,
-      sprint: newCard.sprint,
-      version: newCard.version,
-      component: newCard.component,
-      fixVersion: newCard.fixVersion,
-      environment: newCard.environment,
-      testCases: [],
-      acceptanceCriteria: [],
-      definition_of_done: [],
-      position: cards.filter(c => c.columnId === newCard.columnId).length
-    };
-    
-    // Generate AI suggestions
-    card.aiSuggestions = generateAISuggestions(card);
-    
-    setCards(prev => [...prev, card]);
-    setShowNewCardDialog(false);
-    setNewCard({});
-    
-    // Trigger automation rules
-    triggerAutomationRules('card_created', card);
+    try {
+      // Verify column exists
+      const selectedColumn = columns.find(col => col.id === newCard.columnId);
+      if (!selectedColumn) {
+        toast.error('Selected column not found. Please refresh the page.');
+        return;
+      }
+
+      // Map priority to API format
+      const priorityMap: Record<string, string> = {
+        'Low': 'low',
+        'Medium': 'medium',
+        'High': 'high',
+        'Critical': 'critical'
+      };
+
+      // Map column name to status (fallback if column doesn't have status)
+      let status = 'todo';
+      const columnNameLower = selectedColumn.name.toLowerCase();
+      if (columnNameLower.includes('done') || columnNameLower.includes('complete')) status = 'done';
+      else if (columnNameLower.includes('progress') || columnNameLower.includes('working')) status = 'in-progress';
+      else if (columnNameLower.includes('review')) status = 'review';
+      else if (columnNameLower.includes('blocked') || columnNameLower.includes('backlog')) status = 'blocked';
+      else status = 'todo';
+
+      const base = { ...CARD_TEMPLATES['task'] };
+      
+      await createCard.mutateAsync({
+        projectId,
+        data: {
+          title: newCard.title,
+          columnId: newCard.columnId as string,
+          description: newCard.description || '',
+          status,
+          priority: priorityMap[newCard.priority as string] || 'medium',
+          dueDate: newCard.dueDate ? new Date(newCard.dueDate).toISOString() : undefined,
+          startDate: newCard.startDate ? new Date(newCard.startDate).toISOString() : undefined,
+          estimatedHours: newCard.estimatedHours || 0,
+          assignees: newCard.assignees || [],
+          labels: newCard.labels || base.labels,
+          subtasks: [],
+          checklists: [],
+          attachments: [],
+          comments: [],
+          dependencies: [],
+          blockedBy: [],
+          blocking: [],
+          customFields: {
+            businessValue: newCard.businessValue || 0,
+            storyPoints: newCard.storyPoints || 0,
+            epic: newCard.epic,
+            sprint: newCard.sprint,
+            version: newCard.version,
+            component: newCard.component,
+            fixVersion: newCard.fixVersion,
+            environment: newCard.environment,
+          },
+        },
+      });
+
+      setNewCard({});
+      setShowNewCardDialog(false);
+      // Error toast is handled by the hook
+    } catch (error) {
+      console.error('Failed to create card:', error);
+      // Error toast is handled by the hook
+    }
   };
   
   // Enhanced drag & drop
@@ -447,19 +632,44 @@ const KanbanBoard: React.FC<{
     setDraggedCardId(cardId);
   };
   
-  const onCardDrop = (columnId: string, position?: number) => {
-    if (!draggedCardId) return;
+  const onCardDrop = async (columnId: string, position?: number) => {
+    if (!draggedCardId || !projectId) return;
     
     const card = cards.find(c => c.id === draggedCardId);
     if (!card) return;
     
     const oldColumnId = card.columnId;
+    const newPosition = position ?? cards.filter(c => c.columnId === columnId).length;
     
-    setCards(prev => prev.map(card => 
-      card.id === draggedCardId 
-        ? { ...card, columnId, position: position || 0, updatedAt: new Date().toISOString() }
-        : card
-    ));
+    // Map column ID back to status
+    let newStatus = 'todo';
+    if (columnId === 'todo') newStatus = 'todo';
+    else if (columnId === 'working') newStatus = 'in-progress';
+    else if (columnId === 'review') newStatus = 'review';
+    else if (columnId === 'done') newStatus = 'done';
+    else if (columnId === 'backlog') newStatus = 'blocked';
+    
+    // Update in API using moveCard
+    try {
+      await moveCard.mutateAsync({
+        projectId,
+        cardId: draggedCardId,
+        targetColumnId: columnId,
+        newPosition,
+      });
+      
+      // Also update status if column changed
+      if (oldColumnId !== columnId) {
+        await updateCard.mutateAsync({
+          projectId,
+          cardId: draggedCardId,
+          data: { status: newStatus },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      toast.error('Failed to update task status');
+    }
     
     setDraggedCardId(null);
     
@@ -645,7 +855,7 @@ const KanbanBoard: React.FC<{
       }
       
       // Labels filter
-      if (filters.labels.length > 0 && !filters.labels.some(label => card.labels.includes(label))) {
+      if (filters.labels.length > 0 && (!card.labels || !filters.labels.some(label => card.labels.includes(label)))) {
         return false;
       }
       
@@ -671,17 +881,17 @@ const KanbanBoard: React.FC<{
       }
       
       // Has attachments filter
-      if (filters.hasAttachments && card.attachments.length === 0) {
+      if (filters.hasAttachments && (!card.attachments || card.attachments.length === 0)) {
         return false;
       }
       
       // Has comments filter
-      if (filters.hasComments && card.comments.length === 0) {
+      if (filters.hasComments && (!card.comments || card.comments.length === 0)) {
         return false;
       }
       
       // Has subtasks filter
-      if (filters.hasSubtasks && card.subtasks.length === 0) {
+      if (filters.hasSubtasks && (!card.subtasks || card.subtasks.length === 0)) {
         return false;
       }
       
@@ -690,27 +900,80 @@ const KanbanBoard: React.FC<{
   }, [cards, searchTerm, filters]);
   
   // Column actions
-  const addColumn = () => {
-    if (!newColumnName.trim()) return;
-    const newColumn: KanbanColumn = {
-      id: generateId(),
-      name: newColumnName,
-      color: '#6366f1',
-      position: columns.length,
-      wipLimit: 10
-    };
-    setColumns(prev => [...prev, newColumn]);
-    setNewColumnName('');
+  const handleAddColumn = async () => {
+    if (!newColumnName.trim() || !projectId) return;
+    
+    const columnName = newColumnName.trim();
+    setNewColumnName(''); // Clear input immediately for better UX
+    
+    try {
+      // Don't use optimistic updates - let React Query handle the refetch
+      // This ensures we always have the complete, correct data from the API
+      await createColumn.mutateAsync({
+        projectId,
+        data: {
+          name: columnName,
+          color: '#6366f1',
+          position: columns.length,
+        },
+      });
+      
+      // The mutation's onSuccess will invalidate and refetch columns
+      // The useEffect will then update with all columns including the new one
+      // No need to manually update state here
+    } catch (error) {
+      console.error('Failed to create column:', error);
+      toast.error('Failed to create column');
+    }
   };
   
-  const renameColumn = (id: string, name: string) => {
-    setColumns(prev => prev.map(col => col.id === id ? { ...col, name } : col));
-    setEditingColumnId(null);
+  const handleRenameColumn = async (id: string, name: string) => {
+    if (!projectId) return;
+    try {
+      await updateColumn.mutateAsync({
+        projectId,
+        columnId: id,
+        data: { name },
+      });
+      setEditingColumnId(null);
+    } catch (error) {
+      console.error('Failed to rename column:', error);
+      toast.error('Failed to rename column');
+    }
   };
   
-  const deleteColumn = (id: string) => {
-    setColumns(prev => prev.filter(col => col.id !== id));
-    setCards(prev => prev.filter(card => card.columnId !== id));
+  const handleDeleteColumn = async (id: string) => {
+    if (!projectId) return;
+    
+    // Check if column has cards
+    const columnToDelete = columns.find(col => col.id === id);
+    const cardsInColumn = cards.filter(card => card.columnId === id && !card.archived);
+    
+    if (cardsInColumn.length > 0) {
+      // Ask user what to do with cards
+      const action = confirm(
+        `This column has ${cardsInColumn.length} card(s). Do you want to delete the column and all its cards? Click OK to delete, or Cancel to abort.`
+      );
+      
+      if (!action) {
+        return; // User cancelled
+      }
+      
+      // Optionally, we could move cards to another column instead
+      // For now, we'll delete the column and let the backend handle card deletion
+    }
+    
+    try {
+      // Optimistically remove the column from UI
+      setColumns(prev => prev.filter(col => col.id !== id));
+      
+      await deleteColumn.mutateAsync({ projectId, columnId: id });
+    } catch (error) {
+      console.error('Failed to delete column:', error);
+      // Revert optimistic update on error
+      queryClient.invalidateQueries({ queryKey: ['kanban', 'columns', projectId] });
+      toast.error('Failed to delete column');
+    }
   };
   
   const setColumnColor = (id: string, color: string) => {
@@ -727,29 +990,81 @@ const KanbanBoard: React.FC<{
   };
   
   // Card actions
-  const archiveCard = (id: string) => {
-    setCards(prev => prev.map(card => card.id === id ? { ...card, archived: true } : card));
+  const archiveCard = async (id: string) => {
+    if (!projectId) return;
+    try {
+      await updateCard.mutateAsync({
+        projectId,
+        cardId: id,
+        data: { archived: true },
+      });
+    } catch (error) {
+      console.error('Failed to archive card:', error);
+    }
   };
   
-  const unarchiveCard = (id: string) => {
-    setCards(prev => prev.map(card => card.id === id ? { ...card, archived: false } : card));
+  const unarchiveCard = async (id: string) => {
+    if (!projectId) return;
+    try {
+      await updateCard.mutateAsync({
+        projectId,
+        cardId: id,
+        data: { archived: false },
+      });
+    } catch (error) {
+      console.error('Failed to unarchive card:', error);
+    }
   };
   
-  const deleteCard = (id: string) => {
-    setCards(prev => prev.filter(card => card.id !== id));
+  const handleDeleteCard = async (id: string) => {
+    if (!projectId) return;
+    try {
+      await deleteCard.mutateAsync({ projectId, cardId: id });
+    } catch (error) {
+      console.error('Failed to delete card:', error);
+    }
   };
   
-  const duplicateCard = (id: string) => {
+  const duplicateCard = async (id: string) => {
+    if (!projectId) return;
     const card = cards.find(c => c.id === id);
     if (!card) return;
-    const newCard = { 
-      ...card, 
-      id: generateId(), 
-      title: card.title + ' (Copy)',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setCards(prev => [...prev, newCard]);
+    
+    try {
+      // Map priority back to API format
+      const priorityMap: Record<string, string> = {
+        'Low': 'low',
+        'Medium': 'medium',
+        'High': 'high',
+        'Critical': 'critical'
+      };
+
+      await createCard.mutateAsync({
+        projectId,
+        data: {
+          title: card.title + ' (Copy)',
+          columnId: card.columnId,
+          description: card.description,
+          status: card.status,
+          priority: priorityMap[card.priority] || 'medium',
+          dueDate: card.dueDate,
+          startDate: card.startDate,
+          estimatedHours: card.estimatedHours,
+          assignees: card.assignees,
+          labels: card.labels,
+          subtasks: card.subtasks,
+          checklists: card.checklists,
+          attachments: card.attachments,
+          comments: card.comments,
+          dependencies: card.dependencies,
+          blockedBy: card.blockedBy,
+          blocking: card.blocking,
+          customFields: card.customFields,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to duplicate card:', error);
+    }
   };
   
   // File upload
@@ -828,40 +1143,41 @@ const KanbanBoard: React.FC<{
   const columnWidth = `min-w-[340px] w-full sm:w-[340px]`;
 
   // Render main board
+  // Handle API errors gracefully
+  if (columnsError || cardsError) {
+    const error = columnsError || cardsError;
+    const is403 = (error as any)?.response?.status === 403;
+    const is404 = (error as any)?.response?.status === 404;
+    
+    return (
+      <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+        <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">
+          {is403 ? 'Access Denied' : is404 ? 'Project Not Found' : 'Unable to Load Board'}
+        </h3>
+        <p className="text-gray-500 text-center max-w-md">
+          {is403 
+            ? "You don't have permission to access this project's board. Please contact the project owner to request access."
+            : is404
+            ? "The project you're looking for doesn't exist or has been deleted."
+            : 'There was an error loading the board. Please try refreshing the page.'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Enhanced Board Header */}
+      {/* Simple Board Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 p-4 border-b bg-white sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-2">
-          <Input
-            value={boardTitle}
-            onChange={e => setBoardTitle(e.target.value)}
-            className="font-bold text-2xl border-none bg-transparent focus:ring-0 w-auto min-w-[180px]"
-          />
-          <Button variant="ghost" size="icon" onClick={() => setBoardStarred(s => !s)}>
-            {boardStarred ? <Star className="text-yellow-400 fill-yellow-400" /> : <StarOff />}
-          </Button>
+          <h2 className="font-bold text-2xl">{boardTitle}</h2>
           <Badge variant="outline" className="ml-2">
             {filteredCards.length} cards
           </Badge>
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
-          {/* View Selector */}
-          <Select value={boardView} onValueChange={(value: BoardView) => setBoardView(value)}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="kanban">Kanban</SelectItem>
-              <SelectItem value="list">List</SelectItem>
-              <SelectItem value="calendar">Calendar</SelectItem>
-              <SelectItem value="timeline">Timeline</SelectItem>
-              <SelectItem value="analytics">Analytics</SelectItem>
-              <SelectItem value="swimlanes">Swimlanes</SelectItem>
-            </SelectContent>
-          </Select>
-          
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -873,63 +1189,7 @@ const KanbanBoard: React.FC<{
             />
           </div>
           
-          {/* Action Buttons */}
-          <Button variant="outline" size="sm" onClick={() => setShowFilterDialog(true)}>
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
-          
-          <Button variant="outline" size="sm" onClick={() => setShowAnalyticsDialog(true)}>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Analytics
-          </Button>
-          
-          <Button variant="outline" size="sm" onClick={() => setShowAutomationDialog(true)}>
-            <Zap className="h-4 w-4 mr-2" />
-            Automation
-          </Button>
-          
-          <Button variant="outline" size="sm" onClick={() => setShowTemplateDialog(true)}>
-            <FileText className="h-4 w-4 mr-2" />
-            Templates
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <MoreHorizontal className="h-4 w-4 mr-2" />
-                More
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setShowBulkOperationsDialog(true)}>
-                <CheckSquare className="mr-2 h-4 w-4" />
-                Bulk Operations
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowTimeTrackingDialog(true)}>
-                <Clock className="mr-2 h-4 w-4" />
-                Time Tracking
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowSettingsDialog(true)}>
-                <Settings className="mr-2 h-4 w-4" />
-                Board Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportBoard('json')}>
-                <Download className="mr-2 h-4 w-4" />
-                Export JSON
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportBoard('csv')}>
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportBoard('pdf')}>
-                <Download className="mr-2 h-4 w-4" />
-                Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          <Button onClick={() => setShowNewCardDialog(true)}>
+          <Button onClick={() => setShowNewCardDialog(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
             <Plus className="h-4 w-4 mr-2" />
             Add Card
           </Button>
@@ -981,7 +1241,7 @@ const KanbanBoard: React.FC<{
       )}
 
       {/* Main Board Content */}
-      {boardView === 'kanban' && (
+      {(
         <div className="flex gap-4 overflow-x-auto p-4 pb-8 h-full">
           {columns.sort((a, b) => a.position - b.position).map((col, colIdx) => {
             const columnCards = filteredCards.filter(card => card.columnId === col.id && !card.archived);
@@ -1003,8 +1263,8 @@ const KanbanBoard: React.FC<{
                       <Input
                         value={newColumnName}
                         onChange={e => setNewColumnName(e.target.value)}
-                        onBlur={() => renameColumn(col.id, newColumnName)}
-                        onKeyPress={e => e.key === 'Enter' && renameColumn(col.id, newColumnName)}
+                        onBlur={() => handleRenameColumn(col.id, newColumnName)}
+                        onKeyPress={e => e.key === 'Enter' && handleRenameColumn(col.id, newColumnName)}
                         autoFocus
                         className="w-32 text-white bg-transparent border-white"
                       />
@@ -1047,7 +1307,7 @@ const KanbanBoard: React.FC<{
                         <Target className="mr-2 h-4 w-4" />
                         Set WIP Limit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => deleteColumn(col.id)} className="text-red-600">
+                      <DropdownMenuItem onClick={() => handleDeleteColumn(col.id)} className="text-red-600">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
@@ -1119,7 +1379,7 @@ const KanbanBoard: React.FC<{
                         )}
 
                         {/* Card Labels */}
-                        {card.labels.length > 0 && (
+                        {card.labels && card.labels.length > 0 && (
                           <div className="flex flex-wrap gap-1 mb-2">
                             {card.labels.slice(0, 3).map(label => (
                               <Badge key={label} variant="secondary" className="text-xs px-1 py-0">
@@ -1152,19 +1412,19 @@ const KanbanBoard: React.FC<{
                           </div>
                           
                           <div className="flex items-center gap-1">
-                            {card.comments.length > 0 && (
+                            {card.comments && card.comments.length > 0 && (
                               <div className="flex items-center gap-1">
                                 <MessageSquare className="h-3 w-3" />
                                 <span>{card.comments.length}</span>
                               </div>
                             )}
-                            {card.attachments.length > 0 && (
+                            {card.attachments && card.attachments.length > 0 && (
                               <div className="flex items-center gap-1">
                                 <Paperclip className="h-3 w-3" />
                                 <span>{card.attachments.length}</span>
                               </div>
                             )}
-                            {card.subtasks.length > 0 && (
+                            {card.subtasks && card.subtasks.length > 0 && (
                               <div className="flex items-center gap-1">
                                 <ListChecks className="h-3 w-3" />
                                 <span>{card.subtasks.filter(st => st.done).length}/{card.subtasks.length}</span>
@@ -1174,7 +1434,7 @@ const KanbanBoard: React.FC<{
                         </div>
 
                         {/* Progress Bar for Subtasks */}
-                        {card.subtasks.length > 0 && (
+                        {card.subtasks && card.subtasks.length > 0 && (
                           <div className="mt-2">
                             <Progress 
                               value={(card.subtasks.filter(st => st.done).length / card.subtasks.length) * 100}
@@ -1221,7 +1481,7 @@ const KanbanBoard: React.FC<{
                         )}
 
                         {/* AI Suggestions Indicator */}
-                        {card.aiSuggestions.length > 0 && (
+                        {card.aiSuggestions && card.aiSuggestions.length > 0 && (
                           <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
                             <Lightbulb className="h-3 w-3" />
                             <span>{card.aiSuggestions.length} AI suggestions</span>
@@ -1270,7 +1530,7 @@ const KanbanBoard: React.FC<{
                             onClick={(e) => {
                               e.stopPropagation();
                               if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
-                                deleteCard(card.id);
+                                handleDeleteCard(card.id);
                               }
                             }}
                           >
@@ -1306,9 +1566,9 @@ const KanbanBoard: React.FC<{
               onChange={e => setNewColumnName(e.target.value)}
               placeholder="New column name"
               className="mb-2 w-48"
-              onKeyPress={e => e.key === 'Enter' && addColumn()}
+              onKeyPress={e => e.key === 'Enter' && handleAddColumn()}
             />
-            <Button onClick={addColumn} variant="outline" size="sm">
+            <Button onClick={handleAddColumn} variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Column
             </Button>
@@ -1316,211 +1576,12 @@ const KanbanBoard: React.FC<{
         </div>
       )}
 
-      {/* List View */}
-      {boardView === 'list' && (
-        <div className="p-4">
-          <div className="bg-white rounded-lg shadow">
-            <div className="grid grid-cols-8 gap-4 p-4 border-b font-medium text-sm text-gray-700">
-              <div>Title</div>
-              <div>Column</div>
-              <div>Assignee</div>
-              <div>Priority</div>
-              <div>Due Date</div>
-              <div>Progress</div>
-              <div>Time</div>
-              <div>Actions</div>
-            </div>
-            {filteredCards.map(card => (
-              <div key={card.id} className="grid grid-cols-8 gap-4 p-4 border-b hover:bg-gray-50 text-sm">
-                <div className="font-medium">{card.title}</div>
-                <div>
-                  <Badge variant="outline">
-                    {columns.find(col => col.id === card.columnId)?.name}
-                  </Badge>
-                </div>
-                <div>{card.assignee || '-'}</div>
-                <div>
-                  <Badge 
-                    variant="outline" 
-                    style={{ color: PRIORITY_COLORS[card.priority] }}
-                  >
-                    {card.priority}
-                  </Badge>
-                </div>
-                <div className={card.dueDate && new Date(card.dueDate) < new Date() ? 'text-red-500' : ''}>
-                  {card.dueDate || '-'}
-                </div>
-                <div>
-                  {card.subtasks.length > 0 && (
-                    <Progress 
-                      value={(card.subtasks.filter(st => st.done).length / card.subtasks.length) * 100}
-                      className="h-2"
-                    />
-                  )}
-                </div>
-                <div>
-                  {card.actualHours > 0 && `${card.actualHours.toFixed(1)}h`}
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setShowCardDetails(card)}>
-                    <Eye className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setEditingCard(card)}>
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-red-600"
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
-                        deleteCard(card.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Calendar View */}
-      {boardView === 'calendar' && (
-        <div className="p-4">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium mb-4">Calendar View</h3>
-            <p className="text-gray-500">Calendar view would show cards by due date in a calendar layout.</p>
-            {/* Calendar implementation would go here */}
-          </div>
-        </div>
-      )}
-
-      {/* Timeline View */}
-      {boardView === 'timeline' && (
-        <div className="p-4">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium mb-4">Timeline View</h3>
-            <p className="text-gray-500">Timeline view would show cards in a Gantt-like timeline.</p>
-            {/* Timeline implementation would go here */}
-          </div>
-        </div>
-      )}
-
-      {/* Analytics View */}
-      {boardView === 'analytics' && (
-        <div className="p-4 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Cards</p>
-                    <p className="text-2xl font-bold">{calculateAnalytics.totalCards}</p>
-                  </div>
-                  <ListChecks className="h-8 w-8 text-blue-600 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Completed</p>
-                    <p className="text-2xl font-bold">{calculateAnalytics.completedCards}</p>
-                  </div>
-                  <CheckSquare className="h-8 w-8 text-green-600 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Overdue</p>
-                    <p className="text-2xl font-bold">{calculateAnalytics.overdueTasks}</p>
-                  </div>
-                  <AlertTriangle className="h-8 w-8 text-red-600 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Avg. Completion</p>
-                    <p className="text-2xl font-bold">{calculateAnalytics.averageCompletionTime.toFixed(1)}d</p>
-                  </div>
-                  <TrendingUp className="h-8 w-8 text-purple-600 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-medium mb-4">Column Distribution</h3>
-                <div className="space-y-3">
-                  {columns.map(column => {
-                    const columnCards = cards.filter(card => card.columnId === column.id);
-                    const percentage = cards.length > 0 ? (columnCards.length / cards.length) * 100 : 0;
-                    return (
-                      <div key={column.id}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span>{column.name}</span>
-                          <span>{columnCards.length} cards ({percentage.toFixed(1)}%)</span>
-                        </div>
-                        <Progress value={percentage} className="h-2" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-medium mb-4">Priority Distribution</h3>
-                <div className="space-y-3">
-                  {Object.keys(PRIORITY_COLORS).map(priority => {
-                    const priorityCards = cards.filter(card => card.priority === priority);
-                    const percentage = cards.length > 0 ? (priorityCards.length / cards.length) * 100 : 0;
-                    return (
-                      <div key={priority}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span>{priority}</span>
-                          <span>{priorityCards.length} cards ({percentage.toFixed(1)}%)</span>
-                        </div>
-                        <Progress value={percentage} className="h-2" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Swimlanes View */}
-      {boardView === 'swimlanes' && (
-        <div className="p-4">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium mb-4">Swimlanes View</h3>
-            <p className="text-gray-500">Swimlanes view would group cards by assignee, priority, or other criteria.</p>
-            {/* Swimlanes implementation would go here */}
-          </div>
-        </div>
-      )}
-
       {/* Enhanced Card Details Modal */}
-      {showCardDetails && (
-        <Dialog open={!!showCardDetails} onOpenChange={() => setShowCardDetails(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+      <Dialog open={!!showCardDetails} onOpenChange={() => setShowCardDetails(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          {showCardDetails && (
+            <>
+              <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-xl">{showCardDetails.title}</DialogTitle>
                 <div className="flex items-center gap-2">
@@ -1539,7 +1600,7 @@ const KanbanBoard: React.FC<{
                     className="text-red-600"
                     onClick={() => {
                       if (confirm(`Are you sure you want to delete "${showCardDetails.title}"?`)) {
-                        deleteCard(showCardDetails.id);
+                        handleDeleteCard(showCardDetails.id);
                         setShowCardDetails(null);
                       }
                     }}
@@ -1644,7 +1705,7 @@ const KanbanBoard: React.FC<{
                   </div>
                 </div>
                 
-                {showCardDetails.labels.length > 0 && (
+                {showCardDetails.labels && showCardDetails.labels.length > 0 && (
                   <div>
                     <label className="text-sm font-medium">Labels</label>
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -1655,11 +1716,13 @@ const KanbanBoard: React.FC<{
                   </div>
                 )}
                 
-                {(showCardDetails.dependencies.length > 0 || showCardDetails.blockedBy.length > 0 || showCardDetails.blocking.length > 0) && (
+                {((showCardDetails.dependencies && showCardDetails.dependencies.length > 0) || 
+                  (showCardDetails.blockedBy && showCardDetails.blockedBy.length > 0) || 
+                  (showCardDetails.blocking && showCardDetails.blocking.length > 0)) && (
                   <div>
                     <label className="text-sm font-medium">Dependencies</label>
                     <div className="mt-1 space-y-2">
-                      {showCardDetails.dependencies.length > 0 && (
+                      {showCardDetails.dependencies && showCardDetails.dependencies.length > 0 && (
                         <div>
                           <span className="text-xs text-gray-500">Depends on:</span>
                           <div className="flex flex-wrap gap-1">
@@ -1669,7 +1732,7 @@ const KanbanBoard: React.FC<{
                           </div>
                         </div>
                       )}
-                      {showCardDetails.blockedBy.length > 0 && (
+                      {showCardDetails.blockedBy && showCardDetails.blockedBy.length > 0 && (
                         <div>
                           <span className="text-xs text-gray-500">Blocked by:</span>
                           <div className="flex flex-wrap gap-1">
@@ -1679,7 +1742,7 @@ const KanbanBoard: React.FC<{
                           </div>
                         </div>
                       )}
-                      {showCardDetails.blocking.length > 0 && (
+                      {showCardDetails.blocking && showCardDetails.blocking.length > 0 && (
                         <div>
                           <span className="text-xs text-gray-500">Blocking:</span>
                           <div className="flex flex-wrap gap-1">
@@ -1939,13 +2002,14 @@ const KanbanBoard: React.FC<{
                 </div>
               </TabsContent>
             </Tabs>
-          </DialogContent>
-        </Dialog>
-      )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Enhanced Edit Card Dialog */}
       <Dialog open={!!editingCard} onOpenChange={() => setEditingCard(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Edit Card</DialogTitle>
           </DialogHeader>
@@ -2138,15 +2202,52 @@ const KanbanBoard: React.FC<{
                 <Button variant="outline" onClick={() => setEditingCard(null)}>
                   Cancel
                 </Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!editingCard.title?.trim()) {
-                    alert('Title is required');
+                    toast.error('Title is required');
                     return;
                   }
-                  setCards(prev => prev.map(card => 
-                    card.id === editingCard.id ? { ...editingCard, updatedAt: new Date().toISOString() } : card
-                  ));
-                  setEditingCard(null);
+                  
+                  try {
+                    // Map column ID to status
+                    let status: Task['status'] = 'todo';
+                    if (editingCard.columnId === 'todo') status = 'todo';
+                    else if (editingCard.columnId === 'working') status = 'in-progress';
+                    else if (editingCard.columnId === 'review') status = 'review';
+                    else if (editingCard.columnId === 'done') status = 'done';
+                    else if (editingCard.columnId === 'backlog') status = 'blocked';
+
+                    // Map priority
+                    const priorityMap: Record<string, Task['priority']> = {
+                      'Low': 'low',
+                      'Medium': 'medium',
+                      'High': 'high',
+                      'Critical': 'critical'
+                    };
+
+                    await updateTask.mutateAsync({
+                      id: editingCard.id,
+                      data: {
+                        title: editingCard.title,
+                        description: editingCard.description || editingCard.notes,
+                        status,
+                        priority: priorityMap[editingCard.priority] || 'medium',
+                        dueDate: editingCard.dueDate ? new Date(editingCard.dueDate).toISOString() : undefined,
+                        estimatedHours: editingCard.estimatedHours,
+                        actualHours: editingCard.actualHours,
+                        tags: editingCard.labels
+                      }
+                    });
+
+                    setCards(prev => prev.map(card => 
+                      card.id === editingCard.id ? { ...editingCard, updatedAt: new Date().toISOString() } : card
+                    ));
+                    setEditingCard(null);
+                    toast.success('Card updated successfully');
+                  } catch (error) {
+                    console.error('Failed to update card:', error);
+                    toast.error('Failed to update card');
+                  }
                 }}>
                   Save Changes
                 </Button>
@@ -2157,12 +2258,24 @@ const KanbanBoard: React.FC<{
       </Dialog>
 
       {/* Enhanced New Card Dialog */}
-      <Dialog open={showNewCardDialog} onOpenChange={setShowNewCardDialog}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={showNewCardDialog} onOpenChange={(open) => {
+        setShowNewCardDialog(open);
+        if (open && columns.length > 0 && !newCard.columnId) {
+          // Auto-select first column when dialog opens
+          setNewCard({ ...newCard, columnId: columns[0].id });
+        }
+      }}>
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Create New Card</DialogTitle>
           </DialogHeader>
           
+          {columnsLoading || columns.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">Loading columns... Please wait.</p>
+            </div>
+          ) : (
+          <>
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="basic">Basic</TabsTrigger>
@@ -2196,19 +2309,25 @@ const KanbanBoard: React.FC<{
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Column *</label>
-                  <Select 
-                    value={newCard.columnId || ''} 
-                    onValueChange={value => setNewCard({ ...newCard, columnId: value })}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select column" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {columns.map(col => (
-                        <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {columns.length === 0 ? (
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Loading columns... Please wait.
+                    </div>
+                  ) : (
+                    <Select 
+                      value={newCard.columnId || (columns[0]?.id || '')} 
+                      onValueChange={value => setNewCard({ ...newCard, columnId: value })}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {columns.map(col => (
+                          <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 
                 <div>
@@ -2454,16 +2573,18 @@ const KanbanBoard: React.FC<{
             <Button variant="outline" onClick={() => setShowNewCardDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateCard}>
+            <Button onClick={handleCreateCard} disabled={!newCard.title || !newCard.columnId || columns.length === 0}>
               Create Card
             </Button>
           </div>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 
       {/* Filter Dialog */}
       <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Filter Cards</DialogTitle>
           </DialogHeader>
@@ -2605,7 +2726,7 @@ const KanbanBoard: React.FC<{
 
       {/* Template Dialog */}
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Choose Board Template</DialogTitle>
           </DialogHeader>
@@ -2626,7 +2747,7 @@ const KanbanBoard: React.FC<{
 
       {/* Automation Dialog */}
       <Dialog open={showAutomationDialog} onOpenChange={setShowAutomationDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Automation Rules</DialogTitle>
           </DialogHeader>
@@ -2673,7 +2794,7 @@ const KanbanBoard: React.FC<{
 
       {/* Analytics Dialog */}
       <Dialog open={showAnalyticsDialog} onOpenChange={setShowAnalyticsDialog}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Board Analytics</DialogTitle>
           </DialogHeader>
@@ -2774,7 +2895,7 @@ const KanbanBoard: React.FC<{
 
       {/* Bulk Operations Dialog */}
       <Dialog open={showBulkOperationsDialog} onOpenChange={setShowBulkOperationsDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Bulk Operations</DialogTitle>
           </DialogHeader>
@@ -2840,7 +2961,7 @@ const KanbanBoard: React.FC<{
 
       {/* Time Tracking Dialog */}
       <Dialog open={showTimeTrackingDialog} onOpenChange={setShowTimeTrackingDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Time Tracking</DialogTitle>
           </DialogHeader>
@@ -2938,7 +3059,7 @@ const KanbanBoard: React.FC<{
 
       {/* Board Settings Dialog */}
       <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Board Settings</DialogTitle>
           </DialogHeader>

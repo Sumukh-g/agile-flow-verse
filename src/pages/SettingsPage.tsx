@@ -14,10 +14,15 @@ import {
     Shield,
     Star,
     Users,
-    Zap
+    Zap,
+    Trash2,
+    RotateCcw,
+    X
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { useDeletedProjects, useRestoreProject, usePermanentDeleteProject } from '@/hooks/useProjectsEnhanced';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Feature {
   key: string;
@@ -205,11 +210,12 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue="plan-features" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="plan-features">Plan & Features</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsTrigger value="bin">Bin</TabsTrigger>
         </TabsList>
 
         <TabsContent value="plan-features" className="space-y-6">
@@ -389,8 +395,149 @@ const SettingsPage: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="bin" className="space-y-6">
+          <BinSection />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+};
+
+// Bin Section Component
+const BinSection: React.FC = () => {
+  const { data: deletedProjects = [], isLoading } = useDeletedProjects();
+  const restoreProject = useRestoreProject();
+  const permanentDelete = usePermanentDeleteProject();
+
+  const handleRestore = async (projectId: string, projectName: string) => {
+    try {
+      await restoreProject.mutateAsync(projectId);
+      toast.success(`"${projectName}" restored successfully`);
+    } catch (error: any) {
+      console.error('Restore failed:', error);
+    }
+  };
+
+  const handlePermanentDelete = async (projectId: string, projectName: string) => {
+    if (!confirm(`Are you sure you want to permanently delete "${projectName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await permanentDelete.mutateAsync(projectId);
+      toast.success(`"${projectName}" permanently deleted`);
+    } catch (error: any) {
+      console.error('Permanent delete failed:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Trash2 className="w-5 h-5" />
+          <span>Deleted Projects</span>
+        </CardTitle>
+        <CardDescription>
+          Restore or permanently delete projects that have been moved to bin. Projects are automatically deleted after 30 days.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {deletedProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Trash2 className="w-12 h-12 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium mb-2">Bin is empty</p>
+            <p className="text-muted-foreground text-center">
+              Deleted projects will appear here. You can restore them or permanently delete them.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {deletedProjects.map((project: any) => {
+              const deletedDate = project.deletedAt ? new Date(project.deletedAt) : null;
+              const daysSinceDeleted = deletedDate 
+                ? Math.floor((Date.now() - deletedDate.getTime()) / (1000 * 60 * 60 * 24))
+                : 0;
+              const willAutoDelete = daysSinceDeleted >= 25; // Warn if close to 30 days
+
+              return (
+                <div
+                  key={project.id}
+                  className={`p-4 border rounded-lg ${
+                    willAutoDelete ? 'border-orange-200 bg-orange-50' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="font-semibold text-lg">{project.name}</h4>
+                        {willAutoDelete && (
+                          <Badge variant="destructive" className="text-xs">
+                            Auto-delete soon
+                          </Badge>
+                        )}
+                      </div>
+                      {project.description && (
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                          {project.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        {deletedDate && (
+                          <span>
+                            Deleted {formatDistanceToNow(deletedDate, { addSuffix: true })}
+                            {daysSinceDeleted > 0 && ` (${daysSinceDeleted} days ago)`}
+                          </span>
+                        )}
+                        {project.creator && (
+                          <span>Deleted by {project.creator.name || project.creator.email}</span>
+                        )}
+                      </div>
+                      {willAutoDelete && (
+                        <p className="text-xs text-orange-600 mt-2">
+                          ⚠️ This project will be automatically deleted in {30 - daysSinceDeleted} days
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRestore(project.id, project.name)}
+                        disabled={restoreProject.isPending}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-1" />
+                        Restore
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handlePermanentDelete(project.id, project.name)}
+                        disabled={permanentDelete.isPending}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Delete Forever
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

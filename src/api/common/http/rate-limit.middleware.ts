@@ -23,7 +23,7 @@ export async function RateLimitMiddleware(req: Request, res: Response, next: Nex
   try {
     const redis = getRedis();
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
-    const tenantId = (req.headers['x-tenant-id'] as string) || 'unknown';
+    const tenantId = (req as any).user?.tenantId || 'unknown';
 
     const nowWindow = Math.floor(Date.now() / WINDOW_MS);
     const ipKey = `rl:ip:${ip}:${nowWindow}`;

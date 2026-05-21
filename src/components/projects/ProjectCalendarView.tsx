@@ -2,10 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import EventDialog from '@/components/calendar/EventDialog';
 import {
     AlertCircle,
     Calendar,
@@ -22,7 +19,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { useCalendarEvents, useCreateCalendarEvent, useDeleteCalendarEvent, useUpdateCalendarEvent } from '@/hooks/useCalendarEnhanced';
 
 interface ProjectCalendarViewProps {
   projectId: string | undefined;
@@ -33,52 +30,68 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [prefilledDate, setPrefilledDate] = useState<Date | undefined>(undefined);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
+  
+  const createEvent = useCreateCalendarEvent();
+  const updateEvent = useUpdateCalendarEvent();
+  const deleteEvent = useDeleteCalendarEvent();
 
   // Compute current month start/end
   const monthRange = useMemo(() => {
     const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    // ISO strings
     return {
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0],
+      start: start.toISOString(),
+      end: end.toISOString(),
     };
   }, [currentDate]);
 
+  // Use the same hook as CalendarHub for consistency and automatic cache invalidation
+  const { data: rawEvents = [], isLoading: isLoadingEvents } = useCalendarEvents(
+    monthRange.start,
+    monthRange.end,
+    projectId,
+    'project'
+  );
+
+  // Transform events to match the component's expected format
+  const transformedEvents = useMemo(() => {
+    return rawEvents.map((e: any) => {
+      const startDate = new Date(e.startDate);
+      const endDate = new Date(e.endDate);
+      return {
+        id: e.id,
+        title: e.title,
+        description: e.description || '',
+        date: e.startDate.slice(0, 10),
+        time: e.allDay ? 'All Day' : startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        duration: e.allDay ? '' : `${Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60))} min`,
+        type: (e.type || 'OTHER').toLowerCase().replace('_', '-'),
+        priority: 'medium',
+        attendees: [],
+        location: e.project?.name || '',
+        isOnline: false,
+        status: 'confirmed',
+        allDay: e.allDay,
+        sourceType: e.sourceType,
+        sourceId: e.sourceId,
+        projectId: e.projectId,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        reminderMinutesBefore: e.reminderMinutesBefore,
+        project: e.project,
+      };
+    });
+  }, [rawEvents]);
+
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        if (!projectId) {
-          setEvents([]);
-          return;
-        }
-        const raw = await api.calendar.getEvents(monthRange.start, monthRange.end, projectId);
-        if (cancelled) return;
-        const mapped = raw.map((e: any) => ({
-          id: e.id,
-          title: e.title,
-          description: e.description,
-          date: (e.startDate || e.start || '').slice(0, 10),
-          time: '',
-          duration: '',
-          type: e.type || 'task',
-          priority: e.priority || 'medium',
-          attendees: (e.assignees || []).map((a: any) => a.name || a.email).filter(Boolean),
-          location: e.project?.name || '',
-          isOnline: false,
-          status: e.status || 'confirmed',
-        }));
-        setEvents(mapped);
-      } catch (e: any) {
-        toast.error(e?.response?.data?.message || 'Failed to load calendar events');
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [projectId, monthRange.start, monthRange.end]);
+    setEvents(transformedEvents);
+    setIsLoading(isLoadingEvents);
+  }, [transformedEvents, isLoadingEvents]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -154,101 +167,45 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
     }
   };
 
-  const AddEventForm = () => (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="title">Event Title</Label>
-        <Input id="title" placeholder="Enter event title" />
-      </div>
-      <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea id="description" placeholder="Event description..." />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="date">Date</Label>
-          <Input id="date" type="date" />
-        </div>
-        <div>
-          <Label htmlFor="time">Time</Label>
-          <Input id="time" type="time" />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="duration">Duration</Label>
-          <Input id="duration" placeholder="e.g., 2 hours" />
-        </div>
-        <div>
-          <Label htmlFor="type">Type</Label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="meeting">Meeting</SelectItem>
-              <SelectItem value="review">Review</SelectItem>
-              <SelectItem value="planning">Planning</SelectItem>
-              <SelectItem value="presentation">Presentation</SelectItem>
-              <SelectItem value="deadline">Deadline</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="priority">Priority</Label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="location">Location</Label>
-          <Input id="location" placeholder="Meeting location" />
-        </div>
-      </div>
-      <div>
-        <Label htmlFor="attendees">Attendees</Label>
-        <Input id="attendees" placeholder="Enter attendee names (comma separated)" />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => setIsAddEventOpen(false)}>Cancel</Button>
-        <Button onClick={async () => {
-          // Create a task to appear on the calendar
-          const titleEl = document.getElementById('title') as HTMLInputElement | null;
-          const dateEl = document.getElementById('date') as HTMLInputElement | null;
-          const timeEl = document.getElementById('time') as HTMLInputElement | null;
-          const descriptionEl = document.getElementById('description') as HTMLTextAreaElement | null;
-          if (!titleEl?.value || !dateEl?.value) {
-            toast.error('Title and date are required');
-            return;
-          }
-          const dueDateIso = timeEl?.value ? `${dateEl.value}T${timeEl.value}:00.000Z` : new Date(dateEl.value).toISOString();
-          try {
-            await api.tasks.createTask({
-              title: titleEl.value,
-              description: descriptionEl?.value,
-              projectId,
-              dueDate: dueDateIso,
-              priority: 'medium',
-              status: 'todo',
-            } as any);
-            toast.success('Event added successfully!');
-            setIsAddEventOpen(false);
-          } catch (e: any) {
-            toast.error(e?.response?.data?.message || 'Failed to add event');
-          }
-        }}>Add Event</Button>
-      </div>
-    </div>
-  );
+  const handleSaveEvent = async (data: any) => {
+    if (!projectId) {
+      toast.error('Project ID is required');
+      return;
+    }
+
+    try {
+      if (editingEvent) {
+        await updateEvent.mutateAsync({
+          id: editingEvent.id,
+          data: {
+            title: data.title,
+            description: data.description,
+            startAt: data.startAt,
+            endAt: data.endAt,
+            allDay: data.allDay,
+            type: data.type as any,
+            reminderMinutesBefore: data.reminderMinutesBefore,
+          },
+        });
+      } else {
+        await createEvent.mutateAsync({
+          title: data.title,
+          description: data.description,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          allDay: data.allDay,
+          type: data.type as any,
+          projectId,
+          reminderMinutesBefore: data.reminderMinutesBefore,
+        });
+      }
+      setIsEventDialogOpen(false);
+      setEditingEvent(null);
+      setPrefilledDate(undefined);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to save event');
+    }
+  };
 
   const EventDetails = ({ event }: { event: any }) => (
     <div className="space-y-4">
@@ -282,56 +239,75 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
           )}
           <span>{event.location}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span>{event.attendees.length} attendees</span>
-        </div>
+        {event.attendees && event.attendees.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>{event.attendees.length} attendees</span>
+          </div>
+        )}
       </div>
       
-      <div>
-        <h4 className="font-medium mb-2">Attendees</h4>
-        <div className="flex flex-wrap gap-2">
-          {event.attendees.map((attendee: string, index: number) => (
-            <Badge key={index} variant="secondary">
-              {attendee}
-            </Badge>
-          ))}
+      {event.attendees && event.attendees.length > 0 && (
+        <div>
+          <h4 className="font-medium mb-2">Attendees</h4>
+          <div className="flex flex-wrap gap-2">
+            {event.attendees.map((attendee: string, index: number) => (
+              <Badge key={index} variant="secondary">
+                {attendee}
+              </Badge>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       
       <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button 
-          variant="outline"
-          onClick={() => {
-            setIsAddEventOpen(true);
-            toast.info(`Editing event: ${event.title}`);
-          }}
-        >
-          Edit
-        </Button>
-        <Button 
-          variant="outline"
-          onClick={() => {
-            if (confirm('Are you sure you want to delete this event?')) {
-              setEvents(prev => prev.filter(e => e.id !== event.id));
-              toast.success('Event deleted successfully');
-              setIsEventDetailsOpen(false);
-            }
-          }}
-        >
-          Delete
-        </Button>
-        <Button
-          onClick={() => {
-            if (event.isOnline) {
-              toast.info(`Joining online meeting: ${event.title}`);
-            } else {
-              toast.info(`Event location: ${event.location}`);
-            }
-          }}
-        >
-          {event.isOnline ? 'Join Meeting' : 'View Location'}
-        </Button>
+        {event.sourceType && (
+          <Button 
+            variant="outline"
+            onClick={() => {
+              if (event.sourceType === 'TASK' && event.sourceId) {
+                window.location.href = `/tasks?taskId=${event.sourceId}`;
+              } else if (event.sourceType === 'ISSUE' && event.sourceId) {
+                window.location.href = `/projects/${event.projectId}?issueId=${event.sourceId}`;
+              } else if (event.sourceType === 'NOTE' && event.sourceId) {
+                window.location.href = `/notes?noteId=${event.sourceId}`;
+              }
+            }}
+          >
+            View Source
+          </Button>
+        )}
+        {!event.sourceType && (
+          <>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setEditingEvent(event);
+                setIsEventDialogOpen(true);
+                setIsEventDetailsOpen(false);
+              }}
+            >
+              Edit
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                if (confirm('Are you sure you want to delete this event?')) {
+                  try {
+                    await deleteEvent.mutateAsync(event.id);
+                    setIsEventDetailsOpen(false);
+                    // Events will automatically refresh via React Query cache invalidation
+                  } catch (e: any) {
+                    toast.error(e?.response?.data?.message || 'Failed to delete event');
+                  }
+                }
+              }}
+              disabled={deleteEvent.isPending}
+            >
+              Delete
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -359,23 +335,14 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Event
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add New Event</DialogTitle>
-                <DialogDescription>
-                  Create a new calendar event for your project
-                </DialogDescription>
-              </DialogHeader>
-              <AddEventForm />
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => {
+            setEditingEvent(null);
+            setPrefilledDate(undefined);
+            setIsEventDialogOpen(true);
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Event
+          </Button>
         </div>
       </div>
 
@@ -450,6 +417,14 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
                     className={`min-h-[120px] p-2 border-b border-r ${
                       day ? 'hover:bg-muted/50 cursor-pointer' : 'bg-muted/20'
                     } ${isToday ? 'bg-blue-50' : ''}`}
+                    onClick={() => {
+                      if (day) {
+                        const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                        setPrefilledDate(clickedDate);
+                        setEditingEvent(null);
+                        setIsEventDialogOpen(true);
+                      }
+                    }}
                   >
                     {day && (
                       <>
@@ -463,7 +438,8 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
                               className={`text-xs p-1 rounded border-l-2 cursor-pointer hover:shadow-sm ${
                                 getEventTypeColor(event.type)
                               } ${getPriorityColor(event.priority)}`}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setSelectedEvent(event);
                                 setIsEventDetailsOpen(true);
                               }}
@@ -484,6 +460,44 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
                 );
               })}
             </div>
+          )}
+
+          {view === 'week' && (
+            <WeekViewGrid 
+              currentDate={currentDate}
+              events={events}
+              getEventsForDate={getEventsForDate}
+              getEventTypeColor={getEventTypeColor}
+              getPriorityColor={getPriorityColor}
+              onEventClick={(event) => {
+                setSelectedEvent(event);
+                setIsEventDetailsOpen(true);
+              }}
+              onDateClick={(date) => {
+                setPrefilledDate(date);
+                setEditingEvent(null);
+                setIsEventDialogOpen(true);
+              }}
+            />
+          )}
+
+          {view === 'day' && (
+            <DayViewGrid 
+              currentDate={currentDate}
+              events={events}
+              getEventsForDate={getEventsForDate}
+              getEventTypeColor={getEventTypeColor}
+              getPriorityColor={getPriorityColor}
+              onEventClick={(event) => {
+                setSelectedEvent(event);
+                setIsEventDetailsOpen(true);
+              }}
+              onAddEvent={() => {
+                setPrefilledDate(currentDate);
+                setEditingEvent(null);
+                setIsEventDialogOpen(true);
+              }}
+            />
           )}
         </CardContent>
       </Card>
@@ -526,10 +540,12 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
                         <Clock className="h-3 w-3" />
                         <span>{event.time}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        <span>{event.attendees.length} attendees</span>
-                      </div>
+                      {event.attendees && event.attendees.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          <span>{event.attendees.length} attendees</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1">
                         {event.isOnline ? (
                           <Video className="h-3 w-3" />
@@ -556,8 +572,225 @@ const ProjectCalendarView: React.FC<ProjectCalendarViewProps> = ({ projectId }) 
           {selectedEvent && <EventDetails event={selectedEvent} />}
         </DialogContent>
       </Dialog>
+
+      {/* Event Create/Edit Dialog */}
+      {isEventDialogOpen && (
+        <EventDialog
+          event={editingEvent}
+          defaultProjectId={projectId}
+          defaultDate={prefilledDate}
+          onSave={handleSaveEvent}
+          onClose={() => {
+            setIsEventDialogOpen(false);
+            setEditingEvent(null);
+            setPrefilledDate(undefined);
+          }}
+        />
+      )}
     </div>
   );
 };
+
+// Week View Component
+function WeekViewGrid({ 
+  currentDate, 
+  events, 
+  getEventsForDate, 
+  getEventTypeColor, 
+  getPriorityColor,
+  onEventClick,
+  onDateClick
+}: {
+  currentDate: Date;
+  events: any[];
+  getEventsForDate: (date: string) => any[];
+  getEventTypeColor: (type: string) => string;
+  getPriorityColor: (priority: string) => string;
+  onEventClick: (event: any) => void;
+  onDateClick: (date: Date) => void;
+}) {
+  // Get the start of the week (Sunday)
+  const startOfWeek = new Date(currentDate);
+  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+  
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(startOfWeek);
+    date.setDate(startOfWeek.getDate() + i);
+    return date;
+  });
+
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="grid grid-cols-7 gap-0">
+      {/* Day headers with dates */}
+      {weekDays.map((date, idx) => {
+        const isToday = new Date().toDateString() === date.toDateString();
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][idx];
+        return (
+          <div key={idx} className={`p-3 text-center border-b ${isToday ? 'bg-blue-50' : ''}`}>
+            <div className="text-sm text-muted-foreground">{dayName}</div>
+            <div className={`text-lg font-semibold ${isToday ? 'text-blue-600' : ''}`}>{date.getDate()}</div>
+          </div>
+        );
+      })}
+      
+      {/* Events for each day */}
+      {weekDays.map((date, idx) => {
+        const dateStr = formatDateStr(date);
+        const dayEvents = getEventsForDate(dateStr);
+        const isToday = new Date().toDateString() === date.toDateString();
+        
+        return (
+          <div 
+            key={idx} 
+            className={`min-h-[300px] p-2 border-r cursor-pointer hover:bg-muted/30 ${isToday ? 'bg-blue-50/50' : ''}`}
+            onClick={() => onDateClick(date)}
+          >
+            <div className="space-y-1">
+              {dayEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className={`text-xs p-2 rounded border-l-2 cursor-pointer hover:shadow-sm ${
+                    getEventTypeColor(event.type)
+                  } ${getPriorityColor(event.priority)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEventClick(event);
+                  }}
+                >
+                  <div className="font-medium truncate">{event.title}</div>
+                  <div className="text-muted-foreground">{event.time}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Day View Component
+function DayViewGrid({ 
+  currentDate, 
+  events, 
+  getEventsForDate, 
+  getEventTypeColor, 
+  getPriorityColor,
+  onEventClick,
+  onAddEvent
+}: {
+  currentDate: Date;
+  events: any[];
+  getEventsForDate: (date: string) => any[];
+  getEventTypeColor: (type: string) => string;
+  getPriorityColor: (priority: string) => string;
+  onEventClick: (event: any) => void;
+  onAddEvent: () => void;
+}) {
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+  const dayEvents = getEventsForDate(dateStr);
+  const isToday = new Date().toDateString() === currentDate.toDateString();
+
+  const getEventsForHour = (hour: number) => {
+    return dayEvents.filter((event: any) => {
+      if (event.allDay) return false;
+      // Parse the time from event.time like "9:00 AM"
+      if (event.time && event.time !== 'All Day') {
+        const match = event.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (match) {
+          let eventHour = parseInt(match[1]);
+          const ampm = match[3].toUpperCase();
+          if (ampm === 'PM' && eventHour !== 12) eventHour += 12;
+          if (ampm === 'AM' && eventHour === 12) eventHour = 0;
+          return eventHour === hour;
+        }
+      }
+      return false;
+    });
+  };
+
+  const allDayEvents = dayEvents.filter((e: any) => e.allDay || e.time === 'All Day');
+
+  const formatHour = (hour: number) => {
+    if (hour === 0) return '12 AM';
+    if (hour < 12) return `${hour} AM`;
+    if (hour === 12) return '12 PM';
+    return `${hour - 12} PM`;
+  };
+
+  return (
+    <div className="p-4">
+      {/* Date header */}
+      <div className={`text-center p-4 mb-4 rounded-lg ${isToday ? 'bg-blue-50' : 'bg-muted/30'}`}>
+        <div className="text-lg font-semibold">
+          {currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+        {isToday && <div className="text-sm text-blue-600 font-medium">Today</div>}
+      </div>
+
+      {/* All-day events */}
+      {allDayEvents.length > 0 && (
+        <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+          <div className="text-sm font-medium text-purple-800 mb-2">All Day Events</div>
+          <div className="space-y-1">
+            {allDayEvents.map((event: any) => (
+              <div
+                key={event.id}
+                className="text-sm p-2 bg-purple-100 text-purple-800 rounded cursor-pointer hover:bg-purple-200"
+                onClick={() => onEventClick(event)}
+              >
+                {event.title}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hourly grid */}
+      <div className="border rounded-lg overflow-hidden">
+        {hours.map((hour) => {
+          const hourEvents = getEventsForHour(hour);
+          const isCurrentHour = isToday && new Date().getHours() === hour;
+          
+          return (
+            <div 
+              key={hour} 
+              className={`flex border-b last:border-b-0 min-h-[60px] ${isCurrentHour ? 'bg-blue-50' : ''}`}
+            >
+              <div className="w-20 p-2 text-sm text-muted-foreground border-r flex-shrink-0">
+                {formatHour(hour)}
+              </div>
+              <div 
+                className="flex-1 p-1 cursor-pointer hover:bg-muted/30"
+                onClick={onAddEvent}
+              >
+                {hourEvents.map((event: any) => (
+                  <div
+                    key={event.id}
+                    className={`text-xs p-2 rounded mb-1 cursor-pointer hover:shadow-sm ${
+                      getEventTypeColor(event.type)
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEventClick(event);
+                    }}
+                  >
+                    <div className="font-medium">{event.title}</div>
+                    <div className="text-muted-foreground">{event.time}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default ProjectCalendarView; 

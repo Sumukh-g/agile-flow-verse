@@ -1,10 +1,4 @@
-import CalendarBoard from '@/components/boards/CalendarBoard';
-import FlowchartBoard from '@/components/boards/FlowchartBoard';
-import GanttBoard from '@/components/boards/GanttBoard';
 import KanbanBoard from '@/components/boards/KanbanBoard';
-import ListBoard from '@/components/boards/ListBoard';
-import MindmapBoard from '@/components/boards/MindmapBoard';
-import TimelineBoard from '@/components/boards/TimelineBoard';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
@@ -21,22 +15,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Brain,
-    Calendar,
     Columns,
     Filter,
-    GitBranch,
     Grid,
     LayoutDashboard,
     List,
     Lock,
     MoreHorizontal,
     Plus,
-    Settings,
     Star,
     StarOff,
     Trello,
@@ -44,8 +33,10 @@ import {
     UserPlus,
     Users
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from "sonner";
+import { useProjects, useCreateProject, Project } from '@/hooks/useProjects';
+import { formatDistanceToNow } from 'date-fns';
 
 interface BoardCard {
   id: string;
@@ -58,94 +49,34 @@ interface BoardCard {
   template?: boolean;
   type?: 'kanban' | 'scrum' | 'custom' | 'timeline';
   visibility?: 'private' | 'team' | 'public';
+  projectId: string;
 }
-
-const INITIAL_BOARDS: BoardCard[] = [
-  {
-    id: '1',
-    title: 'Product Roadmap',
-    description: 'Strategic planning for product development',
-    collaborators: ['JD', 'AS'],
-    tags: ['Planning', 'Strategy'],
-    createdAt: '3 days ago',
-    starred: true,
-    type: 'kanban',
-    visibility: 'team'
-  },
-  {
-    id: '2',
-    title: 'Design System',
-    description: 'Components and design patterns',
-    collaborators: ['RM', 'JW'],
-    tags: ['Design', 'UI'],
-    createdAt: '1 week ago',
-    type: 'kanban',
-    visibility: 'team'
-  },
-  {
-    id: '3',
-    title: 'Marketing Campaign',
-    description: 'Q3 marketing initiatives',
-    collaborators: ['TW', 'AS'],
-    tags: ['Marketing'],
-    createdAt: '2 days ago',
-    type: 'timeline',
-    visibility: 'public'
-  },
-  {
-    id: '4',
-    title: 'Sprint Planning',
-    description: 'Current sprint tasks and goals',
-    collaborators: ['JD', 'JW', 'TW'],
-    tags: ['Development', 'Agile'],
-    createdAt: '5 days ago',
-    starred: true,
-    type: 'scrum',
-    visibility: 'team'
-  },
-  {
-    id: '5',
-    title: 'Customer Feedback Board',
-    description: 'Track and prioritize user requests',
-    collaborators: ['JD', 'AS', 'RM'],
-    tags: ['Feedback', 'Product'],
-    createdAt: '1 week ago',
-    type: 'custom',
-    visibility: 'team'
-  },
-  {
-    id: '6',
-    title: 'Project Timeline',
-    description: 'Major milestones and deliverables',
-    collaborators: ['JW', 'TW'],
-    tags: ['Planning', 'Timeline'],
-    createdAt: '2 weeks ago',
-    type: 'timeline',
-    visibility: 'public'
-  },
-  {
-    id: '7',
-    title: 'Kanban Template',
-    description: 'Standard workflow template',
-    collaborators: [],
-    tags: ['Template'],
-    createdAt: '1 month ago',
-    template: true,
-    type: 'kanban',
-    visibility: 'private'
-  },
-];
 
 const BOARD_TYPES = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, description: 'Overview of all boards and projects' },
-  { id: 'gantt', name: 'Gantt Chart', icon: Calendar, description: 'Timeline and project management' },
-  { id: 'mindmap', name: 'Mindmap', icon: Brain, description: 'Visual thinking and idea mapping' },
-  { id: 'flowchart', name: 'Flowchart', icon: GitBranch, description: 'Process flows and diagrams' },
   { id: 'kanban', name: 'Kanban', icon: Trello, description: 'Task management and workflows' }
 ];
 
 const BoardsPage = () => {
-  const [boards, setBoards] = useState<BoardCard[]>(INITIAL_BOARDS);
+  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const createProject = useCreateProject();
+  
+  // Convert projects to board cards
+  const boards: BoardCard[] = useMemo(() => {
+    return projects.map((project: Project) => ({
+      id: project.id,
+      title: project.name,
+      description: project.description || 'No description',
+      collaborators: [], // TODO: Get project members
+      tags: project.tags || [],
+      createdAt: formatDistanceToNow(new Date(project.createdAt), { addSuffix: true }),
+      starred: false,
+      type: 'kanban' as const,
+      visibility: project.isPublic ? 'public' as const : 'team' as const,
+      projectId: project.id,
+    }));
+  }, [projects]);
+
   const [newBoardTitle, setNewBoardTitle] = useState('');
   const [newBoardDesc, setNewBoardDesc] = useState('');
   const [newBoardType, setNewBoardType] = useState<string>('kanban');
@@ -154,68 +85,73 @@ const BoardsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeFilter, setActiveFilter] = useState<string>('all');
-  const [selectedBoardType, setSelectedBoardType] = useState('kanban');
+  const [selectedBoardType, setSelectedBoardType] = useState('dashboard');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   
   const filteredBoards = boards.filter(board => {
-    // First filter by search term
     const matchesSearch = board.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       board.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       board.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
       
-    // Then filter by active filter
     let matchesFilter = true;
     if (activeFilter === 'starred') {
       matchesFilter = board.starred === true;
     } else if (activeFilter === 'recent') {
-      matchesFilter = board.createdAt.includes('day');
-    } else if (activeFilter === 'templates') {
-      matchesFilter = board.template === true;
+      matchesFilter = board.createdAt.includes('day') || board.createdAt.includes('hour');
     }
     
     return matchesSearch && matchesFilter;
   });
 
-  const handleCreateBoard = () => {
+  const handleCreateBoard = async () => {
     if (!newBoardTitle.trim()) {
       toast.error('Please enter a board title');
       return;
     }
 
-    const newBoard: BoardCard = {
-      id: Date.now().toString(),
-      title: newBoardTitle,
-      description: newBoardDesc,
-      collaborators: ['JD'],
-      tags: [],
-      createdAt: 'Just now',
-      type: newBoardType as 'kanban' | 'scrum' | 'custom' | 'timeline',
-      visibility: newBoardVisibility as 'private' | 'team' | 'public'
-    };
+    try {
+      const newProject = await createProject.mutateAsync({
+        name: newBoardTitle,
+        description: newBoardDesc,
+        status: 'active',
+        priority: 'medium',
+        isPublic: newBoardVisibility === 'public',
+      });
 
-    setBoards(prev => [newBoard, ...prev]);
-    setNewBoardTitle('');
-    setNewBoardDesc('');
-    setDialogOpen(false);
-    toast.success('Board created successfully');
+      setNewBoardTitle('');
+      setNewBoardDesc('');
+      setDialogOpen(false);
+      
+      // Switch to Kanban view and show the new board
+      setSelectedBoardType('kanban');
+      setSelectedProjectId(newProject.id);
+      
+      toast.success('Board created successfully');
+    } catch (error: any) {
+      toast.error(error?.apiError?.message || 'Failed to create board');
+    }
   };
 
   const handleDeleteBoard = (id: string) => {
-    setBoards(prev => prev.filter(board => board.id !== id));
-    toast.success('Board deleted');
+    // TODO: Implement project deletion
+    toast.info('Project deletion coming soon');
   };
 
   const handleOpenBoard = (id: string) => {
-    toast.info(`Opening board: ${boards.find(b => b.id === id)?.title}`);
+    const board = boards.find(b => b.id === id);
+    if (!board) {
+      toast.error('Board not found');
+      return;
+    }
+    
+    // Switch to Kanban view and set the project
+    setSelectedBoardType('kanban');
+    setSelectedProjectId(board.projectId);
   };
 
   const handleStarBoard = (id: string) => {
-    setBoards(prev => prev.map(board =>
-      board.id === id ? { ...board, starred: !board.starred } : board
-    ));
-    
-    const board = boards.find(b => b.id === id);
-    const action = board?.starred ? 'removed from' : 'added to';
-    toast.success(`${board?.title} ${action} favorites`);
+    // TODO: Implement starring (could be a project favorite)
+    toast.info('Starring feature coming soon');
   };
 
   const getTypeIcon = (type?: string) => {
@@ -244,12 +180,20 @@ const BoardsPage = () => {
     }
   };
 
+  if (projectsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading boards...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Boards</h1>
         <p className="text-muted-foreground">
-          Visual boards for planning and collaboration.
+          Visual boards for planning and collaboration. Each project has its own Kanban board.
         </p>
       </div>
 
@@ -269,7 +213,6 @@ const BoardsPage = () => {
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="starred">Starred</TabsTrigger>
               <TabsTrigger value="recent">Recent</TabsTrigger>
-              <TabsTrigger value="templates">Templates</TabsTrigger>
             </TabsList>
           </Tabs>
           
@@ -281,18 +224,9 @@ const BoardsPage = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setActiveFilter('all')}>
-                All
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setActiveFilter('starred')}>
-                Starred
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setActiveFilter('recent')}>
-                Recent
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setActiveFilter('templates')}>
-                Templates
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('all')}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('starred')}>Starred</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveFilter('recent')}>Recent</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         
@@ -358,9 +292,6 @@ const BoardsPage = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="kanban">Kanban Board</SelectItem>
-                        <SelectItem value="scrum">Scrum Board</SelectItem>
-                        <SelectItem value="timeline">Timeline</SelectItem>
-                        <SelectItem value="custom">Custom Board</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -374,29 +305,25 @@ const BoardsPage = () => {
                         <SelectValue placeholder="Select visibility" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="private">Private</SelectItem>
                         <SelectItem value="team">Team</SelectItem>
                         <SelectItem value="public">Public</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Switch id="template-mode" />
-                  <Label htmlFor="template-mode">Create as template</Label>
-                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreateBoard}>Create Board</Button>
+                <Button onClick={handleCreateBoard} disabled={createProject.isPending}>
+                  {createProject.isPending ? 'Creating...' : 'Create Board'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      {/* NEW: Board/Chart Type Bar */}
+      {/* Board Type Selection */}
       <div className="w-full overflow-x-auto py-2 mb-2">
         <div className="flex gap-2 min-w-[400px]">
           {BOARD_TYPES.map(type => {
@@ -405,7 +332,12 @@ const BoardsPage = () => {
               <button
                 key={type.id}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors whitespace-nowrap font-medium text-base ${selectedBoardType === type.id ? 'bg-indigo-600 text-white shadow' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'}`}
-                onClick={() => setSelectedBoardType(type.id)}
+                onClick={() => {
+                  setSelectedBoardType(type.id);
+                  if (type.id === 'dashboard') {
+                    setSelectedProjectId(null);
+                  }
+                }}
                 style={{ minWidth: 120 }}
               >
                 <IconComponent className="h-4 w-4" />
@@ -416,7 +348,7 @@ const BoardsPage = () => {
         </div>
       </div>
 
-      {/* Board/Chart Content */}
+      {/* Board Content */}
       {selectedBoardType === 'dashboard' && (
         <>
           {viewMode === 'grid' ? (
@@ -502,7 +434,7 @@ const BoardsPage = () => {
                         size="sm"
                         onClick={() => handleOpenBoard(board.id)}
                       >
-                        {board.template ? 'Use Template' : 'Open Board'}
+                        Open Board
                       </Button>
                     </div>
                   </CardFooter>
@@ -599,92 +531,26 @@ const BoardsPage = () => {
           )}
         </>
       )}
-      {selectedBoardType === 'gantt' && (
-        <GanttBoard />
+      
+      {selectedBoardType === 'kanban' && selectedProjectId && (
+        <KanbanBoard projectId={selectedProjectId} />
       )}
-      {selectedBoardType === 'kanban' && (
-        <KanbanBoard />
-      )}
-      {selectedBoardType === 'flowchart' && (
-        <FlowchartBoard />
-      )}
-      {selectedBoardType === 'list' && (
-        <ListBoard />
-      )}
-      {selectedBoardType === 'timeline' && (
-        <TimelineBoard />
-      )}
-      {selectedBoardType === 'calendar' && (
-        <CalendarBoard />
-      )}
-      {selectedBoardType === 'mindmap' && (
-        <MindmapBoard />
-      )}
-      {selectedBoardType === 'swimlane' && (
-        <div className="p-8 text-center text-lg text-muted-foreground">Swimlane board coming soon!</div>
-      )}
-
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button variant="outline" className="w-full" onClick={(e) => e.preventDefault()}>
-            <Settings className="mr-2 h-4 w-4" />
-            Board Settings
+      
+      {selectedBoardType === 'kanban' && !selectedProjectId && (
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium mb-2">No board selected</h3>
+          <p className="text-muted-foreground mb-4">
+            Select a board from the dashboard or create a new one
+          </p>
+          <Button onClick={() => {
+            setSelectedBoardType('dashboard');
+            setDialogOpen(true);
+          }}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create New Board
           </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Board Settings</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Default Board Type</Label>
-              <Select defaultValue="kanban">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kanban">Kanban Board</SelectItem>
-                  <SelectItem value="scrum">Scrum Board</SelectItem>
-                  <SelectItem value="timeline">Timeline</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Default View</Label>
-              <Select defaultValue="grid">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="grid">Grid</SelectItem>
-                  <SelectItem value="list">List</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="autoAssign">Auto-assign to creator</Label>
-                <Switch id="autoAssign" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="enableTemplates">Enable templates</Label>
-                <Switch id="enableTemplates" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="enableWipLimits">WIP limits</Label>
-                <Switch id="enableWipLimits" />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={() => toast.success('Settings saved')}>
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };

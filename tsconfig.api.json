@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "dist-api",
-    "rootDir": "src/api",
+    "rootDir": "src",
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "Node",
@@ -14,13 +14,15 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node", "multer"],
+    "types": ["node"],
     "lib": ["ES2020"]
   },
   "include": [
     "src/api/**/*.ts",
     "src/api/**/*.d.ts",
-    "src/api/storage/multer.d.ts"
+    "src/api/storage/multer.d.ts",
+    "src/shared/**/*.ts",
+    "src/shared/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

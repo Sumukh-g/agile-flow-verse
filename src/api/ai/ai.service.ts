@@ -463,12 +463,12 @@ Return ONLY a JSON array of strings: ["action 1", "action 2", ...]`,
           costCents = 25;
           break;
         case 'Comms':
-          output = await this.runCommsAgent(input);
+          output = await this.runCommsAgent(tenantId, input);
           toolCalls = 1;
           costCents = 15;
           break;
         case 'Summarizer':
-          output = await this.runSummarizerAgent(input);
+          output = await this.runSummarizerAgent(tenantId, input);
           toolCalls = 1;
           costCents = 10;
           break;
@@ -563,14 +563,14 @@ Create a detailed project plan:`,
   /**
    * Comms Agent: Generate updates and stakeholder messages
    */
-  private async runCommsAgent(input: any): Promise<any> {
+  private async runCommsAgent(tenantId: string, input: any): Promise<any> {
     const { projectId, timePeriod, audience = 'team' } = input;
 
-    // Fetch project and task data
-    const project = await this.prisma.tx.project.findUnique({
-      where: { id: projectId },
+    const project = await this.prisma.tx.project.findFirst({
+      where: { id: projectId, tenantId },
       include: {
         tasks: {
+          where: { tenantId },
           take: 50,
           orderBy: { updatedAt: 'desc' },
         },
@@ -594,12 +594,12 @@ Create a detailed project plan:`,
   /**
    * Summarizer Agent: Summarize tasks, notes, and activity
    */
-  public async runSummarizerAgent(input: any): Promise<any> {
+  public async runSummarizerAgent(tenantId: string, input: any): Promise<any> {
     const { type, ids } = input;
 
     if (type === 'notes') {
       const notes = await this.prisma.tx.note.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, tenantId },
       });
 
       const combinedContent = notes.map((n) => `${n.title}\n${n.content}`).join('\n\n---\n\n');
@@ -612,7 +612,7 @@ Create a detailed project plan:`,
       };
     } else if (type === 'tasks') {
       const tasks = await this.prisma.tx.task.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, tenantId },
       });
 
       const combinedContent = tasks
@@ -636,14 +636,284 @@ Create a detailed project plan:`,
     return { ok: true, tool: 'createTask', input };
   }
 
-  async toolSummarizeNotes(input: z.infer<typeof summarizeNotesInput>) {
+  async toolSummarizeNotes(tenantId: string, input: z.infer<typeof summarizeNotesInput>) {
     summarizeNotesInput.parse(input);
-    const result = await this.runSummarizerAgent({ type: 'notes', ids: input.noteIds });
+    const result = await this.runSummarizerAgent(tenantId, { type: 'notes', ids: input.noteIds });
     return { ok: true, tool: 'summarizeNotes', input, summary: result.summary };
   }
 
   async toolPostUpdate(input: z.infer<typeof postUpdateInput>) {
     postUpdateInput.parse(input);
     return { ok: true, tool: 'postUpdate', input };
+  }
+
+  // ===========================
+  // Sprint Retro AI Facilitator
+  // ===========================
+
+  async generateRetroInsights(tenantId: string, sprintId: string) {
+    const sprint = await this.prisma.sprint.findFirst({
+      where: { id: sprintId, tenantId },
+      include: {
+        kanbanCards: {
+          select: { id: true, title: true, status: true, storyPoints: true, updatedAt: true, createdAt: true },
+        },
+      },
+    });
+
+    if (!sprint) throw new Error('Sprint not found');
+
+    const totalPoints = sprint.kanbanCards.reduce((s, c) => s + (c.storyPoints || 0), 0);
+    const completedPoints = sprint.kanbanCards.filter(c => c.status === 'done')
+      .reduce((s, c) => s + (c.storyPoints || 0), 0);
+
+    const stuckInReview = sprint.kanbanCards.filter(c => {
+      if (c.status !== 'review') return false;
+      const days = (new Date().getTime() - c.updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+      return days > 3;
+    });
+
+    const pastRetros = await this.prisma.sprint.findMany({
+      where: { tenantId, projectId: sprint.projectId, status: 'COMPLETED', id: { not: sprintId } },
+      select: { name: true, wentWell: true, needsImprovement: true, actionItems: true, velocity: true, committedPoints: true },
+      orderBy: { endDate: 'desc' },
+      take: 3,
+    });
+
+    const velocityDelta = pastRetros.length > 0 && pastRetros[0].velocity
+      ? ((sprint.velocity || completedPoints) - pastRetros[0].velocity) / pastRetros[0].velocity * 100
+      : 0;
+
+    const prompt = `You are an expert Agile coach facilitating a sprint retrospective.
+
+Sprint: "${sprint.name}"
+Committed: ${sprint.committedPoints || totalPoints} points
+Completed: ${completedPoints} points
+Velocity change from last sprint: ${Math.round(velocityDelta)}%
+Items added mid-sprint (scope creep): ${sprint.scopeChanges}
+Cards stuck in review >3 days: ${stuckInReview.length} (${stuckInReview.map(c => c.title).join(', ')})
+
+Past retrospective themes:
+${pastRetros.map(r => `- ${r.name}: Well: "${r.wentWell || 'N/A'}", Improve: "${r.needsImprovement || 'N/A'}", Actions: "${r.actionItems || 'N/A'}"`).join('\n')}
+
+Generate retrospective insights. Return JSON:
+{
+  "prompts": ["question for team discussion 1", "question 2", "question 3"],
+  "patterns": ["recurring pattern observed across sprints"],
+  "suggestedWentWell": "pre-fill for what went well",
+  "suggestedNeedsImprovement": "pre-fill for what needs improvement",
+  "recommendedActionItems": ["specific action 1", "specific action 2"]
+}`;
+
+    try {
+      const result = await this.chat({
+        messages: [
+          { role: 'system', content: 'You are an expert Agile coach. Always respond with valid JSON only.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.4,
+        maxTokens: 1500,
+      });
+
+      return JSON.parse(result.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+    } catch (error) {
+      this.logger.error('Retro AI error:', error);
+      const prompts = [];
+      if (stuckInReview.length > 0) {
+        prompts.push(`${stuckInReview.length} cards were stuck in Review for >3 days. What caused the bottleneck?`);
+      }
+      if (Math.abs(velocityDelta) > 15) {
+        prompts.push(`Velocity ${velocityDelta > 0 ? 'increased' : 'dropped'} by ${Math.abs(Math.round(velocityDelta))}%. What changed?`);
+      }
+      if (sprint.scopeChanges > 0) {
+        prompts.push(`${sprint.scopeChanges} items were added mid-sprint. How can we prevent scope creep?`);
+      }
+      if (prompts.length === 0) {
+        prompts.push('What went well this sprint?', 'What could be improved?', 'What will we commit to doing differently?');
+      }
+
+      return {
+        prompts,
+        patterns: [],
+        suggestedWentWell: '',
+        suggestedNeedsImprovement: '',
+        recommendedActionItems: [],
+      };
+    }
+  }
+
+  // ===========================
+  // Epic Decomposition
+  // ===========================
+
+  async decomposeEpic(tenantId: string, epicId: string, description: string) {
+    const epic = await this.prisma.epic.findFirst({
+      where: { id: epicId, tenantId },
+      select: { id: true, name: true, projectId: true, priority: true, targetDate: true },
+    });
+
+    if (!epic) throw new Error('Epic not found');
+
+    const prompt = `You are an expert product owner decomposing an epic into user stories.
+
+Epic: "${epic.name}"
+Priority: ${epic.priority}
+Target Date: ${epic.targetDate?.toISOString().split('T')[0] || 'Not set'}
+Description: ${description}
+
+Decompose this into 8-12 user stories. For each story, provide:
+- title (concise, action-oriented)
+- description (as a user story: "As a [role], I want to [action], so that [benefit]")
+- acceptanceCriteria (2-3 bullet points)
+- storyPoints (Fibonacci: 1, 2, 3, 5, 8, 13)
+- priority (critical, high, medium, low)
+- suggestedSprint (1, 2, 3 — which sprint to schedule in)
+
+Return JSON:
+{
+  "stories": [
+    {
+      "title": "...",
+      "description": "...",
+      "acceptanceCriteria": "...",
+      "storyPoints": 5,
+      "priority": "high",
+      "suggestedSprint": 1
+    }
+  ],
+  "totalPoints": 0,
+  "estimatedSprints": 3
+}`;
+
+    try {
+      const result = await this.chat({
+        messages: [
+          { role: 'system', content: 'You are an expert product owner. Always respond with valid JSON only.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.5,
+        maxTokens: 3000,
+      });
+
+      const parsed = JSON.parse(result.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+      return { epicId, epicName: epic.name, projectId: epic.projectId, ...parsed };
+    } catch (error) {
+      this.logger.error('Epic decomposition error:', error);
+      return {
+        epicId, epicName: epic.name, projectId: epic.projectId,
+        stories: [],
+        totalPoints: 0,
+        estimatedSprints: 0,
+        error: 'AI decomposition unavailable. Please create stories manually.',
+      };
+    }
+  }
+
+  // ===========================
+  // Natural Language Query
+  // ===========================
+
+  async naturalLanguageQuery(tenantId: string, projectId: string, query: string) {
+    const schema = `Available data: 
+- kanbanCards (id, title, description, status, priority, storyPoints, epicId, sprintId, dueDate, isRefined, assignees)
+- tasks (id, title, status, priority, storyPoints, epicId, sprintId)
+- sprints (id, name, status, startDate, endDate, velocity, committedPoints)
+- epics (id, name, status, progress, riskLevel, targetDate, storyPoints)`;
+
+    const prompt = `${schema}
+
+User question: "${query}"
+
+Generate a Prisma-compatible filter to answer this question. Return JSON:
+{
+  "model": "kanbanCard" | "task" | "sprint" | "epic",
+  "where": { prisma filter object },
+  "select": { fields to return },
+  "orderBy": { optional ordering },
+  "take": number (max 50),
+  "explanation": "human-readable explanation of what this query does"
+}
+
+IMPORTANT: Do NOT include tenantId or projectId in the filter — those are added automatically.`;
+
+    try {
+      const result = await this.chat({
+        messages: [
+          { role: 'system', content: 'You are a database query assistant. Always respond with valid JSON only. Generate safe read-only Prisma queries.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        maxTokens: 1000,
+      });
+
+      const parsed = JSON.parse(result.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+
+      const allowedModels = ['kanbanCard', 'task', 'sprint', 'epic'];
+      if (!allowedModels.includes(parsed.model)) {
+        return { error: 'Invalid query target', results: [] };
+      }
+
+      const sensitiveFields = ['password', 'totpSecret', 'totpBackupCodes', 'token', 'refreshToken', 'codeVerifier'];
+      const allowedSelectFields: Record<string, string[]> = {
+        kanbanCard: ['id', 'title', 'description', 'status', 'priority', 'storyPoints', 'dueDate', 'isRefined', 'createdAt', 'updatedAt'],
+        task: ['id', 'title', 'description', 'status', 'priority', 'storyPoints', 'dueDate', 'createdAt', 'updatedAt'],
+        sprint: ['id', 'name', 'status', 'goal', 'startDate', 'endDate', 'velocity', 'committedPoints', 'plannedPoints', 'scopeChanges'],
+        epic: ['id', 'name', 'description', 'status', 'progress', 'riskLevel', 'riskReason', 'targetDate', 'startDate', 'storyPoints', 'businessValue', 'priority', 'color'],
+      };
+
+      if (parsed.select && typeof parsed.select === 'object') {
+        const allowed = allowedSelectFields[parsed.model] || [];
+        const filteredSelect: Record<string, boolean> = {};
+        for (const key of Object.keys(parsed.select)) {
+          if (allowed.includes(key) && !sensitiveFields.includes(key)) {
+            filteredSelect[key] = true;
+          }
+        }
+        parsed.select = Object.keys(filteredSelect).length > 0 ? filteredSelect : undefined;
+      }
+
+      if (parsed.where && typeof parsed.where === 'object') {
+        const whereStr = JSON.stringify(parsed.where);
+        for (const field of sensitiveFields) {
+          if (whereStr.includes(field)) {
+            return { error: 'Query references restricted fields', results: [] };
+          }
+        }
+      }
+
+      const where = { ...parsed.where, tenantId };
+      if (projectId && parsed.model !== 'sprint') {
+        (where as any).projectId = projectId;
+      }
+
+      const modelMap: Record<string, any> = {
+        kanbanCard: this.prisma.kanbanCard,
+        task: this.prisma.task,
+        sprint: this.prisma.sprint,
+        epic: this.prisma.epic,
+      };
+
+      const results = await modelMap[parsed.model].findMany({
+        where,
+        select: parsed.select,
+        orderBy: parsed.orderBy,
+        take: Math.min(parsed.take || 20, 50),
+      });
+
+      return {
+        query,
+        explanation: parsed.explanation,
+        model: parsed.model,
+        resultCount: results.length,
+        results,
+      };
+    } catch (error) {
+      this.logger.error('NL query error:', error);
+      return {
+        query,
+        error: 'Could not process natural language query. Please try rephrasing.',
+        results: [],
+      };
+    }
   }
 } 

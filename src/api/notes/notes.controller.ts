@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Put, Delete, Query, Request, UseGua
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { decodeCursor } from '../common/pagination/cursor';
-import { CreateNoteDto } from './dto';
+import { CreateNoteDto, NotesListQueryDto, UpdateNoteDto } from './dto';
 import { NotesService } from './notes.service';
 
 @ApiTags('notes')
@@ -18,8 +18,14 @@ export class NotesController {
   }
 
   @Get()
-  async list(@Query('projectId') projectId: string, @Query('cursor') cursor?: string, @Query('limit') limit?: string, @Request() req?: any) {
-    return this.svc.list(req.user.tenantId, projectId, decodeCursor(cursor), limit ? Number(limit) : 25);
+  async list(@Query() query: NotesListQueryDto, @Request() req: any) {
+    return this.svc.list(
+      req.user.tenantId,
+      req.user.userId,
+      { projectId: query.projectId, scope: query.scope },
+      decodeCursor(query.cursor),
+      query.limit ?? 25,
+    );
   }
 
   @Get(':id')
@@ -28,12 +34,21 @@ export class NotesController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+  async update(@Param('id') id: string, @Body() body: UpdateNoteDto, @Request() req: any) {
     return this.svc.update(req.user.tenantId, req.user.userId, id, body);
   }
 
   @Delete(':id')
   async delete(@Param('id') id: string, @Request() req: any) {
     return this.svc.delete(req.user.tenantId, req.user.userId, id);
+  }
+
+  @Post(':id/calendar-events')
+  async createCalendarEventFromNote(
+    @Param('id') id: string,
+    @Body() body: { title?: string; startAt: string; endAt: string; allDay?: boolean; type?: string },
+    @Request() req: any,
+  ) {
+    return this.svc.createCalendarEventFromNote(req.user.tenantId, req.user.userId, id, body);
   }
 } 

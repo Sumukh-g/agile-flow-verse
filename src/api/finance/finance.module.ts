@@ -1,0 +1,15 @@
+import { Module } from '@nestjs/common';
+import { FinanceController } from './finance.controller';
+import { FinanceService } from './finance.service';
+import { CommonModule } from '../common/common.module';
+import { AuthModule } from '../auth/auth.module';
+import { PrismaModule } from '../prisma/prisma.module';
+
+@Module({
+  imports: [AuthModule, PrismaModule, CommonModule],
+  controllers: [FinanceController],
+  providers: [FinanceService],
+  exports: [FinanceService],
+})
+export class FinanceModule {}
+

@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import 'dotenv/config';
 import helmet from 'helmet';
+import { createServer } from 'node:net';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { validateEnvironment } from './common/config/env.validation';
@@ -11,6 +12,29 @@ import { ErrorFilter } from './common/http/error.filter';
 import { IdempotencyInterceptor } from './common/http/idempotency.interceptor';
 import { RateLimitMiddleware } from './common/http/rate-limit.middleware';
 import { TenantContextInterceptor } from './common/tenant/tenant-context.interceptor';
+
+async function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close(() => resolve(true));
+    });
+    // Probe using Node's default binding behavior (same as app.listen(port)):
+    // this catches both IPv4/IPv6 occupancy on Windows.
+    server.listen(port);
+  });
+}
+
+async function getAvailablePort(startPort: number, maxAttempts = 10): Promise<number> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = startPort + attempt;
+    if (await isPortFree(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`No available port found in range ${startPort}-${startPort + maxAttempts - 1}`);
+}
 
 async function bootstrap() {
   // Validate environment variables before starting
@@ -170,9 +194,20 @@ async function bootstrap() {
     });
   }
 
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await app.listen(port);
-  Logger.log(`API listening on http://localhost:${port}`);
-  Logger.log(`WebSocket Gateway available at ws://localhost:${port}/realtime`);
+  const isProd = process.env.NODE_ENV === 'production';
+  const requestedPort = process.env.PORT ? Number(process.env.PORT) : 3000;
+  let boundPort = requestedPort;
+
+  if (!isProd) {
+    const selectedPort = await getAvailablePort(requestedPort);
+    if (selectedPort !== requestedPort) {
+      Logger.warn(`Port ${requestedPort} is already in use. Falling back to port ${selectedPort} for this session.`);
+    }
+    boundPort = selectedPort;
+  }
+
+  await app.listen(boundPort);
+  Logger.log(`API listening on http://localhost:${boundPort}`);
+  Logger.log(`WebSocket Gateway available at ws://localhost:${boundPort}/realtime`);
 }
 bootstrap(); 

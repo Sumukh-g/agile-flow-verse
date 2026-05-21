@@ -272,12 +272,23 @@ export class TestService {
   }
 
   private async createTestNote(tenantId: string, projectId: string) {
+    const project = await this.prisma.tx.project.findUnique({
+      where: { id: projectId },
+      select: { createdBy: true },
+    });
+    if (!project) {
+      throw new Error('Project not found while creating test note');
+    }
+
     return this.prisma.tx.note.create({
       data: {
         title: 'Test Note',
         content: 'Test note content',
+        scope: 'PROJECT',
         tenantId,
         projectId,
+        createdById: project.createdBy,
+        updatedById: project.createdBy,
       },
     });
   }

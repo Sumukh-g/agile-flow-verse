@@ -1,5 +1,26 @@
+/**
+ * Task Details Panel Component
+ * 
+ * A comprehensive side panel for viewing and editing task details.
+ * 
+ * Features:
+ * - View and edit task title/description
+ * - Display status, priority, due date, and assignee
+ * - Time tracking with start/stop timer
+ * - Time logs list with manual entry support
+ * - Subtasks management with progress indicator
+ * - Task dependencies management
+ * - Custom fields display and editing
+ * - Comments section (integrated from API)
+ * - File attachments management
+ * 
+ * The panel uses Sheet component for slide-in effect from right side.
+ * All sections use real API data instead of mock data.
+ * 
+ * @component
+ */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,10 +29,34 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, Clock, FileText, LinkIcon, Paperclip, Send } from "lucide-react";
+import { 
+  CalendarIcon, 
+  Clock, 
+  FileText, 
+  LinkIcon, 
+  Paperclip, 
+  Send, 
+  ListChecks,
+  Settings,
+  GitBranch,
+  Timer
+} from "lucide-react";
 import { toast } from "sonner";
 
+// Import real task feature components
+import { TaskTimer } from './TaskTimer';
+import { TaskSubtasks } from './TaskSubtasks';
+import { TaskTimeLogs } from './TaskTimeLogs';
+import { TaskDependencies } from './TaskDependencies';
+import { TaskCustomFields } from './TaskCustomFields';
+
+// Import hooks for real data
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+
+/**
+ * Task interface matching the API task model
+ */
 interface Task {
   id: string;
   title: string;
@@ -21,6 +66,39 @@ interface Task {
   assignee: string;
   tags: string[];
   status: string;
+  projectId?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  customFields?: Record<string, any>;
+}
+
+/**
+ * Comment interface for task comments
+ */
+interface Comment {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+/**
+ * Attachment interface for file attachments
+ */
+interface Attachment {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  url: string;
+  createdAt: string;
+  uploadedBy: {
+    name: string;
+  };
 }
 
 interface TaskDetailsPanelProps {
@@ -30,83 +108,108 @@ interface TaskDetailsPanelProps {
   onTaskUpdate: (task: Task) => void;
 }
 
+/**
+ * TaskDetailsPanel Component
+ * 
+ * Main component that renders the task details in a side panel.
+ * Uses tabs to organize different sections: Details, Subtasks, Time, Dependencies, Comments, Files
+ */
 const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({ 
   task, 
   isOpen, 
   onClose,
   onTaskUpdate
 }) => {
+  // State for active tab and form inputs
   const [activeTab, setActiveTab] = useState('details');
   const [commentText, setCommentText] = useState('');
   const [taskTitle, setTaskTitle] = useState(task?.title || '');
   const [taskDescription, setTaskDescription] = useState(task?.description || '');
 
-  // Mock comments data
-  const [comments, setComments] = useState([
-    {
-      id: 'c1',
-      author: 'JD',
-      fullName: 'John Doe',
-      text: 'This task needs more details before I can start working on it.',
-      timestamp: 'Today at 10:23 AM',
+  const queryClient = useQueryClient();
+
+  // Sync local state when task prop changes
+  useEffect(() => {
+    if (task) {
+      setTaskTitle(task.title);
+      setTaskDescription(task.description || '');
+    }
+  }, [task]);
+
+  /**
+   * Fetch comments for the task from the API
+   * Returns empty array if no task is selected
+   */
+  const { data: comments = [], refetch: refetchComments } = useQuery<Comment[]>({
+    queryKey: ['task-comments', task?.id],
+    queryFn: async () => {
+      if (!task?.id) return [];
+      try {
+        const response = await apiClient.get(`/v1/comments?taskId=${task.id}`);
+        return response.data?.items || response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch comments:', error);
+        return [];
+      }
     },
-    {
-      id: 'c2',
-      author: 'AS',
-      fullName: 'Alice Smith',
-      text: 'I will add more information shortly. Please wait for my update.',
-      timestamp: 'Today at 11:05 AM',
+    enabled: !!task?.id,
+  });
+
+  /**
+   * Fetch attachments for the task from the API
+   */
+  const { data: attachments = [] } = useQuery<Attachment[]>({
+    queryKey: ['task-attachments', task?.id],
+    queryFn: async () => {
+      if (!task?.id) return [];
+      try {
+        const response = await apiClient.get(`/v1/attachments?taskId=${task.id}`);
+        return response.data?.items || response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch attachments:', error);
+        return [];
+      }
     },
-  ]);
+    enabled: !!task?.id,
+  });
 
-  // Mock subtasks data
-  const [subtasks, setSubtasks] = useState([
-    { id: 'st1', title: 'Research competitors', completed: true },
-    { id: 'st2', title: 'Draft initial specifications', completed: false },
-    { id: 'st3', title: 'Get feedback from team', completed: false },
-  ]);
-
-  // Mock attachments data
-  const [attachments, setAttachments] = useState([
-    { id: 'a1', name: 'requirements.pdf', size: '2.4 MB', type: 'application/pdf', uploadedBy: 'JD', timestamp: 'Yesterday' },
-    { id: 'a2', name: 'mockup.png', size: '1.7 MB', type: 'image/png', uploadedBy: 'AS', timestamp: 'Yesterday' },
-  ]);
-
-  if (!task) return null;
-
-  const handleAddComment = () => {
-    if (commentText.trim()) {
-      const newComment = {
-        id: `c${comments.length + 1}`,
-        author: 'JD', // This would come from the logged-in user
-        fullName: 'John Doe',
-        text: commentText,
-        timestamp: 'Just now'
-      };
-      
-      setComments([...comments, newComment]);
+  /**
+   * Mutation to add a new comment
+   */
+  const addCommentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const response = await apiClient.post('/v1/comments', {
+        content,
+        taskId: task?.id,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-comments', task?.id] });
       setCommentText('');
       toast.success("Comment added successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to add comment");
+    },
+  });
+
+  // Early return if no task is selected
+  if (!task) return null;
+
+  /**
+   * Handle adding a new comment
+   */
+  const handleAddComment = () => {
+    if (commentText.trim()) {
+      addCommentMutation.mutate(commentText.trim());
     }
   };
 
-  const toggleSubtask = (id: string) => {
-    setSubtasks(subtasks.map(st => 
-      st.id === id ? { ...st, completed: !st.completed } : st
-    ));
-    toast.success("Subtask status updated");
-  };
-
-  const addSubtask = () => {
-    const newSubtask = { 
-      id: `st${subtasks.length + 1}`, 
-      title: 'New subtask', 
-      completed: false 
-    };
-    setSubtasks([...subtasks, newSubtask]);
-    toast.success("Subtask added");
-  };
-
+  /**
+   * Handle saving task changes (title, description)
+   * Calls the parent onTaskUpdate callback with updated task data
+   */
   const handleSaveChanges = () => {
     if (task) {
       const updatedTask = {
@@ -119,37 +222,89 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-100 text-red-800';
-      case 'Medium':
-        return 'bg-amber-100 text-amber-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
+  /**
+   * Handle custom field changes
+   * Updates task with new custom field values
+   */
+  const handleCustomFieldChange = (fieldId: string, value: any) => {
+    if (task) {
+      const updatedTask = {
+        ...task,
+        customFields: {
+          ...(task.customFields || {}),
+          [fieldId]: value,
+        },
+      };
+      onTaskUpdate(updatedTask);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'To Do':
-        return 'bg-slate-100 text-slate-800';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'In Review':
-        return 'bg-purple-100 text-purple-800';
-      case 'Done':
-        return 'bg-green-100 text-green-800';
+  /**
+   * Get background color class for priority badge
+   */
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+      case 'critical':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
       default:
-        return 'bg-slate-100 text-slate-800';
+        return 'bg-slate-100 text-slate-800 border-slate-200';
     }
+  };
+
+  /**
+   * Get background color class for status badge
+   */
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'todo':
+      case 'to do':
+        return 'bg-slate-100 text-slate-800 border-slate-200';
+      case 'in_progress':
+      case 'in progress':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'review':
+      case 'in review':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'done':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'blocked':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-slate-100 text-slate-800 border-slate-200';
+    }
+  };
+
+  /**
+   * Format file size for display
+   */
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  /**
+   * Format date for display
+   */
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="sm:max-w-md md:max-w-lg overflow-y-auto">
+      <SheetContent className="sm:max-w-xl md:max-w-2xl overflow-y-auto">
+        {/* Task Title - Editable Input */}
         <SheetHeader>
           <SheetTitle className="text-left">
             <Input 
@@ -161,6 +316,7 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
         </SheetHeader>
         
         <div className="mt-4 space-y-6">
+          {/* Status and Priority Badges */}
           <div className="flex flex-wrap gap-3">
             <Badge variant="outline" className={getPriorityColor(task.priority)}>
               {task.priority} Priority
@@ -168,20 +324,45 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
             <Badge variant="outline" className={getStatusColor(task.status)}>
               {task.status}
             </Badge>
-            <Badge variant="outline">
-              <CalendarIcon className="h-3 w-3 mr-1" /> 
-              {task.dueDate}
-            </Badge>
+            {task.dueDate && (
+              <Badge variant="outline">
+                <CalendarIcon className="h-3 w-3 mr-1" /> 
+                {formatDate(task.dueDate)}
+              </Badge>
+            )}
           </div>
           
+          {/* Tabbed Content Area */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="files">Files</TabsTrigger>
+            {/* Tab Navigation */}
+            <TabsList className="grid grid-cols-6 w-full">
+              <TabsTrigger value="details" className="text-xs">
+                <FileText className="h-3 w-3 mr-1" />
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="subtasks" className="text-xs">
+                <ListChecks className="h-3 w-3 mr-1" />
+                Subtasks
+              </TabsTrigger>
+              <TabsTrigger value="time" className="text-xs">
+                <Timer className="h-3 w-3 mr-1" />
+                Time
+              </TabsTrigger>
+              <TabsTrigger value="dependencies" className="text-xs">
+                <GitBranch className="h-3 w-3 mr-1" />
+                Deps
+              </TabsTrigger>
+              <TabsTrigger value="comments" className="text-xs">
+                <Send className="h-3 w-3 mr-1" />
+                Comments
+              </TabsTrigger>
+              <TabsTrigger value="files" className="text-xs">
+                <Paperclip className="h-3 w-3 mr-1" />
+                Files
+              </TabsTrigger>
             </TabsList>
             
+            {/* Details Tab - Basic task info */}
             <TabsContent value="details" className="space-y-4 mt-4">
               <div>
                 <label className="text-sm font-medium">Description</label>
@@ -199,21 +380,18 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
                 <div className="flex items-center gap-2 mt-1">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {task.assignee}
+                      {task.assignee?.slice(0, 2).toUpperCase() || 'UN'}
                     </AvatarFallback>
                   </Avatar>
-                  <span>{task.assignee === 'JD' ? 'John Doe' : 
-                         task.assignee === 'AS' ? 'Alice Smith' :
-                         task.assignee === 'RM' ? 'Robert Miller' :
-                         task.assignee === 'JW' ? 'Jane Wilson' :
-                         task.assignee === 'TW' ? 'Thomas Wright' : task.assignee}</span>
+                  <span>{task.assignee || 'Unassigned'}</span>
                 </div>
               </div>
               
+              {/* Tags Section */}
               <div>
                 <label className="text-sm font-medium">Tags</label>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {task.tags.map((tag, idx) => (
+                  {task.tags?.map((tag, idx) => (
                     <Badge key={idx} variant="outline">
                       {tag}
                     </Badge>
@@ -224,12 +402,13 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
                 </div>
               </div>
               
+              {/* Time Estimate Display */}
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <label className="text-sm font-medium">Time Estimate</label>
                   <div className="flex items-center gap-2 mt-1">
                     <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span>4 hours</span>
+                    <span>{task.estimatedHours || 0} hours</span>
                   </div>
                 </div>
                 
@@ -237,93 +416,83 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
                   <label className="text-sm font-medium">Time Logged</label>
                   <div className="flex items-center gap-2 mt-1">
                     <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span>2.5 hours</span>
+                    <span>{task.actualHours || 0} hours</span>
                   </div>
                 </div>
               </div>
-              
-              <div>
-                <label className="text-sm font-medium">Dependencies</label>
-                <div className="flex flex-col gap-2 mt-1">
-                  <div className="flex items-center gap-2 p-2 border rounded-md">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span>Design Requirements (Blocked by)</span>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <LinkIcon className="h-3 w-3 mr-1" /> Add Dependency
-                  </Button>
-                </div>
+
+              {/* Custom Fields Section - Inline in Details tab */}
+              <div className="pt-4 border-t">
+                <TaskCustomFields
+                  taskId={task.id}
+                  customFields={task.customFields || {}}
+                  onFieldChange={handleCustomFieldChange}
+                />
               </div>
             </TabsContent>
             
+            {/* Subtasks Tab - Real component */}
             <TabsContent value="subtasks" className="space-y-4 mt-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">Subtasks</h4>
-                <Button size="sm" variant="outline" onClick={addSubtask}>Add Subtask</Button>
-              </div>
-              
-              <div className="space-y-2">
-                {subtasks.map((subtask) => (
-                  <div key={subtask.id} className="flex items-center space-x-2 p-2 border rounded-md">
-                    <Checkbox 
-                      id={subtask.id} 
-                      checked={subtask.completed}
-                      onCheckedChange={() => toggleSubtask(subtask.id)}
-                    />
-                    <label
-                      htmlFor={subtask.id}
-                      className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${
-                        subtask.completed ? 'line-through text-muted-foreground' : ''
-                      }`}
-                    >
-                      {subtask.title}
-                    </label>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="pt-4">
-                <h4 className="text-sm font-medium">Progress</h4>
-                <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-                  <div 
-                    className="bg-primary h-2.5 rounded-full" 
-                    style={{ width: `${(subtasks.filter(st => st.completed).length / subtasks.length) * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {subtasks.filter(st => st.completed).length} of {subtasks.length} subtasks completed
-                </p>
-              </div>
+              <TaskSubtasks 
+                taskId={task.id} 
+                projectId={task.projectId}
+                onSubtaskCreated={() => {
+                  // Optionally refresh task data after subtask creation
+                  queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                }}
+              />
+            </TabsContent>
+
+            {/* Time Tracking Tab - Real components */}
+            <TabsContent value="time" className="space-y-4 mt-4">
+              <TaskTimer taskId={task.id} taskTitle={task.title} />
+              <TaskTimeLogs taskId={task.id} />
+            </TabsContent>
+
+            {/* Dependencies Tab - Real component */}
+            <TabsContent value="dependencies" className="space-y-4 mt-4">
+              <TaskDependencies taskId={task.id} projectId={task.projectId} />
             </TabsContent>
             
+            {/* Comments Tab - API integrated */}
             <TabsContent value="comments" className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">Comments ({comments.length})</h4>
               </div>
               
-              <div className="space-y-4">
-                {comments.map(comment => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {comment.author}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-sm">{comment.fullName}</h5>
-                        <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
-                      </div>
-                      <p className="text-sm mt-1">{comment.text}</p>
-                    </div>
+              {/* Comments List */}
+              <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                {comments.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    No comments yet. Be the first to comment!
                   </div>
-                ))}
+                ) : (
+                  comments.map(comment => (
+                    <div key={comment.id} className="flex gap-3 p-3 rounded-lg hover:bg-accent/50">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          {comment.user?.name?.slice(0, 2).toUpperCase() || 'UN'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">{comment.user?.name || 'Unknown'}</h5>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(comment.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm mt-1">{comment.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               
-              <div className="flex items-center gap-2 pt-2">
+              {/* Add Comment Form */}
+              <div className="flex items-start gap-2 pt-2 border-t">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    JD
+                    ME
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 flex gap-2">
@@ -333,13 +502,19 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                   />
-                  <Button variant="default" size="icon" onClick={handleAddComment}>
+                  <Button 
+                    variant="default" 
+                    size="icon" 
+                    onClick={handleAddComment}
+                    disabled={addCommentMutation.isPending}
+                  >
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             </TabsContent>
             
+            {/* Files Tab - API integrated */}
             <TabsContent value="files" className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">Attachments ({attachments.length})</h4>
@@ -348,28 +523,38 @@ const TaskDetailsPanel: React.FC<TaskDetailsPanelProps> = ({
                 </Button>
               </div>
               
+              {/* Attachments List */}
               <div className="space-y-2">
-                {attachments.map(file => (
-                  <div key={file.id} className="flex items-center justify-between p-3 border rounded-md">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-6 w-6 text-blue-500" />
-                      <div>
-                        <p className="font-medium text-sm">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {file.size} • Uploaded by {file.uploadedBy} • {file.timestamp}
-                        </p>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Download
-                    </Button>
+                {attachments.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    No attachments yet. Upload files to share with your team.
                   </div>
-                ))}
+                ) : (
+                  attachments.map(file => (
+                    <div key={file.id} className="flex items-center justify-between p-3 border rounded-md hover:bg-accent/50">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-6 w-6 text-blue-500" />
+                        <div>
+                          <p className="font-medium text-sm">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(file.size)} • Uploaded by {file.uploadedBy?.name || 'Unknown'} • {formatDate(file.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" asChild>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer">
+                          Download
+                        </a>
+                      </Button>
+                    </div>
+                  ))
+                )}
               </div>
             </TabsContent>
           </Tabs>
         </div>
         
+        {/* Footer with Save/Cancel buttons */}
         <div className="mt-6">
           <Separator className="my-4" />
           <div className="flex justify-between">

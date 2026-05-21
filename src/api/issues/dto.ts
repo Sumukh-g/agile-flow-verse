@@ -20,37 +20,37 @@ export class CreateIssueDto {
 
   @ApiPropertyOptional({ 
     description: 'Issue status', 
-    enum: ['backlog', 'todo', 'in-progress', 'review', 'done', 'closed'],
-    default: 'backlog'
+    enum: ['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD'],
+    default: 'INBOX'
   })
   @IsOptional()
-  @IsEnum(['backlog', 'todo', 'in-progress', 'review', 'done', 'closed'])
+  @IsEnum(['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD'])
   status?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue priority', 
-    enum: ['low', 'medium', 'high', 'critical'],
-    default: 'medium'
+    enum: ['P0', 'P1', 'P2', 'P3'],
+    default: 'P2'
   })
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high', 'critical'])
+  @IsEnum(['P0', 'P1', 'P2', 'P3'])
   priority?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue type', 
-    enum: ['bug', 'feature', 'task', 'improvement'],
-    default: 'task'
+    enum: ['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT'],
+    default: 'TASK'
   })
   @IsOptional()
-  @IsEnum(['bug', 'feature', 'task', 'improvement'])
+  @IsEnum(['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT'])
   type?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue severity (for bugs)', 
-    enum: ['minor', 'major', 'critical', 'blocker']
+    enum: ['CRITICAL', 'MAJOR', 'MINOR']
   })
   @IsOptional()
-  @IsEnum(['minor', 'major', 'critical', 'blocker'])
+  @IsEnum(['CRITICAL', 'MAJOR', 'MINOR'])
   severity?: string;
 
   @ApiPropertyOptional({ description: 'Assignee user ID' })
@@ -69,6 +69,11 @@ export class CreateIssueDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @ApiPropertyOptional({ description: 'Component ID (optional area/component within project)' })
+  @IsOptional()
+  @IsString()
+  componentId?: string;
 }
 
 export class UpdateIssueDto {
@@ -84,34 +89,34 @@ export class UpdateIssueDto {
 
   @ApiPropertyOptional({ 
     description: 'Issue status', 
-    enum: ['backlog', 'todo', 'in-progress', 'review', 'done', 'closed']
+    enum: ['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD']
   })
   @IsOptional()
-  @IsEnum(['backlog', 'todo', 'in-progress', 'review', 'done', 'closed'])
+  @IsEnum(['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD'])
   status?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue priority', 
-    enum: ['low', 'medium', 'high', 'critical']
+    enum: ['P0', 'P1', 'P2', 'P3']
   })
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high', 'critical'])
+  @IsEnum(['P0', 'P1', 'P2', 'P3'])
   priority?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue type', 
-    enum: ['bug', 'feature', 'task', 'improvement']
+    enum: ['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT']
   })
   @IsOptional()
-  @IsEnum(['bug', 'feature', 'task', 'improvement'])
+  @IsEnum(['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT'])
   type?: string;
 
   @ApiPropertyOptional({ 
     description: 'Issue severity (for bugs)', 
-    enum: ['minor', 'major', 'critical', 'blocker']
+    enum: ['CRITICAL', 'MAJOR', 'MINOR']
   })
   @IsOptional()
-  @IsEnum(['minor', 'major', 'critical', 'blocker'])
+  @IsEnum(['CRITICAL', 'MAJOR', 'MINOR'])
   severity?: string;
 
   @ApiPropertyOptional({ description: 'Assignee user ID' })
@@ -130,6 +135,11 @@ export class UpdateIssueDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @ApiPropertyOptional({ description: 'Component ID (optional area/component within project)' })
+  @IsOptional()
+  @IsString()
+  componentId?: string;
 }
 
 export class IssueQueryDto {
@@ -141,26 +151,26 @@ export class IssueQueryDto {
 
   @ApiPropertyOptional({ 
     description: 'Status filter', 
-    enum: ['backlog', 'todo', 'in-progress', 'review', 'done', 'closed']
+    enum: ['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD']
   })
   @IsOptional()
-  @IsEnum(['backlog', 'todo', 'in-progress', 'review', 'done', 'closed'])
+  @IsEnum(['INBOX', 'NEEDS_INFO', 'TRIAGED', 'PLANNED', 'READY_FOR_DEV', 'IN_PROGRESS', 'IN_REVIEW', 'IN_QA', 'DONE', 'WONT_DO', 'DUPLICATE', 'ON_HOLD'])
   status?: string;
 
   @ApiPropertyOptional({ 
     description: 'Priority filter', 
-    enum: ['low', 'medium', 'high', 'critical']
+    enum: ['P0', 'P1', 'P2', 'P3']
   })
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high', 'critical'])
+  @IsEnum(['P0', 'P1', 'P2', 'P3'])
   priority?: string;
 
   @ApiPropertyOptional({ 
     description: 'Type filter', 
-    enum: ['bug', 'feature', 'task', 'improvement']
+    enum: ['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT']
   })
   @IsOptional()
-  @IsEnum(['bug', 'feature', 'task', 'improvement'])
+  @IsEnum(['BUG', 'STORY', 'TASK', 'INCIDENT', 'SUPPORT'])
   type?: string;
 
   @ApiPropertyOptional({ description: 'Assignee user ID filter' })
@@ -213,5 +223,30 @@ export class CreateIssueCommentDto {
   @ApiProperty({ description: 'Comment content' })
   @IsString()
   content!: string;
+}
+
+// ============================================
+// Phase 8: Advanced Issue Features DTOs
+// ============================================
+
+export class CreateIssueLinkDto {
+  @ApiProperty({ description: 'Target issue ID' })
+  @IsString()
+  @IsCuid()
+  targetIssueId!: string;
+
+  @ApiProperty({ 
+    description: 'Link type',
+    enum: ['BLOCKS', 'IS_BLOCKED_BY', 'DUPLICATES', 'IS_DUPLICATED_BY', 'RELATES_TO']
+  })
+  @IsEnum(['BLOCKS', 'IS_BLOCKED_BY', 'DUPLICATES', 'IS_DUPLICATED_BY', 'RELATES_TO'])
+  linkType!: string;
+}
+
+export class DeleteIssueLinkDto {
+  @ApiProperty({ description: 'Link ID to delete' })
+  @IsString()
+  @IsCuid()
+  linkId!: string;
 }
 

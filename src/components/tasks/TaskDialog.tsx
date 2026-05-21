@@ -15,6 +15,7 @@ import { useCreateTask, useUpdateTask, Task } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { User } from 'lucide-react';
 
 interface TaskDialogProps {
   open: boolean;
@@ -33,7 +34,7 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'todo' | 'in-progress' | 'review' | 'done' | 'blocked' | 'cancelled'>('todo');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
-  const [projectId, setProjectId] = useState(defaultProjectId || '');
+  const [projectId, setProjectId] = useState(defaultProjectId || 'personal');
   const [dueDate, setDueDate] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
 
@@ -47,7 +48,7 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
       setDescription(task.description || '');
       setStatus(task.status);
       setPriority(task.priority);
-      setProjectId(task.projectId);
+      setProjectId(task.projectId || 'personal');
       setDueDate(task.dueDate || '');
       setEstimatedHours(task.estimatedHours?.toString() || '');
     } else {
@@ -56,7 +57,7 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
       setDescription('');
       setStatus('todo');
       setPriority('medium');
-      setProjectId(defaultProjectId || '');
+      setProjectId(defaultProjectId || 'personal');
       setDueDate('');
       setEstimatedHours('');
     }
@@ -70,13 +71,8 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
       return;
     }
 
-    // Project ID is required for now (Prisma schema requirement)
-    // If defaultProjectId is set, use it as fallback
-    const finalProjectId = projectId || defaultProjectId;
-    if (!finalProjectId) {
-      toast.error('Please select a project');
-      return;
-    }
+    // Allow personal tasks (no projectId) or project tasks
+    const finalProjectId = projectId === 'personal' ? undefined : (projectId || defaultProjectId);
 
     try {
       const data = {
@@ -84,8 +80,8 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
         description: description.trim() || undefined,
         status,
         priority,
-        projectId: finalProjectId,
-        dueDate: dueDate || undefined,
+        projectId: finalProjectId, // Can be undefined for personal tasks
+        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
         estimatedHours: estimatedHours ? parseFloat(estimatedHours) : undefined,
       };
 
@@ -127,12 +123,23 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="project">Project {!defaultProjectId && '*'}</Label>
-              <Select value={projectId || ''} onValueChange={setProjectId} required={!defaultProjectId}>
+              <Label htmlFor="project">Project</Label>
+              <Select 
+                value={projectId || 'personal'} 
+                onValueChange={(value) => {
+                  setProjectId(value === 'personal' ? 'personal' : value);
+                }}
+              >
                 <SelectTrigger id="project">
-                  <SelectValue placeholder={defaultProjectId ? "Select a project (optional)" : "Select a project"} />
+                  <SelectValue placeholder="Select project or personal" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="personal">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      <span>Personal</span>
+                    </div>
+                  </SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
@@ -140,6 +147,9 @@ export const TaskDialog: React.FC<TaskDialogProps> = ({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Select "Personal" to create a task without a project
+              </p>
             </div>
 
             <div className="grid gap-2">

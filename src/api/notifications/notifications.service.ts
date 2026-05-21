@@ -13,6 +13,7 @@ export enum NotificationType {
   COMMENT_ADDED = 'comment.added',
   MENTION = 'mention',
   SYSTEM = 'system',
+  CALENDAR_REMINDER = 'calendar.reminder',
 }
 
 export enum NotificationChannel {

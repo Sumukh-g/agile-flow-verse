@@ -5,6 +5,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { RedisClient } from '../common/redis/redis.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 import { AttachmentQueryDto, CreateAttachmentDto } from './dto';
 
 const writeFile = promisify(fs.writeFile);
@@ -19,6 +20,7 @@ export class StorageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisClient,
+    private readonly permissions: ProjectPermissionsService,
   ) {
     this.ensureUploadDir();
   }
@@ -55,6 +57,11 @@ export class StorageService {
       // Validate that either noteId or projectId is provided
       if (!metadata.noteId && !metadata.projectId) {
         throw new BadRequestException('Either noteId or projectId must be provided');
+      }
+
+      // Check write permissions if projectId is provided (viewers cannot upload)
+      if (metadata.projectId) {
+        await this.permissions.ensureCanWriteProject(tenantId, userId, metadata.projectId);
       }
 
       // Save metadata to database
@@ -94,7 +101,7 @@ export class StorageService {
     }
   }
 
-  async getAttachment(tenantId: string, attachmentId: string) {
+  async getAttachment(tenantId: string, userId: string, attachmentId: string) {
     const attachment = await this.prisma.tx.attachment.findFirst({
       where: {
         id: attachmentId,
@@ -106,11 +113,16 @@ export class StorageService {
       throw new NotFoundException('Attachment not found');
     }
 
+    // Check read permissions if projectId is provided (viewers can read)
+    if (attachment.projectId) {
+      await this.permissions.ensureCanReadProject(tenantId, userId, attachment.projectId);
+    }
+
     return attachment;
   }
 
-  async getAttachmentFile(tenantId: string, attachmentId: string) {
-    const attachment = await this.getAttachment(tenantId, attachmentId);
+  async getAttachmentFile(tenantId: string, userId: string, attachmentId: string) {
+    const attachment = await this.getAttachment(tenantId, userId, attachmentId);
     
     if (!fs.existsSync(attachment.path)) {
       throw new NotFoundException('File not found on disk');
@@ -223,8 +235,13 @@ export class StorageService {
     return result;
   }
 
-  async deleteAttachment(tenantId: string, attachmentId: string) {
-    const attachment = await this.getAttachment(tenantId, attachmentId);
+  async deleteAttachment(tenantId: string, userId: string, attachmentId: string) {
+    const attachment = await this.getAttachment(tenantId, userId, attachmentId);
+    
+    // Check write permissions if projectId is provided (viewers cannot delete)
+    if (attachment.projectId) {
+      await this.permissions.ensureCanWriteProject(tenantId, userId, attachment.projectId);
+    }
     
     // Delete file from disk
     if (fs.existsSync(attachment.path)) {

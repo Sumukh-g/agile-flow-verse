@@ -30,6 +30,8 @@ export interface Project {
   endDate?: string;
   tags?: string[];
   isPublic?: boolean;
+  archived?: boolean; // Archive status
+  deletedAt?: string | null; // Soft delete timestamp
   tenantId: string;
   ownerId: string;
   createdAt: string;
@@ -77,6 +79,8 @@ export interface ProjectQueryDto {
   priority?: ProjectPriority;
   limit?: number;
   cursor?: string;
+  showDeleted?: boolean; // Include deleted projects
+  showArchived?: boolean; // Include archived projects
 }
 
 // === Tasks ===
@@ -125,7 +129,7 @@ export interface CreateTaskDto {
   dueDate?: string;
   estimatedHours?: number;
   actualHours?: number;
-  projectId: string;
+  projectId?: string; // Optional: allows personal tasks without a project
   assigneeIds?: string[];
   dependencyIds?: string[];
   tags?: string[];
@@ -365,21 +369,25 @@ export interface CalendarEvent {
 export interface CreateCalendarEventDto {
   title: string;
   description?: string;
-  startDate: string;
-  endDate: string;
+  startAt: string;
+  endAt: string;
   allDay?: boolean;
   projectId?: string;
   taskId?: string;
+  type?: 'MEETING' | 'TASK_DEADLINE' | 'ISSUE_DUE' | 'REMINDER' | 'NOTE_DATE' | 'OTHER';
+  reminderMinutesBefore?: number;
 }
 
 export interface UpdateCalendarEventDto {
   title?: string;
   description?: string;
-  startDate?: string;
-  endDate?: string;
+  startAt?: string;
+  endAt?: string;
   allDay?: boolean;
   projectId?: string;
   taskId?: string;
+  type?: 'MEETING' | 'TASK_DEADLINE' | 'ISSUE_DUE' | 'REMINDER' | 'NOTE_DATE' | 'OTHER';
+  reminderMinutesBefore?: number;
 }
 
 // === Common ===

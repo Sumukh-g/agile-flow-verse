@@ -1,1204 +1,1259 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-    BarChart3,
-    Building2,
-    Calendar,
-    DollarSign,
-    Edit,
-    Eye,
-    Filter,
-    Mail,
-    MessageSquare,
-    Phone,
-    Plus,
-    Search,
-    Target,
-    TrendingUp,
-    Trash2,
-    Users
+  useCrmClients,
+  useCrmDeals,
+  useCreateCrmClient,
+  useUpdateCrmClient,
+  useDeleteCrmClient,
+  useCreateCrmDeal,
+  useUpdateCrmDeal,
+  useDeleteCrmDeal,
+  useCrmSummary,
+} from '@/hooks/useCrm';
+import { CrmClient, CrmDeal } from '@/lib/api/types';
+import {
+  Building2,
+  Calendar,
+  DollarSign,
+  Edit,
+  Eye,
+  Mail,
+  MoreHorizontal,
+  Phone,
+  Plus,
+  Search,
+  Target,
+  TrendingUp,
+  Trash2,
+  Users,
+  ArrowUpRight,
+  ArrowDownRight,
+  Clock,
+  Briefcase,
+  RefreshCw,
+  Filter,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface ProjectCRMProps {
   projectId: string | undefined;
+  projectName?: string;
 }
 
-const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId }) => {
-  const [activeTab, setActiveTab] = useState("contacts");
-  const [contacts, setContacts] = useState<any[]>([]);
-  const [leads, setLeads] = useState<any[]>([]);
-  const [deals, setDeals] = useState<any[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
+// Status colors
+const clientStatusColors: Record<string, string> = {
+  lead: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  prospect: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  client: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  inactive: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+};
+
+const dealStageColors: Record<string, string> = {
+  lead: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
+  qualified: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  proposal: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  negotiation: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  'closed-won': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  'closed-lost': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+};
+
+const dealStageLabels: Record<string, string> = {
+  lead: 'Lead',
+  qualified: 'Qualified',
+  proposal: 'Proposal',
+  negotiation: 'Negotiation',
+  'closed-won': 'Closed Won',
+  'closed-lost': 'Closed Lost',
+};
+
+const ProjectCRM: React.FC<ProjectCRMProps> = ({ projectId, projectName }) => {
+  const [activeTab, setActiveTab] = useState("overview");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedContact, setSelectedContact] = useState<any>(null);
-  const [editingContact, setEditingContact] = useState<any>(null);
-  const [editingLead, setEditingLead] = useState<any>(null);
-  const [editingDeal, setEditingDeal] = useState<any>(null);
-  const [isAddContactOpen, setIsAddContactOpen] = useState(false);
-  const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
-  const [isAddDealOpen, setIsAddDealOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   
-  // Form states
-  const [contactForm, setContactForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    position: '',
-    status: 'prospect',
-    notes: ''
-  });
-  
-  const [leadForm, setLeadForm] = useState({
-    name: '',
-    company: '',
-    contact: '',
-    email: '',
-    phone: '',
-    source: 'website',
-    status: 'New',
-    value: 0
-  });
-  
-  const [dealForm, setDealForm] = useState({
-    name: '',
-    company: '',
-    contact: '',
-    stage: 'Proposal',
-    value: 0,
-    probability: 50,
-    closeDate: '',
-    notes: ''
-  });
+  // Dialog states
+  const [showClientDialog, setShowClientDialog] = useState(false);
+  const [showDealDialog, setShowDealDialog] = useState(false);
+  const [showClientDetail, setShowClientDetail] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<CrmDeal | null>(null);
+  const [editingClient, setEditingClient] = useState<CrmClient | null>(null);
+  const [editingDeal, setEditingDeal] = useState<CrmDeal | null>(null);
 
-  useEffect(() => {
-    // Mock data for demonstration
-    setContacts([
-      {
-        id: 1,
-        name: "John Smith",
-        email: "john.smith@company.com",
-        phone: "+1 (555) 123-4567",
-        company: "Tech Corp",
-        position: "CEO",
-        status: "Active",
-        lastContact: "2024-01-15",
-        value: 50000,
-        avatar: null,
-        tags: ["VIP", "Decision Maker"],
-        address: "123 Business St, NY",
-        website: "techcorp.com"
-      },
-      {
-        id: 2,
-        name: "Sarah Johnson",
-        email: "sarah.j@startup.io",
-        phone: "+1 (555) 987-6543",
-        company: "Startup Inc",
-        position: "CTO",
-        status: "Prospect",
-        lastContact: "2024-01-12",
-        value: 25000,
-        avatar: null,
-        tags: ["Technical", "Interested"],
-        address: "456 Innovation Ave, CA",
-        website: "startup.io"
-      }
-    ]);
+  // Queries - use real API
+  const { data: allClients = [], isLoading: clientsLoading, refetch: refetchClients } = useCrmClients();
+  const { data: allDeals = [], isLoading: dealsLoading, refetch: refetchDeals } = useCrmDeals();
+  const { data: summary } = useCrmSummary();
 
-    setLeads([
-      {
-        id: 1,
-        name: "Enterprise Deal",
-        company: "Big Corp",
-        contact: "Mike Wilson",
-        email: "mike@bigcorp.com",
-        phone: "+1 (555) 111-2222",
-        source: "Website",
-        status: "Qualified",
-        score: 85,
-        value: 100000,
-        createdDate: "2024-01-10",
-        lastActivity: "2024-01-14"
-      },
-      {
-        id: 2,
-        name: "SMB Opportunity",
-        company: "Small Business",
-        contact: "Lisa Brown",
-        email: "lisa@smallbiz.com",
-        phone: "+1 (555) 333-4444",
-        source: "Referral",
-        status: "New",
-        score: 65,
-        value: 15000,
-        createdDate: "2024-01-12",
-        lastActivity: "2024-01-12"
-      }
-    ]);
+  // Mutations
+  const createClient = useCreateCrmClient();
+  const updateClient = useUpdateCrmClient();
+  const deleteClient = useDeleteCrmClient();
+  const createDeal = useCreateCrmDeal();
+  const updateDeal = useUpdateCrmDeal();
+  const deleteDeal = useDeleteCrmDeal();
 
-    setDeals([
-      {
-        id: 1,
-        name: "Q1 Software License",
-        company: "Tech Corp",
-        contact: "John Smith",
-        stage: "Proposal",
-        value: 75000,
-        probability: 70,
-        closeDate: "2024-02-15",
-        createdDate: "2024-01-01",
-        lastActivity: "2024-01-14",
-        notes: "Waiting for final approval from board"
-      },
-      {
-        id: 2,
-        name: "Annual Support Contract",
-        company: "Startup Inc",
-        contact: "Sarah Johnson",
-        stage: "Negotiation",
-        value: 30000,
-        probability: 85,
-        closeDate: "2024-01-30",
-        createdDate: "2024-01-05",
-        lastActivity: "2024-01-13",
-        notes: "Price negotiation in progress"
-      }
-    ]);
-
-    setActivities([
-      {
-        id: 1,
-        type: "call",
-        contact: "John Smith",
-        company: "Tech Corp",
-        description: "Follow-up call regarding proposal",
-        date: "2024-01-15",
-        duration: "30 min",
-        outcome: "Positive"
-      },
-      {
-        id: 2,
-        type: "email",
-        contact: "Sarah Johnson",
-        company: "Startup Inc",
-        description: "Sent pricing information",
-        date: "2024-01-14",
-        outcome: "Sent"
-      },
-      {
-        id: 3,
-        type: "meeting",
-        contact: "Mike Wilson",
-        company: "Big Corp",
-        description: "Product demo presentation",
-        date: "2024-01-13",
-        duration: "60 min",
-        outcome: "Interested"
-      }
-    ]);
-  }, [projectId]);
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'prospect': return 'bg-blue-100 text-blue-800';
-      case 'qualified': return 'bg-purple-100 text-purple-800';
-      case 'new': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+  // Filter clients and deals based on search and status
+  const clients = useMemo(() => {
+    let filtered = allClients;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(term) ||
+        c.company?.toLowerCase().includes(term) ||
+        c.email?.toLowerCase().includes(term)
+      );
     }
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(c => c.status === statusFilter);
+    }
+    
+    return filtered;
+  }, [allClients, searchTerm, statusFilter]);
+
+  const deals = useMemo(() => {
+    let filtered = allDeals;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(d => 
+        d.title.toLowerCase().includes(term) ||
+        d.client?.name?.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [allDeals, searchTerm]);
+
+  // Stats
+  const stats = useMemo(() => {
+    const totalClients = clients.length;
+    const activeClients = clients.filter(c => c.status === 'client').length;
+    const totalDeals = deals.length;
+    const openDeals = deals.filter(d => !['closed-won', 'closed-lost'].includes(d.stage)).length;
+    const wonDeals = deals.filter(d => d.stage === 'closed-won').length;
+    const totalValue = deals.reduce((sum, d) => sum + (d.value || 0), 0);
+    const wonValue = deals.filter(d => d.stage === 'closed-won').reduce((sum, d) => sum + (d.value || 0), 0);
+    const pipelineValue = deals.filter(d => !['closed-won', 'closed-lost'].includes(d.stage)).reduce((sum, d) => sum + (d.value || 0), 0);
+    
+    return { totalClients, activeClients, totalDeals, openDeals, wonDeals, totalValue, wonValue, pipelineValue };
+  }, [clients, deals]);
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
-  const getStageColor = (stage: string) => {
-    switch (stage.toLowerCase()) {
-      case 'proposal': return 'bg-yellow-100 text-yellow-800';
-      case 'negotiation': return 'bg-orange-100 text-orange-800';
-      case 'closed won': return 'bg-green-100 text-green-800';
-      case 'closed lost': return 'bg-red-100 text-red-800';
-      default: return 'bg-blue-100 text-blue-800';
-    }
+  // Handlers
+  const handleRefresh = () => {
+    refetchClients();
+    refetchDeals();
+    toast.success('Data refreshed');
   };
 
-  const handleAddContact = () => {
-    if (!contactForm.name.trim() || !contactForm.email.trim()) {
-      toast.error('Name and email are required');
-      return;
-    }
-    const newContact = {
-      id: Date.now(),
-      ...contactForm,
-      value: 0,
-      tags: [],
-      lastContact: new Date().toISOString().split('T')[0],
-      avatar: null
-    };
-    setContacts(prev => [...prev, newContact]);
-    setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
-    setIsAddContactOpen(false);
-    toast.success('Contact added successfully!');
-  };
-
-  const handleEditContact = (contact: any) => {
-    setEditingContact(contact);
-    setContactForm({
-      name: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-      company: contact.company,
-      position: contact.position,
-      status: contact.status.toLowerCase(),
-      notes: ''
+  const handleCreateClient = (data: Partial<CrmClient>) => {
+    createClient.mutate(data, {
+      onSuccess: () => {
+        setShowClientDialog(false);
+        setEditingClient(null);
+      },
     });
-    setIsAddContactOpen(true);
   };
 
-  const handleUpdateContact = () => {
-    if (!contactForm.name.trim() || !contactForm.email.trim()) {
-      toast.error('Name and email are required');
-      return;
-    }
-    setContacts(prev => prev.map(c => 
-      c.id === editingContact.id 
-        ? { ...c, ...contactForm, status: contactForm.status.charAt(0).toUpperCase() + contactForm.status.slice(1) }
-        : c
-    ));
-    setEditingContact(null);
-    setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
-    setIsAddContactOpen(false);
-    toast.success('Contact updated successfully!');
-  };
-
-  const handleDeleteContact = (id: number) => {
-    if (confirm('Are you sure you want to delete this contact?')) {
-      setContacts(prev => prev.filter(c => c.id !== id));
-      toast.success('Contact deleted successfully!');
-    }
-  };
-
-  const handleAddLead = () => {
-    if (!leadForm.name.trim() || !leadForm.company.trim()) {
-      toast.error('Name and company are required');
-      return;
-    }
-    const newLead = {
-      id: Date.now(),
-      ...leadForm,
-      score: 50,
-      createdDate: new Date().toISOString().split('T')[0],
-      lastActivity: new Date().toISOString().split('T')[0]
-    };
-    setLeads(prev => [...prev, newLead]);
-    setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
-    setIsAddLeadOpen(false);
-    toast.success('Lead added successfully!');
-  };
-
-  const handleAddDeal = () => {
-    if (!dealForm.name.trim() || !dealForm.company.trim()) {
-      toast.error('Name and company are required');
-      return;
-    }
-    const newDeal = {
-      id: Date.now(),
-      ...dealForm,
-      createdDate: new Date().toISOString().split('T')[0],
-      lastActivity: new Date().toISOString().split('T')[0]
-    };
-    setDeals(prev => [...prev, newDeal]);
-    setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
-    setIsAddDealOpen(false);
-    toast.success('Deal added successfully!');
-  };
-
-  const handleEditLead = (lead: any) => {
-    setEditingLead(lead);
-    setLeadForm({
-      name: lead.name,
-      company: lead.company,
-      contact: lead.contact,
-      email: lead.email,
-      phone: lead.phone,
-      source: lead.source,
-      status: lead.status,
-      value: lead.value
+  const handleUpdateClient = (data: Partial<CrmClient>) => {
+    if (!editingClient) return;
+    updateClient.mutate({ id: editingClient.id, data }, {
+      onSuccess: () => {
+        setShowClientDialog(false);
+        setEditingClient(null);
+      },
     });
-    setIsAddLeadOpen(true);
   };
 
-  const handleUpdateLead = () => {
-    if (!leadForm.name.trim() || !leadForm.company.trim()) {
-      toast.error('Name and company are required');
-      return;
-    }
-    setLeads(prev => prev.map(l => 
-      l.id === editingLead.id 
-        ? { ...l, ...leadForm }
-        : l
-    ));
-    setEditingLead(null);
-    setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
-    setIsAddLeadOpen(false);
-    toast.success('Lead updated successfully!');
-  };
-
-  const handleDeleteLead = (id: number) => {
-    if (confirm('Are you sure you want to delete this lead?')) {
-      setLeads(prev => prev.filter(l => l.id !== id));
-      toast.success('Lead deleted successfully!');
+  const handleDeleteClient = (id: string) => {
+    if (confirm('Are you sure you want to delete this client?')) {
+      deleteClient.mutate(id);
     }
   };
 
-  const handleEditDeal = (deal: any) => {
-    setEditingDeal(deal);
-    setDealForm({
-      name: deal.name,
-      company: deal.company,
-      contact: deal.contact,
-      stage: deal.stage,
-      value: deal.value,
-      probability: deal.probability,
-      closeDate: deal.closeDate,
-      notes: deal.notes || ''
+  const handleCreateDeal = (data: Partial<CrmDeal>) => {
+    createDeal.mutate(data, {
+      onSuccess: () => {
+        setShowDealDialog(false);
+        setEditingDeal(null);
+      },
     });
-    setIsAddDealOpen(true);
   };
 
-  const handleUpdateDeal = () => {
-    if (!dealForm.name.trim() || !dealForm.company.trim()) {
-      toast.error('Name and company are required');
-      return;
-    }
-    setDeals(prev => prev.map(d => 
-      d.id === editingDeal.id 
-        ? { ...d, ...dealForm }
-        : d
-    ));
-    setEditingDeal(null);
-    setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
-    setIsAddDealOpen(false);
-    toast.success('Deal updated successfully!');
+  const handleUpdateDeal = (data: Partial<CrmDeal>) => {
+    if (!editingDeal) return;
+    updateDeal.mutate({ id: editingDeal.id, data }, {
+      onSuccess: () => {
+        setShowDealDialog(false);
+        setEditingDeal(null);
+      },
+    });
   };
 
-  const handleDeleteDeal = (id: number) => {
+  const handleDeleteDeal = (id: string) => {
     if (confirm('Are you sure you want to delete this deal?')) {
-      setDeals(prev => prev.filter(d => d.id !== id));
-      toast.success('Deal deleted successfully!');
+      deleteDeal.mutate(id);
     }
   };
 
-  const AddContactForm = () => (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="name">Full Name *</Label>
-          <Input 
-            id="name" 
-            placeholder="Enter full name" 
-            value={contactForm.name}
-            onChange={e => setContactForm({ ...contactForm, name: e.target.value })}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="email">Email *</Label>
-          <Input 
-            id="email" 
-            type="email" 
-            placeholder="Enter email" 
-            value={contactForm.email}
-            onChange={e => setContactForm({ ...contactForm, email: e.target.value })}
-            required
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="phone">Phone</Label>
-          <Input 
-            id="phone" 
-            placeholder="Enter phone number" 
-            value={contactForm.phone}
-            onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="company">Company</Label>
-          <Input 
-            id="company" 
-            placeholder="Enter company name" 
-            value={contactForm.company}
-            onChange={e => setContactForm({ ...contactForm, company: e.target.value })}
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="position">Position</Label>
-          <Input 
-            id="position" 
-            placeholder="Enter position/title" 
-            value={contactForm.position}
-            onChange={e => setContactForm({ ...contactForm, position: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select 
-            value={contactForm.status} 
-            onValueChange={value => setContactForm({ ...contactForm, status: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="prospect">Prospect</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div>
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea 
-          id="notes" 
-          placeholder="Additional notes..." 
-          value={contactForm.notes}
-          onChange={e => setContactForm({ ...contactForm, notes: e.target.value })}
-        />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => {
-          setIsAddContactOpen(false);
-          setEditingContact(null);
-          setContactForm({ name: '', email: '', phone: '', company: '', position: '', status: 'prospect', notes: '' });
-        }}>Cancel</Button>
-        <Button onClick={editingContact ? handleUpdateContact : handleAddContact}>
-          {editingContact ? 'Update Contact' : 'Add Contact'}
-        </Button>
-      </div>
-    </div>
-  );
+  const isLoading = clientsLoading || dealsLoading;
 
   return (
-    <div className="space-y-6">
-      {/* CRM Header */}
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Project CRM</h2>
-          <p className="text-muted-foreground">Manage contacts, leads, and deals for this project</p>
+    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25">
+            <Users className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">CRM</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {projectName || 'Project'} • Customer Relationship Management
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline"
-            onClick={() => setActiveTab('analytics')}
-          >
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Analytics
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={cn("w-4 h-4 mr-2", isLoading && "animate-spin")} />
+            Refresh
           </Button>
           <Button
-            onClick={() => {
-              // Quick add menu - show options
-              toast.info('Quick add: Select a tab to add Contacts, Leads, or Deals');
-            }}
+            onClick={() => { setEditingClient(null); setShowClientDialog(true); }}
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Quick Add
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
           </Button>
         </div>
       </div>
 
-      {/* CRM Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Contacts</p>
-                <p className="text-2xl font-bold">{contacts.length}</p>
-                <p className="text-xs text-green-600">+2 this week</p>
-              </div>
-              <Users className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Leads</p>
-                <p className="text-2xl font-bold">{leads.length}</p>
-                <p className="text-xs text-green-600">+1 this week</p>
-              </div>
-              <Target className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Open Deals</p>
-                <p className="text-2xl font-bold">{deals.length}</p>
-                <p className="text-xs text-orange-600">$105K pipeline</p>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
-                <p className="text-2xl font-bold">68%</p>
-                <p className="text-xs text-green-600">+5% vs last month</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-indigo-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <div className="px-6 py-2 border-b bg-white/50 dark:bg-slate-900/50">
+          <TabsList className="bg-slate-100 dark:bg-slate-800">
+            <TabsTrigger value="overview" className="gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="clients" className="gap-2">
+              <Users className="w-4 h-4" />
+              Clients
+              {clients.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{clients.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="deals" className="gap-2">
+              <Target className="w-4 h-4" />
+              Deals
+              {deals.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{deals.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="pipeline" className="gap-2">
+              <Briefcase className="w-4 h-4" />
+              Pipeline
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-5 mb-4">
-          <TabsTrigger value="contacts">Contacts</TabsTrigger>
-          <TabsTrigger value="leads">Leads</TabsTrigger>
-          <TabsTrigger value="deals">Deals</TabsTrigger>
-          <TabsTrigger value="activities">Activities</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        <ScrollArea className="flex-1">
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="p-6 m-0">
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-500">Total Clients</CardTitle>
+                    <Users className="w-4 h-4 text-blue-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalClients}</div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {stats.activeClients} active
+                    </p>
+                  </CardContent>
+                </Card>
 
-        <TabsContent value="contacts" className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex gap-2 flex-1">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search contacts..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-500">Open Deals</CardTitle>
+                    <Target className="w-4 h-4 text-purple-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.openDeals}</div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {stats.wonDeals} won
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-500">Pipeline Value</CardTitle>
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.pipelineValue)}</div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      in active deals
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-500">Won Revenue</CardTitle>
+                    <TrendingUp className="w-4 h-4 text-green-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.wonValue)}</div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      from closed deals
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
-              <Button 
-                variant="outline"
-                onClick={() => toast.info('Filter contacts coming soon')}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
-            </div>
-            <Dialog open={isAddContactOpen} onOpenChange={setIsAddContactOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Contact
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add New Contact</DialogTitle>
-                  <DialogDescription>
-                    Add a new contact to your project CRM
-                  </DialogDescription>
-                </DialogHeader>
-                <AddContactForm />
-              </DialogContent>
-            </Dialog>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {contacts.map((contact) => (
-              <Card key={contact.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={contact.avatar} />
-                        <AvatarFallback>{contact.name.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h3 className="font-semibold">{contact.name}</h3>
-                        <p className="text-sm text-muted-foreground">{contact.position}</p>
+              {/* Recent Activity */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Recent Clients */}
+                <Card className="border-0 shadow-lg">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Recent Clients</CardTitle>
+                      <Button variant="ghost" size="sm" onClick={() => setActiveTab('clients')}>
+                        View All
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {clients.slice(0, 5).map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center justify-between py-3 border-b last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 cursor-pointer"
+                        onClick={() => { setSelectedClient(client); setShowClientDetail(true); }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-blue-100 text-blue-700">
+                              {client.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{client.name}</p>
+                            <p className="text-sm text-slate-500">{client.company || 'No company'}</p>
+                          </div>
+                        </div>
+                        <Badge className={clientStatusColors[client.status]}>
+                          {client.status}
+                        </Badge>
                       </div>
-                    </div>
-                    <Badge className={getStatusColor(contact.status)}>
-                      {contact.status}
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span>{contact.company}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="truncate">{contact.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{contact.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span>${contact.value.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {contact.tags.map((tag: string, index: number) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
                     ))}
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-4 pt-3 border-t">
-                    <span className="text-xs text-muted-foreground">
-                      Last contact: {contact.lastContact}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => setSelectedContact(contact)}
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => handleEditContact(contact)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        className="text-red-600"
-                        onClick={() => handleDeleteContact(contact.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
+                    {clients.length === 0 && (
+                      <p className="text-center text-slate-500 py-8">No clients yet</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Recent Deals */}
+                <Card className="border-0 shadow-lg">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Recent Deals</CardTitle>
+                      <Button variant="ghost" size="sm" onClick={() => setActiveTab('deals')}>
+                        View All
                       </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="leads" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Lead Pipeline</h3>
-            <Dialog open={isAddLeadOpen} onOpenChange={setIsAddLeadOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Lead
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Lead</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Lead Name *</Label>
-                    <Input 
-                      placeholder="Lead name" 
-                      value={leadForm.name}
-                      onChange={e => setLeadForm({ ...leadForm, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Company *</Label>
-                    <Input 
-                      placeholder="Company" 
-                      value={leadForm.company}
-                      onChange={e => setLeadForm({ ...leadForm, company: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Contact Person</Label>
-                    <Input 
-                      placeholder="Contact person" 
-                      value={leadForm.contact}
-                      onChange={e => setLeadForm({ ...leadForm, contact: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Email</Label>
-                    <Input 
-                      type="email"
-                      placeholder="Email" 
-                      value={leadForm.email}
-                      onChange={e => setLeadForm({ ...leadForm, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Phone</Label>
-                    <Input 
-                      placeholder="Phone" 
-                      value={leadForm.phone}
-                      onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Lead Source</Label>
-                    <Select 
-                      value={leadForm.source} 
-                      onValueChange={value => setLeadForm({ ...leadForm, source: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Lead source" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="website">Website</SelectItem>
-                        <SelectItem value="referral">Referral</SelectItem>
-                        <SelectItem value="social">Social Media</SelectItem>
-                        <SelectItem value="event">Event</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Value ($)</Label>
-                    <Input 
-                      type="number"
-                      placeholder="0" 
-                      value={leadForm.value}
-                      onChange={e => setLeadForm({ ...leadForm, value: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => {
-                      setIsAddLeadOpen(false);
-                      setEditingLead(null);
-                      setLeadForm({ name: '', company: '', contact: '', email: '', phone: '', source: 'website', status: 'New', value: 0 });
-                    }}>Cancel</Button>
-                    <Button onClick={editingLead ? handleUpdateLead : handleAddLead}>
-                      {editingLead ? 'Update Lead' : 'Add Lead'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="grid gap-4">
-            {leads.map((lead) => (
-              <Card key={lead.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold">{lead.name}</h3>
-                      <p className="text-sm text-muted-foreground">{lead.company} • {lead.contact}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(lead.status)}>
-                        {lead.status}
-                      </Badge>
-                      <div className="text-right">
-                        <p className="font-semibold">${lead.value.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Score: {lead.score}%</p>
+                  </CardHeader>
+                  <CardContent>
+                    {deals.slice(0, 5).map((deal) => (
+                      <div
+                        key={deal.id}
+                        className="flex items-center justify-between py-3 border-b last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2"
+                      >
+                        <div>
+                          <p className="font-medium">{deal.title}</p>
+                          <p className="text-sm text-slate-500">{deal.client?.name || 'No client'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-emerald-600">{formatCurrency(deal.value)}</p>
+                          <Badge className={dealStageColors[deal.stage]} variant="secondary">
+                            {dealStageLabels[deal.stage]}
+                          </Badge>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <p className="truncate">{lead.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <p>{lead.phone}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Source</p>
-                      <p>{lead.source}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Created</p>
-                      <p>{lead.createdDate}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-muted-foreground">Lead Score</span>
-                      <span className="text-sm font-medium">{lead.score}%</span>
-                    </div>
-                    <Progress value={lead.score} className="h-2" />
-                  </div>
-                  
-                  <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => handleEditLead(lead)}
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      className="text-red-600"
-                      onClick={() => handleDeleteLead(lead.id)}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="deals" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Sales Pipeline</h3>
-            <Dialog open={isAddDealOpen} onOpenChange={setIsAddDealOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Deal
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Deal</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Deal Name *</Label>
-                    <Input 
-                      placeholder="Deal name" 
-                      value={dealForm.name}
-                      onChange={e => setDealForm({ ...dealForm, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Company *</Label>
-                    <Input 
-                      placeholder="Company" 
-                      value={dealForm.company}
-                      onChange={e => setDealForm({ ...dealForm, company: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Contact Person</Label>
-                    <Input 
-                      placeholder="Contact person" 
-                      value={dealForm.contact}
-                      onChange={e => setDealForm({ ...dealForm, contact: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Deal Value ($)</Label>
-                    <Input 
-                      placeholder="0" 
-                      type="number" 
-                      value={dealForm.value}
-                      onChange={e => setDealForm({ ...dealForm, value: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Deal Stage</Label>
-                    <Select 
-                      value={dealForm.stage} 
-                      onValueChange={value => setDealForm({ ...dealForm, stage: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Deal stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Prospecting">Prospecting</SelectItem>
-                        <SelectItem value="Qualification">Qualification</SelectItem>
-                        <SelectItem value="Proposal">Proposal</SelectItem>
-                        <SelectItem value="Negotiation">Negotiation</SelectItem>
-                        <SelectItem value="Closed Won">Closed Won</SelectItem>
-                        <SelectItem value="Closed Lost">Closed Lost</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Probability (%)</Label>
-                    <Input 
-                      placeholder="50" 
-                      type="number" 
-                      min="0" 
-                      max="100"
-                      value={dealForm.probability}
-                      onChange={e => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Expected Close Date</Label>
-                    <Input 
-                      placeholder="Expected close date" 
-                      type="date" 
-                      value={dealForm.closeDate}
-                      onChange={e => setDealForm({ ...dealForm, closeDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Deal Notes</Label>
-                    <Textarea 
-                      placeholder="Deal notes..." 
-                      value={dealForm.notes}
-                      onChange={e => setDealForm({ ...dealForm, notes: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => {
-                      setIsAddDealOpen(false);
-                      setEditingDeal(null);
-                      setDealForm({ name: '', company: '', contact: '', stage: 'Proposal', value: 0, probability: 50, closeDate: '', notes: '' });
-                    }}>Cancel</Button>
-                    <Button onClick={editingDeal ? handleUpdateDeal : handleAddDeal}>
-                      {editingDeal ? 'Update Deal' : 'Add Deal'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="grid gap-4">
-            {deals.map((deal) => (
-              <Card key={deal.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold">{deal.name}</h3>
-                      <p className="text-sm text-muted-foreground">{deal.company} • {deal.contact}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-lg">${deal.value.toLocaleString()}</p>
-                      <Badge className={getStageColor(deal.stage)}>
-                        {deal.stage}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-3">
-                    <div>
-                      <p className="text-muted-foreground">Probability</p>
-                      <p className="font-medium">{deal.probability}%</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Close Date</p>
-                      <p>{deal.closeDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Created</p>
-                      <p>{deal.createdDate}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-muted-foreground">Win Probability</span>
-                      <span className="text-sm font-medium">{deal.probability}%</span>
-                    </div>
-                    <Progress value={deal.probability} className="h-2" />
-                  </div>
-                  
-                  {deal.notes && (
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <p className="text-sm">{deal.notes}</p>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => handleEditDeal(deal)}
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      className="text-red-600"
-                      onClick={() => handleDeleteDeal(deal.id)}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="activities" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Recent Activities</h3>
-            <Button
-              onClick={() => toast.info('Log activity feature coming soon')}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Log Activity
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {activities.map((activity) => (
-              <Card key={activity.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-full bg-blue-100">
-                      {activity.type === 'call' && <Phone className="h-4 w-4 text-blue-600" />}
-                      {activity.type === 'email' && <Mail className="h-4 w-4 text-blue-600" />}
-                      {activity.type === 'meeting' && <Calendar className="h-4 w-4 text-blue-600" />}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-medium">{activity.contact}</h4>
-                        <span className="text-sm text-muted-foreground">{activity.date}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-1">{activity.company}</p>
-                      <p className="text-sm">{activity.description}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        {activity.duration && <span>Duration: {activity.duration}</span>}
-                        <span>Outcome: {activity.outcome}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Sales Funnel</CardTitle>
-                <CardDescription>Conversion rates through the pipeline</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Leads</span>
-                    <span className="font-medium">100%</span>
-                  </div>
-                  <Progress value={100} className="h-2" />
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Qualified</span>
-                    <span className="font-medium">75%</span>
-                  </div>
-                  <Progress value={75} className="h-2" />
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Proposal</span>
-                    <span className="font-medium">50%</span>
-                  </div>
-                  <Progress value={50} className="h-2" />
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Closed Won</span>
-                    <span className="font-medium">25%</span>
-                  </div>
-                  <Progress value={25} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Revenue Forecast</CardTitle>
-                <CardDescription>Projected revenue for next 3 months</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <p className="text-sm text-muted-foreground">This Month</p>
-                      <p className="text-xl font-bold text-green-600">$45,000</p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-green-500" />
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Next Month</p>
-                      <p className="text-xl font-bold text-blue-600">$62,000</p>
-                    </div>
-                    <Target className="h-8 w-8 text-blue-500" />
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Q1 Total</p>
-                      <p className="text-xl font-bold text-purple-600">$180,000</p>
-                    </div>
-                    <BarChart3 className="h-8 w-8 text-purple-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
-              <CardDescription>Key performance indicators for this project</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">68%</p>
-                  <p className="text-sm text-muted-foreground">Conversion Rate</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">$52K</p>
-                  <p className="text-sm text-muted-foreground">Avg Deal Size</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">14</p>
-                  <p className="text-sm text-muted-foreground">Days Avg Cycle</p>
-                </div>
-                <div className="text-center p-4 border rounded-lg">
-                  <p className="text-2xl font-bold text-orange-600">85%</p>
-                  <p className="text-sm text-muted-foreground">Customer Satisfaction</p>
-                </div>
+                    ))}
+                    {deals.length === 0 && (
+                      <p className="text-center text-slate-500 py-8">No deals yet</p>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </TabsContent>
+
+          {/* Clients Tab */}
+          <TabsContent value="clients" className="p-6 m-0">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Clients</CardTitle>
+                    <CardDescription>Manage your customer relationships</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        placeholder="Search clients..."
+                        className="pl-9 w-64"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-32">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="lead">Leads</SelectItem>
+                        <SelectItem value="prospect">Prospects</SelectItem>
+                        <SelectItem value="client">Clients</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => { setEditingClient(null); setShowClientDialog(true); }}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Client
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : clients.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Company</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Last Contact</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {clients.map((client) => (
+                        <TableRow key={client.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
+                                  {client.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">{client.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{client.company || '—'}</TableCell>
+                          <TableCell>{client.email || '—'}</TableCell>
+                          <TableCell>
+                            <Badge className={clientStatusColors[client.status]}>
+                              {client.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{formatCurrency(client.value)}</TableCell>
+                          <TableCell>
+                            {client.lastContact
+                              ? formatDistanceToNow(parseISO(client.lastContact), { addSuffix: true })
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setSelectedClient(client); setShowClientDetail(true); }}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setEditingClient(client); setShowClientDialog(true); }}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteClient(client.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-12">
+                    <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No clients yet</h3>
+                    <p className="text-slate-500 mb-4">Start building your customer relationships</p>
+                    <Button onClick={() => { setEditingClient(null); setShowClientDialog(true); }}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Client
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Deals Tab */}
+          <TabsContent value="deals" className="p-6 m-0">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Deals</CardTitle>
+                    <CardDescription>Track your sales opportunities</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        placeholder="Search deals..."
+                        className="pl-9 w-64"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <Button onClick={() => { setEditingDeal(null); setShowDealDialog(true); }}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Deal
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : deals.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Deal</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Stage</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Probability</TableHead>
+                        <TableHead>Expected Close</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {deals.map((deal) => (
+                        <TableRow key={deal.id}>
+                          <TableCell className="font-medium">{deal.title}</TableCell>
+                          <TableCell>{deal.client?.name || '—'}</TableCell>
+                          <TableCell>
+                            <Badge className={dealStageColors[deal.stage]}>
+                              {dealStageLabels[deal.stage]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-bold text-emerald-600">
+                            {formatCurrency(deal.value)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress value={deal.probability} className="w-16 h-2" />
+                              <span className="text-sm">{deal.probability}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {deal.expectedCloseDate
+                              ? format(parseISO(deal.expectedCloseDate), 'MMM dd, yyyy')
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setEditingDeal(deal); setShowDealDialog(true); }}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => updateDeal.mutate({ id: deal.id, data: { stage: 'closed-won' } })}
+                                  className="text-green-600"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Mark as Won
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => updateDeal.mutate({ id: deal.id, data: { stage: 'closed-lost' } })}
+                                  className="text-red-600"
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Mark as Lost
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteDeal(deal.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-12">
+                    <Target className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No deals yet</h3>
+                    <p className="text-slate-500 mb-4">Start tracking your sales opportunities</p>
+                    <Button onClick={() => { setEditingDeal(null); setShowDealDialog(true); }}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Your First Deal
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Pipeline Tab */}
+          <TabsContent value="pipeline" className="p-6 m-0">
+            <div className="grid grid-cols-6 gap-4">
+              {Object.entries(dealStageLabels).map(([stage, label]) => {
+                const stageDeals = deals.filter(d => d.stage === stage);
+                const stageValue = stageDeals.reduce((sum, d) => sum + d.value, 0);
+                
+                return (
+                  <Card key={stage} className="border-0 shadow-lg">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium">{label}</CardTitle>
+                        <Badge variant="secondary">{stageDeals.length}</Badge>
+                      </div>
+                      <p className="text-xs text-slate-500">{formatCurrency(stageValue)}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {stageDeals.map((deal) => (
+                        <Card
+                          key={deal.id}
+                          className="p-3 cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => { setEditingDeal(deal); setShowDealDialog(true); }}
+                        >
+                          <p className="font-medium text-sm truncate">{deal.title}</p>
+                          <p className="text-xs text-slate-500 truncate">{deal.client?.name}</p>
+                          <p className="text-sm font-bold text-emerald-600 mt-1">
+                            {formatCurrency(deal.value)}
+                          </p>
+                        </Card>
+                      ))}
+                      {stageDeals.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-4">No deals</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+        </ScrollArea>
       </Tabs>
+
+      {/* Client Dialog */}
+      <ClientDialog
+        open={showClientDialog}
+        onOpenChange={setShowClientDialog}
+        client={editingClient}
+        onSave={editingClient ? handleUpdateClient : handleCreateClient}
+        isLoading={createClient.isPending || updateClient.isPending}
+      />
+
+      {/* Deal Dialog */}
+      <DealDialog
+        open={showDealDialog}
+        onOpenChange={setShowDealDialog}
+        deal={editingDeal}
+        clients={allClients}
+        onSave={editingDeal ? handleUpdateDeal : handleCreateDeal}
+        isLoading={createDeal.isPending || updateDeal.isPending}
+      />
+
+      {/* Client Detail Dialog */}
+      {selectedClient && (
+        <ClientDetailDialog
+          open={showClientDetail}
+          onOpenChange={setShowClientDetail}
+          client={selectedClient}
+          onEdit={() => {
+            setShowClientDetail(false);
+            setEditingClient(selectedClient);
+            setShowClientDialog(true);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-export default ProjectCRM; 
+// Client Dialog Component
+function ClientDialog({
+  open,
+  onOpenChange,
+  client,
+  onSave,
+  isLoading,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  client: CrmClient | null;
+  onSave: (data: Partial<CrmClient>) => void;
+  isLoading: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    name: '',
+    company: '',
+    email: '',
+    phone: '',
+    status: 'lead' as CrmClient['status'],
+    value: 0,
+    industry: '',
+    source: '',
+    notes: '',
+  });
+
+  React.useEffect(() => {
+    if (client) {
+      setFormData({
+        name: client.name,
+        company: client.company || '',
+        email: client.email || '',
+        phone: client.phone || '',
+        status: client.status,
+        value: client.value,
+        industry: client.industry || '',
+        source: client.source || '',
+        notes: client.notes || '',
+      });
+    } else {
+      setFormData({
+        name: '',
+        company: '',
+        email: '',
+        phone: '',
+        status: 'lead',
+        value: 0,
+        industry: '',
+        source: '',
+        notes: '',
+      });
+    }
+  }, [client]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{client ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+          <DialogDescription>
+            {client ? 'Update client information' : 'Enter details for the new client'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Name *</Label>
+              <Input
+                className="mt-1"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="John Smith"
+              />
+            </div>
+            <div>
+              <Label>Company</Label>
+              <Input
+                className="mt-1"
+                value={formData.company}
+                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                placeholder="Acme Inc"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                className="mt-1"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="john@company.com"
+              />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input
+                className="mt-1"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+1 (555) 123-4567"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(v) => setFormData({ ...formData, status: v as CrmClient['status'] })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lead">Lead</SelectItem>
+                  <SelectItem value="prospect">Prospect</SelectItem>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Estimated Value</Label>
+              <Input
+                type="number"
+                className="mt-1"
+                value={formData.value}
+                onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Industry</Label>
+              <Input
+                className="mt-1"
+                value={formData.industry}
+                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                placeholder="Technology"
+              />
+            </div>
+            <div>
+              <Label>Source</Label>
+              <Input
+                className="mt-1"
+                value={formData.source}
+                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                placeholder="Website, Referral, etc."
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Notes</Label>
+            <Textarea
+              className="mt-1"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Additional notes about this client..."
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={() => onSave(formData)} disabled={isLoading || !formData.name}>
+            {isLoading ? 'Saving...' : client ? 'Update Client' : 'Create Client'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Deal Dialog Component
+function DealDialog({
+  open,
+  onOpenChange,
+  deal,
+  clients,
+  onSave,
+  isLoading,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  deal: CrmDeal | null;
+  clients: CrmClient[];
+  onSave: (data: Partial<CrmDeal>) => void;
+  isLoading: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    title: '',
+    clientId: '',
+    value: 0,
+    stage: 'lead' as CrmDeal['stage'],
+    probability: 10,
+    expectedCloseDate: '',
+    source: '',
+    notes: '',
+  });
+
+  React.useEffect(() => {
+    if (deal) {
+      setFormData({
+        title: deal.title,
+        clientId: deal.clientId,
+        value: deal.value,
+        stage: deal.stage,
+        probability: deal.probability,
+        expectedCloseDate: deal.expectedCloseDate?.split('T')[0] || '',
+        source: deal.source || '',
+        notes: deal.notes || '',
+      });
+    } else {
+      setFormData({
+        title: '',
+        clientId: '',
+        value: 0,
+        stage: 'lead',
+        probability: 10,
+        expectedCloseDate: '',
+        source: '',
+        notes: '',
+      });
+    }
+  }, [deal]);
+
+  // Auto-update probability based on stage
+  const handleStageChange = (stage: CrmDeal['stage']) => {
+    const probabilities: Record<CrmDeal['stage'], number> = {
+      lead: 10,
+      qualified: 25,
+      proposal: 50,
+      negotiation: 75,
+      'closed-won': 100,
+      'closed-lost': 0,
+    };
+    setFormData({ ...formData, stage, probability: probabilities[stage] });
+  };
+
+  const handleSave = () => {
+    const data: Partial<CrmDeal> = {
+      ...formData,
+      expectedCloseDate: formData.expectedCloseDate || undefined,
+    };
+    onSave(data);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{deal ? 'Edit Deal' : 'Create New Deal'}</DialogTitle>
+          <DialogDescription>
+            {deal ? 'Update deal information' : 'Enter details for the new deal'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div>
+            <Label>Deal Title *</Label>
+            <Input
+              className="mt-1"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Enterprise Software License"
+            />
+          </div>
+
+          <div>
+            <Label>Client *</Label>
+            <Select
+              value={formData.clientId}
+              onValueChange={(v) => setFormData({ ...formData, clientId: v })}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select a client..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name} {client.company && `(${client.company})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Value *</Label>
+              <Input
+                type="number"
+                className="mt-1"
+                value={formData.value}
+                onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Expected Close Date</Label>
+              <Input
+                type="date"
+                className="mt-1"
+                value={formData.expectedCloseDate}
+                onChange={(e) => setFormData({ ...formData, expectedCloseDate: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Stage</Label>
+              <Select
+                value={formData.stage}
+                onValueChange={(v) => handleStageChange(v as CrmDeal['stage'])}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lead">Lead</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="proposal">Proposal</SelectItem>
+                  <SelectItem value="negotiation">Negotiation</SelectItem>
+                  <SelectItem value="closed-won">Closed Won</SelectItem>
+                  <SelectItem value="closed-lost">Closed Lost</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Probability ({formData.probability}%)</Label>
+              <Input
+                type="range"
+                min="0"
+                max="100"
+                className="mt-1"
+                value={formData.probability}
+                onChange={(e) => setFormData({ ...formData, probability: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Source</Label>
+            <Input
+              className="mt-1"
+              value={formData.source}
+              onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+              placeholder="Inbound, Outbound, Referral, etc."
+            />
+          </div>
+
+          <div>
+            <Label>Notes</Label>
+            <Textarea
+              className="mt-1"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Additional notes about this deal..."
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || !formData.title || !formData.clientId}
+          >
+            {isLoading ? 'Saving...' : deal ? 'Update Deal' : 'Create Deal'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Client Detail Dialog
+function ClientDetailDialog({
+  open,
+  onOpenChange,
+  client,
+  onEdit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  client: CrmClient;
+  onEdit: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16">
+              <AvatarFallback className="bg-blue-100 text-blue-700 text-xl">
+                {client.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <DialogTitle className="text-xl">{client.name}</DialogTitle>
+              <DialogDescription>{client.company || 'No company'}</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="flex items-center justify-between">
+            <Badge className={clientStatusColors[client.status]} variant="secondary">
+              {client.status}
+            </Badge>
+            <span className="font-bold text-emerald-600 text-lg">
+              ${client.value.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {client.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-400" />
+                <a href={`mailto:${client.email}`} className="text-blue-600 hover:underline">
+                  {client.email}
+                </a>
+              </div>
+            )}
+            {client.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-slate-400" />
+                <a href={`tel:${client.phone}`} className="text-blue-600 hover:underline">
+                  {client.phone}
+                </a>
+              </div>
+            )}
+          </div>
+
+          {(client.industry || client.source) && (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {client.industry && (
+                <div>
+                  <span className="text-slate-500">Industry:</span>{' '}
+                  <span className="font-medium">{client.industry}</span>
+                </div>
+              )}
+              {client.source && (
+                <div>
+                  <span className="text-slate-500">Source:</span>{' '}
+                  <span className="font-medium">{client.source}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {client.lastContact && (
+            <div className="text-sm">
+              <span className="text-slate-500">Last Contact:</span>{' '}
+              <span className="font-medium">
+                {formatDistanceToNow(parseISO(client.lastContact), { addSuffix: true })}
+              </span>
+            </div>
+          )}
+
+          {client.notes && (
+            <div>
+              <Label className="text-slate-500">Notes</Label>
+              <p className="mt-1 text-sm">{client.notes}</p>
+            </div>
+          )}
+
+          {client.tags && client.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {client.tags.map((tag, i) => (
+                <Badge key={i} variant="outline">{tag}</Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button onClick={onEdit}>
+            <Edit className="w-4 h-4 mr-2" />
+            Edit Client
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default ProjectCRM;

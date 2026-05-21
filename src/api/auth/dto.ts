@@ -1,46 +1,41 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class SignupDto {
-  @ApiProperty({
-    description: 'User full name',
-    example: 'John Doe',
-    minLength: 2,
-  })
+  @ApiProperty({ description: 'User full name', example: 'John Doe' })
   @IsString()
   @MinLength(2)
+  @MaxLength(100)
   name!: string;
 
-  @ApiProperty({
-    description: 'User email address',
-    example: 'john@example.com',
-  })
+  @ApiProperty({ description: 'User email address', example: 'john@example.com' })
   @IsEmail()
+  @MaxLength(255)
   email!: string;
 
-  @ApiProperty({
-    description: 'User password',
-    example: 'securePassword123',
-    minLength: 8,
-  })
+  @ApiProperty({ description: 'User password', example: 'securePassword123' })
   @IsString()
   @MinLength(8)
+  @MaxLength(128)
   password!: string;
+
+  @ApiPropertyOptional({ description: 'Company/Organization name', example: 'My Company' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tenantName?: string;
 }
 
 export class LoginDto {
-  @ApiProperty({
-    description: 'User email address',
-    example: 'john@example.com',
-  })
+  @ApiProperty({ description: 'User email address', example: 'john@example.com' })
   @IsEmail()
+  @MaxLength(255)
   email!: string;
 
-  @ApiProperty({
-    description: 'User password',
-    example: 'securePassword123',
-  })
+  @ApiProperty({ description: 'User password', example: 'securePassword123' })
   @IsString()
+  @MinLength(1)
+  @MaxLength(128)
   password!: string;
 }
 

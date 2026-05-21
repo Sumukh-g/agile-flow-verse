@@ -34,4 +34,13 @@ export function useTimeTrackingReport(projectId: string | undefined, startDate: 
   });
 }
 
+export function useProjectSummaryReport(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['reports', 'project-summary', projectId],
+    enabled: !!projectId,
+    queryFn: () => api.reports.getProjectSummary(projectId!),
+    staleTime: 60_000,
+  });
+}
+
 

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 
 export enum ProjectStatus {
   Active = 'active',
@@ -167,19 +167,44 @@ export class UpdateProjectDto {
   isPublic?: boolean;
 }
 
+export enum ProjectMemberRole {
+  Owner = 'owner',
+  Admin = 'admin',
+  Member = 'member',
+  Viewer = 'viewer',
+}
+
 export class AddProjectMemberDto {
-  @ApiProperty({ description: 'User ID to add as member', example: 'user123' })
+  @ApiPropertyOptional({ description: 'User ID to add as member (if user already exists)', example: 'user123' })
+  @IsOptional()
   @IsString()
-  @IsUUID()
-  userId: string;
+  @ValidateIf((o) => !o.email)
+  userId?: string;
+
+  @ApiPropertyOptional({ description: 'Email address to invite (Jira-style - can be new or existing user)', example: 'user@example.com' })
+  @IsOptional()
+  @IsEmail({}, { message: 'Please enter a valid email address' })
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  @ValidateIf((o) => !o.userId)
+  email?: string;
 
   @ApiProperty({ 
     description: 'Member role', 
-    enum: ['member', 'admin', 'owner'],
-    example: 'member'
+    enum: ProjectMemberRole,
+    example: ProjectMemberRole.Member
   })
-  @IsEnum(['member', 'admin', 'owner'])
-  role: string;
+  @IsEnum(ProjectMemberRole)
+  role!: string;
+}
+
+export class UpdateProjectMemberRoleDto {
+  @ApiProperty({ 
+    description: 'Member role', 
+    enum: ProjectMemberRole,
+    example: ProjectMemberRole.Admin
+  })
+  @IsEnum(ProjectMemberRole)
+  role!: string;
 }
 
 export class RemoveProjectMemberDto {

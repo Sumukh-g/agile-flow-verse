@@ -119,29 +119,37 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Direct methods for services to call (when Kafka is not available or for immediate updates)
-  async broadcastTaskUpdate(tenantId: string, projectId: string, taskId: string, event: string, data: any) {
-    this.gateway.broadcastToProject(tenantId, projectId, 'task.updated', {
+  async broadcastTaskUpdate(tenantId: string, projectId: string | null, taskId: string, event: string, data: any) {
+    const payload = {
       taskId,
-      projectId,
+      projectId: projectId || undefined,
       event,
-      data,
+      data, // Include full task data for targeted cache updates
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    // Broadcast to project channel if projectId exists
+    if (projectId) {
+      this.gateway.broadcastToProject(tenantId, projectId, event, payload);
+    }
+
+    // Always broadcast to task-specific channel
+    this.gateway.broadcastToChannel(`task:${taskId}`, event, payload);
+
+    // Also broadcast to tenant for general updates
+    this.gateway.broadcastToTenant(tenantId, event, payload);
   }
 
   async broadcastProjectUpdate(tenantId: string, projectId: string, event: string, data: any) {
-    this.gateway.broadcastToChannel(`project:${projectId}`, 'project.updated', {
+    const payload = {
       projectId,
       event,
-      data,
+      data, // Include full project data for targeted cache updates
       timestamp: new Date().toISOString(),
-    });
-    this.gateway.broadcastToTenant(tenantId, 'project.updated', {
-      projectId,
-      event,
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    };
+
+    this.gateway.broadcastToChannel(`project:${projectId}`, event, payload);
+    this.gateway.broadcastToTenant(tenantId, event, payload);
   }
 
   async broadcastNoteUpdate(tenantId: string, noteId: string, projectId: string, event: string, data: any) {

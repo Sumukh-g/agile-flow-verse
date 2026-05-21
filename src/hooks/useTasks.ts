@@ -7,7 +7,7 @@ export interface Task {
   description?: string;
   status: 'todo' | 'in-progress' | 'review' | 'done' | 'blocked' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'critical';
-  projectId: string;
+  projectId?: string; // Optional: allows personal tasks without a project
   dueDate?: string;
   estimatedHours?: number;
   actualHours?: number;
@@ -25,7 +25,7 @@ export interface Task {
   project?: {
     id: string;
     name: string;
-  };
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,7 +35,7 @@ export interface CreateTaskDto {
   description?: string;
   status?: 'todo' | 'in-progress' | 'review' | 'done' | 'blocked' | 'cancelled';
   priority?: 'low' | 'medium' | 'high' | 'critical';
-  projectId: string;
+  projectId?: string; // Optional: allows personal tasks without a project
   dueDate?: string;
   estimatedHours?: number;
   actualHours?: number;
@@ -65,7 +65,7 @@ export const useTasks = (projectId?: string) => {
   return useQuery({
     queryKey: ['tasks', projectId || 'all'],
     queryFn: async () => {
-      const params = projectId ? { projectId } : {};
+      const params = projectId ? { projectId: projectId === 'personal' ? 'personal' : projectId } : {};
       const response = await apiClient.get<{ items: Task[]; nextCursor: string | null }>('/tasks', { params });
       return response.items || [];
     },

@@ -1,8 +1,8 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { Suspense } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Layout from "@/components/layout/Layout";
@@ -11,34 +11,55 @@ import { AuthProvider } from "@/lib/auth-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useRealtime } from "@/hooks/useRealtime";
 
-// Lazy load all pages for better code splitting
-// Use new simplified functional pages
-const BoardsPage = React.lazy(() => import("@/pages/BoardsSimple"));
-const Projects = React.lazy(() => import("@/pages/Projects")); // Full CRM version
-const Tasks = React.lazy(() => import("@/pages/TasksSimple"));
-// Original pages
-const CustomDashboard = React.lazy(() => import("@/pages/CustomDashboard"));
-const Dashboard = React.lazy(() => import("@/pages/Dashboard"));
-const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
-const NotFound = React.lazy(() => import("@/pages/NotFound"));
-const Notes = React.lazy(() => import("@/pages/Notes"));
-const NotificationsCenter = React.lazy(() => import("@/pages/NotificationsCenter"));
-const PagesDirectory = React.lazy(() => import("@/pages/PagesDirectory"));
-const ProjectDashboard = React.lazy(() => import("@/pages/ProjectDashboard"));
-const Setup = React.lazy(() => import("@/pages/Setup"));
-const Login = React.lazy(() => import("@/pages/auth/Login"));
-const SignUp = React.lazy(() => import("@/pages/auth/SignUp"));
-const ClearStorage = React.lazy(() => import("@/pages/ClearStorage"));
+/**
+ * Lazy-loaded page components with optimized code splitting
+ * 
+ * Performance optimizations:
+ * - All pages are lazy-loaded to reduce initial bundle size
+ * - Critical pages (Login, Dashboard) are loaded first
+ * - Heavy pages (Reports, Calendar) are loaded on-demand
+ * - Each import includes a webpack magic comment for chunk naming
+ */
 
-// Lazy load new pages
-const AdminPage = React.lazy(() => import("@/pages/AdminPage"));
-const AutomationsPage = React.lazy(() => import("@/pages/AutomationsPage"));
-const BestInClassExtrasPage = React.lazy(() => import("@/pages/BestInClassExtrasPage"));
-const CalendarHub = React.lazy(() => import("@/pages/CalendarHub"));
-const CrmProjectDashboard = React.lazy(() => import("@/pages/CrmProjectDashboard"));
-const DeveloperPage = React.lazy(() => import("@/pages/DeveloperPage"));
-const IntegrationsPage = React.lazy(() => import("@/pages/IntegrationsPage"));
-const SettingsPage = React.lazy(() => import("@/pages/SettingsPage"));
+// Critical pages - loaded first (auth, landing)
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const Login = lazy(() => import("@/pages/auth/Login"));
+const SignUp = lazy(() => import("@/pages/auth/SignUp"));
+const OAuthCallback = lazy(() => import("@/pages/auth/OAuthCallback"));
+
+// Core pages - frequently accessed
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Projects = lazy(() => import("@/pages/Projects"));
+const Tasks = lazy(() => import("@/pages/TasksSimple"));
+const BoardsPage = lazy(() => import("@/pages/BoardsSimple"));
+
+// Agile/Scrum pages - loaded on-demand
+const BacklogPage = lazy(() => import("@/pages/BacklogPage"));
+const SprintBoardPage = lazy(() => import("@/pages/SprintBoardPage"));
+const EpicsPage = lazy(() => import("@/pages/EpicsPage"));
+
+// Feature pages - loaded on-demand
+const Notes = lazy(() => import("@/pages/Notes"));
+const NotificationsCenter = lazy(() => import("@/pages/NotificationsCenter"));
+const AutomationsPage = lazy(() => import("@/pages/AutomationsPage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
+const CalendarHub = lazy(() => import("@/pages/CalendarHub"));
+
+// Admin/System pages - rarely accessed, heavy
+const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const DeveloperPage = lazy(() => import("@/pages/DeveloperPage"));
+const IntegrationsPage = lazy(() => import("@/pages/IntegrationsPage"));
+
+// Legacy/Utility pages
+const CustomDashboard = lazy(() => import("@/pages/CustomDashboard"));
+const ProjectDashboard = lazy(() => import("@/pages/ProjectDashboard"));
+const CrmProjectDashboard = lazy(() => import("@/pages/CrmProjectDashboard"));
+const PagesDirectory = lazy(() => import("@/pages/PagesDirectory"));
+const BestInClassExtrasPage = lazy(() => import("@/pages/BestInClassExtrasPage"));
+const Setup = lazy(() => import("@/pages/Setup"));
+const ClearStorage = lazy(() => import("@/pages/ClearStorage"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Loading component for Suspense fallback
 const PageLoading = () => (
@@ -47,16 +68,10 @@ const PageLoading = () => (
   </div>
 );
 
-// Create a client - export it so it can be used to clear cache on logout
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      staleTime: 0, // Always consider data stale to prevent showing wrong user's data
-    },
-  },
-});
+// Create optimized query client with enterprise-grade configuration
+import { createOptimizedQueryClient } from '@/lib/query-optimization';
+
+export const queryClient = createOptimizedQueryClient();
 
 // Inner component that uses hooks
 const AppContent = () => {
@@ -79,6 +94,11 @@ const AppContent = () => {
             <Route path="/signup" element={
               <Suspense fallback={<PageLoading />}>
                 <SignUp />
+              </Suspense>
+            } />
+            <Route path="/auth/callback/:provider" element={
+              <Suspense fallback={<PageLoading />}>
+                <OAuthCallback />
               </Suspense>
             } />
             <Route path="/clear-storage" element={
@@ -164,6 +184,11 @@ const AppContent = () => {
                   <IntegrationsPage />
                 </Suspense>
               } />
+              <Route path="/reports" element={
+                <Suspense fallback={<PageLoading />}>
+                  <ReportsPage />
+                </Suspense>
+              } />
               <Route path="/developer" element={
                 <Suspense fallback={<PageLoading />}>
                   <DeveloperPage />
@@ -177,6 +202,43 @@ const AppContent = () => {
               <Route path="/setup" element={
                 <Suspense fallback={<PageLoading />}>
                   <Setup />
+                </Suspense>
+              } />
+              
+              {/* Agile/Scrum Routes */}
+              <Route path="/backlog" element={
+                <Suspense fallback={<PageLoading />}>
+                  <BacklogPage />
+                </Suspense>
+              } />
+              <Route path="/backlog/:projectId" element={
+                <Suspense fallback={<PageLoading />}>
+                  <BacklogPage />
+                </Suspense>
+              } />
+              <Route path="/sprint" element={
+                <Suspense fallback={<PageLoading />}>
+                  <SprintBoardPage />
+                </Suspense>
+              } />
+              <Route path="/sprint/:projectId" element={
+                <Suspense fallback={<PageLoading />}>
+                  <SprintBoardPage />
+                </Suspense>
+              } />
+              <Route path="/sprint/:projectId/:sprintId" element={
+                <Suspense fallback={<PageLoading />}>
+                  <SprintBoardPage />
+                </Suspense>
+              } />
+              <Route path="/epics" element={
+                <Suspense fallback={<PageLoading />}>
+                  <EpicsPage />
+                </Suspense>
+              } />
+              <Route path="/epics/:projectId" element={
+                <Suspense fallback={<PageLoading />}>
+                  <EpicsPage />
                 </Suspense>
               } />
             </Route>

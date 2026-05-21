@@ -10,11 +10,35 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { OAuthButton } from "@/components/auth/OAuthButton";
+import { getAvailableOAuthProviders } from "@/lib/oauth";
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
+
+function loginErrorMessage(error: unknown): string {
+  const e = error as {
+    response?: { status?: number; data?: { message?: string | string[] } };
+    message?: string;
+  };
+  const raw = e?.response?.data?.message;
+  if (Array.isArray(raw)) {
+    return raw.filter(Boolean).join(', ') || 'Login failed';
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw;
+  }
+  if (e?.response?.status === 401) {
+    return 'Invalid email or password.';
+  }
+  if (typeof e?.message === 'string' && e.message.trim()) {
+    return e.message;
+  }
+  return 'Login failed';
+}
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +49,7 @@ const Login: React.FC = () => {
     password: '',
   });
   const [loading, setLoading] = useState(false);
+  const availableProviders = getAvailableOAuthProviders();
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -66,26 +91,9 @@ const Login: React.FC = () => {
       await login(formData.email, formData.password);
       toast.success("Login successful!");
       navigate('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      const message = error?.response?.data?.message || error?.message || "Login failed";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    // For demo: use a test account
-    setFormData({ email: 'demo@example.com', password: 'demo123' });
-    setLoading(true);
-    
-    try {
-      await login('demo@example.com', 'demo123');
-      toast.success("Demo login successful!");
-      navigate('/dashboard');
-    } catch (error) {
-      toast.error("Demo login failed. Please try manual login.");
+      toast.error(loginErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -148,18 +156,28 @@ const Login: React.FC = () => {
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
             </form>
-            
-            <div className="mt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleDemoLogin}
-                disabled={loading}
-              >
-                {loading ? "Signing in..." : "Demo Login (Skip Keycloak)"}
-              </Button>
-            </div>
+
+            {/* OAuth Providers */}
+            {availableProviders.length > 0 && (
+              <>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-muted-foreground">
+                      Or continue with
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {availableProviders.map((provider) => (
+                    <OAuthButton key={provider} provider={provider} />
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
             <div className="text-sm text-center text-muted-foreground">

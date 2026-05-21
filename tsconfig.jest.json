@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.api.json",
+  "compilerOptions": {
+    "types": ["node", "jest"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "src/api/**/*.ts",
+    "src/shared/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist-api"
+  ]
+}

@@ -1,0 +1,20 @@
+[33m47a7b17[m[33m ([m[1;35mrefs/stash[m[33m)[m On main: Stashing local changes before merge
+[33mb372942[m index on main: 382a07e checkpoint before checking out cursor/debug-backend-and-connection-issues-e8b6
+[33m4fcd439[m[33m ([m[1;31morigin/cursor/debug-backend-and-connection-issues-e8b6[m[33m, [m[1;32mcursor/debug-backend-and-connection-issues-e8b6[m[33m)[m Fix attachments section: implement instant file visibility with optimistic updates
+[33m08f25ac[m[33m ([m[1;32mchore-env-config-dist-clean-pM6RB[m[33m, [m[1;32mchore-env-config-dist-clean-O9EIA[m[33m, [m[1;32mchore-env-config-dist-clean-2H0ES[m[33m, [m[1;32m2025-11-16-dltk-C9fvG[m[33m, [m[1;32m2025-11-16-474e-0DOmf[m[33m, [m[1;32m2025-11-16-2753-VpzF2[m[33m, [m[1;32m2025-11-13-s6k3-lzLV4[m[33m, [m[1;32m2025-11-13-ooeh-Q3CME[m[33m)[m Fix backend authentication and Prisma integration issues
+[33m382a07e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m checkpoint before checking out cursor/debug-backend-and-connection-issues-e8b6
+[33m214b493[m Refactor: Update auth guard and dev proxy, add outbox imports
+[33m3e7318e[m Complete Agile Flow Verse application - Production-ready Jira-style multi-tenant SaaS
+[33m3183a0f[m feat: Add Notes page components and update frontend integration
+[33mf4c7469[m feat: Add enterprise-grade NestJS backend with multi-tenant architecture
+[33m7ac6927[m feat: Add comprehensive Notifications Center with service integration and categorization
+[33m85c8509[m feat: Implement automations and sync features
+[33me99ab78[m Implement signup redirect and dashboard features
+[33m6a5dacb[m Implement first 3 features
+[33m4177b38[m Feat: Implement project-specific features
+[33mf3d4820[m Feat: Implement project-specific features
+[33m5388430[m Fix: Site-wide audit and repair
+[33mcd020c5[m feat: Implement project details, sticky notes, and charts
+[33m89d97dc[m Fix: Resolve import error in WidgetGrid.tsx
+[33ma5869fb[m Refactor: Split CustomDashboard.tsx into smaller components
+[33m4acfd33[m Fix CustomDashboard type errors

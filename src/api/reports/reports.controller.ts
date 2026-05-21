@@ -1,5 +1,5 @@
-import { Controller, Get, Query, Request, Res, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiStandardResponses } from '../common/swagger/swagger.decorators';
@@ -180,6 +180,73 @@ export class ReportsController {
     } else {
       throw new Error('PDF export not yet implemented');
     }
+  }
+
+  @Get('projects/:projectId/summary')
+  @ApiOperation({
+    summary: 'Get project summary report',
+    description: 'Generates a comprehensive project summary report with task statistics, workload, and progress metrics.',
+  })
+  @ApiParam({ name: 'projectId', required: true, description: 'Project ID' })
+  @ApiResponse({ status: 200, description: 'Project summary report retrieved successfully' })
+  @ApiStandardResponses()
+  async getProjectSummaryReport(
+    @Param('projectId') projectId: string,
+    @Request() req?: any,
+  ) {
+    return this.reportsService.generateProjectSummaryReport(req.user.tenantId, projectId);
+  }
+
+  @Post('projects/:projectId/email')
+  @ApiOperation({
+    summary: 'Generate email report',
+    description: 'Generates a formatted email report for the project that can be sent to recipients.',
+  })
+  @ApiParam({ name: 'projectId', required: true, description: 'Project ID' })
+  @ApiResponse({ status: 200, description: 'Email report generated successfully' })
+  @ApiStandardResponses()
+  async generateEmailReport(
+    @Param('projectId') projectId: string,
+    @Body() body: { recipients: string[]; reportType: 'summary' | 'full'; format: 'html' },
+    @Request() req?: any,
+  ) {
+    return this.reportsService.generateEmailReport(
+      req.user.tenantId,
+      projectId,
+      body.recipients,
+      body.reportType || 'summary',
+      body.format || 'html',
+    );
+  }
+
+  @Post('projects/:projectId/generate')
+  @ApiOperation({
+    summary: 'Generate comprehensive project report',
+    description: 'Generates a detailed project report based on selected options including tasks, issues, approvals, team, budget, and time tracking.',
+  })
+  @ApiParam({ name: 'projectId', required: true, description: 'Project ID' })
+  @ApiResponse({ status: 200, description: 'Comprehensive report generated successfully' })
+  @ApiStandardResponses()
+  async generateComprehensiveReport(
+    @Param('projectId') projectId: string,
+    @Body() body: {
+      category?: string;
+      type?: string;
+      dataSource?: string;
+      includeTasks?: boolean;
+      includeIssues?: boolean;
+      includeApprovals?: boolean;
+      includeTeam?: boolean;
+      includeBudget?: boolean;
+      includeTimeTracking?: boolean;
+    },
+    @Request() req?: any,
+  ) {
+    return this.reportsService.generateComprehensiveReport(
+      req.user.tenantId,
+      projectId,
+      body,
+    );
   }
 }
 

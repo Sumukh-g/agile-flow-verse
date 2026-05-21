@@ -545,7 +545,7 @@ const ProjectsCRM: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Profit Margin</p>
-                    <p className="text-2xl font-bold">{Math.round((totalProfit / totalRevenue) * 100)}%</p>
+                    <p className="text-2xl font-bold">{totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0}%</p>
                     <p className="text-xs text-orange-600">+3% improvement</p>
                   </div>
                   <TrendingUp className="h-8 w-8 text-orange-600" />
@@ -2186,9 +2186,9 @@ const ProjectsCRM: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Profit Margin</span>
-                    <span className="font-bold">{Math.round((totalProfit / totalRevenue) * 100)}%</span>
+                    <span className="font-bold">{totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0}%</span>
                   </div>
-                  <Progress value={(totalProfit / totalRevenue) * 100} className="h-2" />
+                  <Progress value={totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0} className="h-2" />
                 </div>
               </CardContent>
             </Card>

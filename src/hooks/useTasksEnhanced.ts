@@ -67,6 +67,7 @@ export function useCreateTask() {
     mutationFn: (data: CreateTaskDto) => api.tasks.createTask(data),
     onSuccess: (newTask) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       queryClient.setQueryData<Task>(taskKeys.detail(newTask.id), newTask);
       toast.success('Task created successfully');
     },
@@ -102,6 +103,7 @@ export function useUpdateTask() {
     onSuccess: (updatedTask) => {
       queryClient.setQueryData<Task>(taskKeys.detail(updatedTask.id), updatedTask);
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('Task updated successfully');
     },
     onError: (error: any, { id }, context) => {
@@ -127,6 +129,7 @@ export function useDeleteTask() {
     onSuccess: (_, id) => {
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard cache
       toast.success('Task deleted successfully');
     },
     onError: (error: any) => {

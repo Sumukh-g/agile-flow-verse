@@ -24,8 +24,18 @@ export function useProjects(query?: ProjectQueryDto) {
     queryKey: projectKeys.list(query || {}),
     queryFn: async () => {
       const response = await api.projects.getProjects(query);
-      // Return the data array, not the full response
-      return response.data || [];
+      // Backend returns { items: [...], nextCursor: ... } but frontend expects { data: [...] }
+      // Handle both formats for compatibility
+      if (Array.isArray(response)) {
+        return response;
+      }
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      }
+      if (response.items && Array.isArray(response.items)) {
+        return response.items;
+      }
+      return [];
     },
     staleTime: 30000, // 30 seconds
   });
@@ -143,7 +153,10 @@ export function useDeleteProject() {
       // Invalidate lists
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       
-      toast.success('Project deleted successfully');
+      // Invalidate deleted projects list so bin shows the newly deleted project
+      queryClient.invalidateQueries({ queryKey: ['projects', 'deleted'] });
+      
+      toast.success('Project moved to bin successfully');
     },
     onError: (error: any) => {
       toast.error(error?.apiError?.message || 'Failed to delete project');
@@ -186,6 +199,150 @@ export function useRemoveProjectMember() {
     onError: (error: any) => {
       toast.error(error?.apiError?.message || 'Failed to remove member');
     },
+  });
+}
+
+/**
+ * Archive a project
+ */
+export function useArchiveProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.projects.archiveProject(id),
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      toast.success('Project archived successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to archive project');
+    },
+  });
+}
+
+/**
+ * Unarchive a project
+ */
+export function useUnarchiveProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.projects.unarchiveProject(id),
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      toast.success('Project unarchived successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to unarchive project');
+    },
+  });
+}
+
+/**
+ * Restore a deleted project from bin
+ */
+export function useRestoreProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.projects.restoreProject(id),
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'deleted'] });
+      toast.success('Project restored successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to restore project');
+    },
+  });
+}
+
+/**
+ * Permanently delete a project from bin
+ */
+export function usePermanentDeleteProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.projects.permanentDeleteProject(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'deleted'] });
+      toast.success('Project permanently deleted');
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to permanently delete project');
+    },
+  });
+}
+
+/**
+ * Bulk delete projects
+ */
+export function useBulkDeleteProjects() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => api.projects.bulkDeleteProjects(ids),
+    onSuccess: (result, ids) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      ids.forEach(id => queryClient.removeQueries({ queryKey: projectKeys.detail(id) }));
+      queryClient.invalidateQueries({ queryKey: ['projects', 'deleted'] });
+      toast.success(`${result.count} project(s) moved to bin`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to delete projects');
+    },
+  });
+}
+
+/**
+ * Bulk archive projects
+ */
+export function useBulkArchiveProjects() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => api.projects.bulkArchiveProjects(ids),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      toast.success(`${result.count} project(s) archived`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to archive projects');
+    },
+  });
+}
+
+/**
+ * Bulk unarchive projects
+ */
+export function useBulkUnarchiveProjects() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => api.projects.bulkUnarchiveProjects(ids),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      toast.success(`${result.count} project(s) unarchived`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.apiError?.message || 'Failed to unarchive projects');
+    },
+  });
+}
+
+/**
+ * Get deleted projects (for bin view)
+ */
+export function useDeletedProjects() {
+  return useQuery({
+    queryKey: ['projects', 'deleted'],
+    queryFn: () => api.projects.getDeletedProjects(),
+    staleTime: 30000,
   });
 }
 
