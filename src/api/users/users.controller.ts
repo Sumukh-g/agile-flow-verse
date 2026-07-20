@@ -91,7 +91,7 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async resetUserPassword(@Request() req: any, @Param('id') id: string) {
-    return this.usersService.resetUserPassword(req.user.tenantId, id);
+    return this.usersService.resetUserPassword(req.user.tenantId, req.user.userId, id);
   }
 
   /**

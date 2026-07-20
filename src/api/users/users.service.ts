@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 /**
  * Users Service
@@ -288,18 +289,44 @@ export class UsersService {
   }
 
   /**
-   * Reset user password
-   * Generates a temporary password (in production, send via email)
-   * 
-   * @param tenantId - The tenant ID
-   * @param userId - The user ID to reset password for
-   * @returns Temporary password (in production, don't return this)
+   * Reset a user's password (admin-initiated).
+   *
+   * Security notes:
+   * - Only tenant owners/admins may reset another user's password. A user may
+   *   always reset their own.
+   * - The temporary password is generated with a cryptographically secure RNG
+   *   (crypto.randomBytes), NOT Math.random().
+   * - The generated password is returned exactly once to the authorised caller
+   *   so it can be delivered to the target user out-of-band. It is never stored
+   *   in plaintext. Once email delivery is configured, prefer emailing a
+   *   one-time reset link instead of returning the password.
+   *
+   * @param tenantId - The tenant of the caller
+   * @param requestingUserId - The authenticated caller performing the reset
+   * @param targetUserId - The user whose password is being reset
    */
-  async resetUserPassword(tenantId: string, userId: string) {
-    // Verify user belongs to tenant
+  async resetUserPassword(tenantId: string, requestingUserId: string, targetUserId: string) {
+    const isSelf = requestingUserId === targetUserId;
+
+    if (!isSelf) {
+      const isTenantAdmin = await this.prisma.tx.roleAssignment.findFirst({
+        where: {
+          tenantId,
+          userId: requestingUserId,
+          role: { permissions: { hasSome: ['tenant.admin', 'tenant.owner'] } },
+        },
+        select: { id: true },
+      });
+
+      if (!isTenantAdmin) {
+        throw new ForbiddenException('Only tenant administrators can reset another user\'s password');
+      }
+    }
+
+    // Verify the target user belongs to this tenant
     const user = await this.prisma.tx.user.findFirst({
       where: {
-        id: userId,
+        id: targetUserId,
         OR: [
           { tenantId },
           { userTenants: { some: { tenantId } } },
@@ -311,21 +338,46 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Generate temporary password
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const tempPassword = this.generateSecureTempPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    // Update password
     await this.prisma.tx.user.update({
-      where: { id: userId },
+      where: { id: targetUserId },
       data: { password: hashedPassword },
     });
 
-    // In production, send password via email instead of returning it
     return {
       message: 'Password reset successfully',
-      tempPassword, // Remove this in production
+      tempPassword,
     };
+  }
+
+  /**
+   * Generate a cryptographically secure temporary password that satisfies
+   * common complexity requirements (upper, lower, digit, symbol).
+   */
+  private generateSecureTempPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%^&*-_';
+    const all = upper + lower + digits + symbols;
+
+    const pick = (set: string) => set[crypto.randomInt(0, set.length)];
+
+    // Guarantee at least one character from each class, then fill to length 16.
+    const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    while (chars.length < 16) {
+      chars.push(pick(all));
+    }
+
+    // Fisher–Yates shuffle using secure randomness so class chars aren't fixed.
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join('');
   }
 
   /**
