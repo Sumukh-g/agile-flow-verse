@@ -37,36 +37,6 @@ interface BurndownChartWidgetProps {
 }
 
 /**
- * Generate mock burndown data for demonstration
- * In production, this would come from the API
- */
-const generateBurndownData = () => {
-  const sprintDays = 14;
-  const totalPoints = 100;
-  const data = [];
-  
-  let remainingIdeal = totalPoints;
-  let remainingActual = totalPoints;
-  const dailyBurnIdeal = totalPoints / sprintDays;
-  
-  for (let day = 0; day <= sprintDays; day++) {
-    // Add some variance to actual progress
-    const variance = Math.random() * 10 - 3;
-    remainingActual = Math.max(0, remainingActual - dailyBurnIdeal + variance);
-    remainingIdeal = Math.max(0, totalPoints - (day * dailyBurnIdeal));
-    
-    data.push({
-      day: `Day ${day}`,
-      ideal: Math.round(remainingIdeal),
-      actual: Math.round(remainingActual),
-      planned: day <= 10 ? Math.round(remainingActual) : null, // Show actual only up to current day
-    });
-  }
-  
-  return data;
-};
-
-/**
  * Custom tooltip component for the chart
  */
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -120,9 +90,11 @@ const BurndownChartWidget: React.FC<BurndownChartWidgetProps> = ({ widget }) => 
       }));
     }
     
-    // Fallback to mock data for demonstration
-    return generateBurndownData();
+    // No real data available — show an empty state rather than fabricated data.
+    return [];
   }, [widget.data, apiData]);
+
+  const hasData = chartData.length > 0;
   
   // Calculate sprint progress metrics
   const metrics = useMemo(() => {
@@ -176,13 +148,25 @@ const BurndownChartWidget: React.FC<BurndownChartWidgetProps> = ({ widget }) => 
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
               <p className="text-sm text-muted-foreground">Failed to load burndown data</p>
-              <p className="text-xs text-muted-foreground mt-1">Using demo data</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State - no data and no error */}
+        {!isLoading && !error && !hasData && (
+          <div className="flex items-center justify-center h-[200px]">
+            <div className="text-center">
+              <TrendingDown className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No burndown data yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add story points to sprint items to see progress.
+              </p>
             </div>
           </div>
         )}
         
-        {/* Chart Content - Only show if not loading */}
-        {!isLoading && (
+        {/* Chart Content - Only show if not loading and we have data */}
+        {!isLoading && !error && hasData && (
           <>
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mb-4">

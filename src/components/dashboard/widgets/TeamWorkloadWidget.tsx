@@ -43,21 +43,6 @@ interface TeamMember {
 }
 
 /**
- * Generate mock team workload data for demonstration
- * In production, this would come from the API
- */
-const generateTeamWorkloadData = (): TeamMember[] => {
-  return [
-    { id: '1', name: 'Alice Smith', assignedTasks: 8, completedTasks: 5, capacity: 10, storyPoints: 21 },
-    { id: '2', name: 'Bob Johnson', assignedTasks: 12, completedTasks: 7, capacity: 10, storyPoints: 34 },
-    { id: '3', name: 'Carol Williams', assignedTasks: 6, completedTasks: 4, capacity: 10, storyPoints: 18 },
-    { id: '4', name: 'David Brown', assignedTasks: 9, completedTasks: 8, capacity: 10, storyPoints: 25 },
-    { id: '5', name: 'Eva Martinez', assignedTasks: 5, completedTasks: 3, capacity: 10, storyPoints: 13 },
-    { id: '6', name: 'Frank Lee', assignedTasks: 11, completedTasks: 6, capacity: 10, storyPoints: 28 },
-  ];
-};
-
-/**
  * Get workload status based on capacity utilization
  */
 const getWorkloadStatus = (assigned: number, capacity: number) => {
@@ -119,9 +104,11 @@ const TeamWorkloadWidget: React.FC<TeamWorkloadWidgetProps> = ({ widget }) => {
       }));
     }
     
-    // Fallback to mock data for demonstration
-    return generateTeamWorkloadData();
+    // No real data available — show an empty state rather than fabricated data.
+    return [];
   }, [widget.data, apiData]);
+
+  const hasData = teamData.length > 0;
   
   // Calculate team metrics
   const metrics = useMemo(() => {
@@ -188,13 +175,25 @@ const TeamWorkloadWidget: React.FC<TeamWorkloadWidgetProps> = ({ widget }) => {
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
               <p className="text-sm text-muted-foreground">Failed to load workload data</p>
-              <p className="text-xs text-muted-foreground mt-1">Using demo data</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State - no data and no error */}
+        {!isLoading && !error && !hasData && (
+          <div className="flex items-center justify-center h-[200px]">
+            <div className="text-center">
+              <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No workload data yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Assign work and log hours to see team capacity.
+              </p>
             </div>
           </div>
         )}
         
-        {/* Content - Only show if not loading */}
-        {!isLoading && (
+        {/* Content - Only show if not loading and we have data */}
+        {!isLoading && !error && hasData && (
           <>
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mb-4">
