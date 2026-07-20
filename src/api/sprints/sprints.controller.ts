@@ -49,7 +49,7 @@ export class SprintsController {
       endDate: string;
     }
   ) {
-    return this.sprintsService.create(req.user.tenantId, {
+    return this.sprintsService.create(req.user.tenantId, req.user.userId, {
       ...body,
       startDate: new Date(body.startDate),
       endDate: new Date(body.endDate)
@@ -71,7 +71,7 @@ export class SprintsController {
     @Query('limit') limit?: string,
     @Query('includeCards') includeCards?: string
   ) {
-    return this.sprintsService.findAllByProject(req.user.tenantId, projectId, {
+    return this.sprintsService.findAllByProject(req.user.tenantId, req.user.userId, projectId, {
       status,
       limit: limit ? parseInt(limit, 10) : undefined,
       includeCards: includeCards === 'true'
@@ -87,7 +87,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('projectId') projectId: string
   ) {
-    return this.sprintsService.getActiveSprint(req.user.tenantId, projectId);
+    return this.sprintsService.getActiveSprint(req.user.tenantId, req.user.userId, projectId);
   }
 
   /**
@@ -99,7 +99,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('projectId') projectId: string
   ) {
-    return this.sprintsService.getBacklog(req.user.tenantId, projectId);
+    return this.sprintsService.getBacklog(req.user.tenantId, req.user.userId, projectId);
   }
 
   /**
@@ -115,6 +115,7 @@ export class SprintsController {
   ) {
     return this.sprintsService.getVelocityData(
       req.user.tenantId,
+      req.user.userId,
       projectId,
       count ? parseInt(count, 10) : 6
     );
@@ -131,7 +132,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.sprintsService.findOne(req.user.tenantId, id);
+    return this.sprintsService.findOne(req.user.tenantId, req.user.userId, id);
   }
 
   /**
@@ -143,7 +144,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.sprintsService.getBurndownData(req.user.tenantId, id);
+    return this.sprintsService.getBurndownData(req.user.tenantId, req.user.userId, id);
   }
 
   /**
@@ -167,7 +168,7 @@ export class SprintsController {
     if (body.startDate) data.startDate = new Date(body.startDate);
     if (body.endDate) data.endDate = new Date(body.endDate);
     
-    return this.sprintsService.update(req.user.tenantId, id, data);
+    return this.sprintsService.update(req.user.tenantId, req.user.userId, id, data);
   }
 
   /**
@@ -182,7 +183,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.sprintsService.start(req.user.tenantId, id);
+    return this.sprintsService.start(req.user.tenantId, req.user.userId, id);
   }
 
   /**
@@ -200,7 +201,7 @@ export class SprintsController {
       actionItems?: string;
     }
   ) {
-    return this.sprintsService.complete(req.user.tenantId, id, body);
+    return this.sprintsService.complete(req.user.tenantId, req.user.userId, id, body);
   }
 
   /**
@@ -217,7 +218,7 @@ export class SprintsController {
       itemType: 'card' | 'task';
     }
   ) {
-    return this.sprintsService.addItems(req.user.tenantId, id, body.itemIds, body.itemType);
+    return this.sprintsService.addItems(req.user.tenantId, req.user.userId, id, body.itemIds, body.itemType);
   }
 
   /**
@@ -233,7 +234,7 @@ export class SprintsController {
       itemType: 'card' | 'task';
     }
   ) {
-    return this.sprintsService.removeItems(req.user.tenantId, id, body.itemIds, body.itemType);
+    return this.sprintsService.removeItems(req.user.tenantId, req.user.userId, id, body.itemIds, body.itemType);
   }
 
   /**
@@ -248,7 +249,7 @@ export class SprintsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.sprintsService.delete(req.user.tenantId, id);
+    return this.sprintsService.delete(req.user.tenantId, req.user.userId, id);
   }
 
   // ===========================
@@ -267,7 +268,7 @@ export class SprintsController {
       reviewDate: string;
     }
   ) {
-    return this.sprintsService.createReview(req.user.tenantId, id, {
+    return this.sprintsService.createReview(req.user.tenantId, req.user.userId, id, {
       ...body,
       reviewDate: new Date(body.reviewDate),
     });
@@ -276,7 +277,7 @@ export class SprintsController {
   @Get(':id/review')
   @ApiOperation({ summary: 'Get sprint review' })
   async getReview(@Request() req: any, @Param('id') id: string) {
-    return this.sprintsService.getReview(req.user.tenantId, id);
+    return this.sprintsService.getReview(req.user.tenantId, req.user.userId, id);
   }
 
   @Put(':id/review')
@@ -293,7 +294,7 @@ export class SprintsController {
   ) {
     const data: any = { ...body };
     if (body.reviewDate) data.reviewDate = new Date(body.reviewDate);
-    return this.sprintsService.updateReview(req.user.tenantId, id, data);
+    return this.sprintsService.updateReview(req.user.tenantId, req.user.userId, id, data);
   }
 
   // ===========================
@@ -308,19 +309,19 @@ export class SprintsController {
     @Param('id') id: string,
     @Body() body: { userId: string; dailyHours?: number; leaveDays?: number; skills?: string[] }
   ) {
-    return this.sprintsService.setCapacity(req.user.tenantId, id, body.userId, body);
+    return this.sprintsService.setCapacity(req.user.tenantId, req.user.userId, id, body.userId, body);
   }
 
   @Get(':id/capacity')
   @ApiOperation({ summary: 'Get capacity data for a sprint' })
   async getCapacity(@Request() req: any, @Param('id') id: string) {
-    return this.sprintsService.getCapacity(req.user.tenantId, id);
+    return this.sprintsService.getCapacity(req.user.tenantId, req.user.userId, id);
   }
 
   @Get(':id/capacity/load')
   @ApiOperation({ summary: 'Get capacity vs load analysis' })
   async getCapacityVsLoad(@Request() req: any, @Param('id') id: string) {
-    return this.sprintsService.getCapacityVsLoad(req.user.tenantId, id);
+    return this.sprintsService.getCapacityVsLoad(req.user.tenantId, req.user.userId, id);
   }
 
   // ===========================
@@ -335,7 +336,7 @@ export class SprintsController {
     @Query('count') count?: string
   ) {
     return this.sprintsService.getEnhancedVelocityData(
-      req.user.tenantId, projectId, count ? parseInt(count, 10) : 6
+      req.user.tenantId, req.user.userId, projectId, count ? parseInt(count, 10) : 6
     );
   }
 
@@ -357,7 +358,7 @@ export class SprintsController {
     @Param('projectId') projectId: string,
     @Body() body: { items: { id: string; label: string; required: boolean }[] }
   ) {
-    return this.dodService.setDoD(req.user.tenantId, projectId, body.items);
+    return this.dodService.setDoD(req.user.tenantId, req.user.userId, projectId, body.items);
   }
 
   @Get('cards/:cardId/dod-checks')

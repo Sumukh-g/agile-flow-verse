@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { SprintStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 
 /**
  * Sprint Service
@@ -18,18 +19,52 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SprintsService {
   private readonly logger = new Logger(SprintsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
+
+  /**
+   * Resolve the projectId that owns a sprint (tenant-scoped) and enforce the
+   * requested access level against project RBAC. Prevents any authenticated
+   * tenant user from reading/mutating sprints of projects they don't belong to.
+   */
+  private async assertSprintAccess(
+    tenantId: string,
+    userId: string,
+    sprintId: string,
+    mode: 'read' | 'write',
+  ): Promise<{ projectId: string }> {
+    const sprint = await this.prisma.sprint.findFirst({
+      where: { id: sprintId, tenantId },
+      select: { projectId: true },
+    });
+
+    if (!sprint) {
+      throw new NotFoundException('Sprint not found');
+    }
+
+    if (mode === 'write') {
+      await this.permissions.ensureCanWriteProject(tenantId, userId, sprint.projectId);
+    } else {
+      await this.permissions.ensureCanReadProject(tenantId, userId, sprint.projectId);
+    }
+
+    return { projectId: sprint.projectId };
+  }
 
   /**
    * Create a new sprint
    */
-  async create(tenantId: string, data: {
+  async create(tenantId: string, userId: string, data: {
     projectId: string;
     name: string;
     goal?: string;
     startDate: Date;
     endDate: Date;
   }) {
+    await this.permissions.ensureCanWriteProject(tenantId, userId, data.projectId);
+
     // Validate date range
     if (data.startDate >= data.endDate) {
       throw new BadRequestException('End date must be after start date');
@@ -84,11 +119,13 @@ export class SprintsService {
   /**
    * Get all sprints for a project
    */
-  async findAllByProject(tenantId: string, projectId: string, options?: {
+  async findAllByProject(tenantId: string, userId: string, projectId: string, options?: {
     status?: SprintStatus;
     limit?: number;
     includeCards?: boolean;
   }) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const where: any = { tenantId, projectId };
     if (options?.status) {
       where.status = options.status;
@@ -134,7 +171,9 @@ export class SprintsService {
   /**
    * Get a single sprint by ID
    */
-  async findOne(tenantId: string, sprintId: string) {
+  async findOne(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'read');
+
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId },
       include: {
@@ -162,7 +201,7 @@ export class SprintsService {
   /**
    * Update a sprint
    */
-  async update(tenantId: string, sprintId: string, data: Partial<{
+  async update(tenantId: string, userId: string, sprintId: string, data: Partial<{
     name: string;
     goal: string;
     startDate: Date;
@@ -172,6 +211,8 @@ export class SprintsService {
     needsImprovement: string;
     actionItems: string;
   }>) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     const existing = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId }
     });
@@ -216,7 +257,9 @@ export class SprintsService {
   /**
    * Delete a sprint
    */
-  async delete(tenantId: string, sprintId: string) {
+  async delete(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     const existing = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId }
     });
@@ -251,7 +294,9 @@ export class SprintsService {
   /**
    * Start a sprint
    */
-  async start(tenantId: string, sprintId: string) {
+  async start(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     // Check if there's already an active sprint for the project
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId }
@@ -274,18 +319,18 @@ export class SprintsService {
       throw new ConflictException(`Project already has an active sprint: "${activeSprint.name}"`);
     }
 
-    return this.update(tenantId, sprintId, { status: 'ACTIVE' });
+    return this.update(tenantId, userId, sprintId, { status: 'ACTIVE' });
   }
 
   /**
    * Complete a sprint
    */
-  async complete(tenantId: string, sprintId: string, retrospective?: {
+  async complete(tenantId: string, userId: string, sprintId: string, retrospective?: {
     wentWell?: string;
     needsImprovement?: string;
     actionItems?: string;
   }) {
-    return this.update(tenantId, sprintId, {
+    return this.update(tenantId, userId, sprintId, {
       status: 'COMPLETED',
       ...retrospective
     });
@@ -294,7 +339,9 @@ export class SprintsService {
   /**
    * Add items to sprint with readiness warnings
    */
-  async addItems(tenantId: string, sprintId: string, itemIds: string[], itemType: 'card' | 'task') {
+  async addItems(tenantId: string, userId: string, sprintId: string, itemIds: string[], itemType: 'card' | 'task') {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId }
     });
@@ -346,7 +393,9 @@ export class SprintsService {
   /**
    * Remove items from sprint
    */
-  async removeItems(tenantId: string, sprintId: string, itemIds: string[], itemType: 'card' | 'task') {
+  async removeItems(tenantId: string, userId: string, sprintId: string, itemIds: string[], itemType: 'card' | 'task') {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     if (itemType === 'card') {
       await this.prisma.kanbanCard.updateMany({
         where: {
@@ -373,7 +422,9 @@ export class SprintsService {
   /**
    * Get burndown chart data for a sprint
    */
-  async getBurndownData(tenantId: string, sprintId: string) {
+  async getBurndownData(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'read');
+
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId }
     });
@@ -429,7 +480,9 @@ export class SprintsService {
   /**
    * Get velocity data for a project
    */
-  async getVelocityData(tenantId: string, projectId: string, sprintCount: number = 6) {
+  async getVelocityData(tenantId: string, userId: string, projectId: string, sprintCount: number = 6) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const sprints = await this.prisma.sprint.findMany({
       where: {
         tenantId,
@@ -465,7 +518,9 @@ export class SprintsService {
   /**
    * Get active sprint for a project
    */
-  async getActiveSprint(tenantId: string, projectId: string) {
+  async getActiveSprint(tenantId: string, userId: string, projectId: string) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const sprint = await this.prisma.sprint.findFirst({
       where: {
         tenantId,
@@ -496,7 +551,9 @@ export class SprintsService {
   /**
    * Get backlog items (cards/tasks not in any sprint)
    */
-  async getBacklog(tenantId: string, projectId: string) {
+  async getBacklog(tenantId: string, userId: string, projectId: string) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const [cards, tasks] = await Promise.all([
       this.prisma.kanbanCard.findMany({
         where: {
@@ -520,7 +577,9 @@ export class SprintsService {
       })
     ]);
 
-    const totalPoints = cards.reduce((sum, c) => sum + (c.storyPoints || 0), 0);
+    const totalPoints =
+      cards.reduce((sum, c) => sum + (c.storyPoints || 0), 0) +
+      tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
 
     return {
       cards,
@@ -534,12 +593,14 @@ export class SprintsService {
   // Sprint Review Methods
   // ===========================
 
-  async createReview(tenantId: string, sprintId: string, data: {
+  async createReview(tenantId: string, userId: string, sprintId: string, data: {
     attendees: { userId: string; name: string; role: string }[];
     demonstratedItems: { cardId: string; title: string; accepted: boolean; feedback?: string }[];
     stakeholderNotes?: string;
     reviewDate: Date;
   }) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId },
     });
@@ -557,18 +618,22 @@ export class SprintsService {
     });
   }
 
-  async getReview(tenantId: string, sprintId: string) {
+  async getReview(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'read');
+
     return this.prisma.sprintReview.findFirst({
       where: { sprintId, tenantId },
     });
   }
 
-  async updateReview(tenantId: string, sprintId: string, data: Partial<{
+  async updateReview(tenantId: string, userId: string, sprintId: string, data: Partial<{
     attendees: any;
     demonstratedItems: any;
     stakeholderNotes: string;
     reviewDate: Date;
   }>) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'write');
+
     const review = await this.prisma.sprintReview.findFirst({
       where: { sprintId, tenantId },
     });
@@ -584,19 +649,23 @@ export class SprintsService {
   // Capacity Methods
   // ===========================
 
-  async setCapacity(tenantId: string, sprintId: string, userId: string, data: {
+  async setCapacity(tenantId: string, requestingUserId: string, sprintId: string, targetUserId: string, data: {
     dailyHours?: number;
     leaveDays?: number;
     skills?: string[];
   }) {
+    await this.assertSprintAccess(tenantId, requestingUserId, sprintId, 'write');
+
     return this.prisma.sprintCapacity.upsert({
-      where: { sprintId_userId: { sprintId, userId } },
+      where: { sprintId_userId: { sprintId, userId: targetUserId } },
       update: { ...data },
-      create: { tenantId, sprintId, userId, ...data },
+      create: { tenantId, sprintId, userId: targetUserId, ...data },
     });
   }
 
-  async getCapacity(tenantId: string, sprintId: string) {
+  async getCapacity(tenantId: string, userId: string, sprintId: string) {
+    await this.assertSprintAccess(tenantId, userId, sprintId, 'read');
+
     const sprint = await this.prisma.sprint.findFirst({
       where: { id: sprintId, tenantId },
     });
@@ -619,8 +688,8 @@ export class SprintsService {
     return { capacities, sprintDays, totalHours };
   }
 
-  async getCapacityVsLoad(tenantId: string, sprintId: string) {
-    const capacity = await this.getCapacity(tenantId, sprintId);
+  async getCapacityVsLoad(tenantId: string, userId: string, sprintId: string) {
+    const capacity = await this.getCapacity(tenantId, userId, sprintId);
     const metrics = await this.calculateSprintMetrics(tenantId, sprintId);
 
     const velocityData = await this.prisma.sprint.findFirst({
@@ -664,7 +733,9 @@ export class SprintsService {
   // Enhanced Velocity Methods
   // ===========================
 
-  async getEnhancedVelocityData(tenantId: string, projectId: string, sprintCount: number = 6) {
+  async getEnhancedVelocityData(tenantId: string, userId: string, projectId: string, sprintCount: number = 6) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const sprints = await this.prisma.sprint.findMany({
       where: { tenantId, projectId, status: 'COMPLETED' },
       orderBy: { endDate: 'desc' },
@@ -752,7 +823,7 @@ export class SprintsService {
       .filter(c => c.status === 'done')
       .reduce((sum, c) => sum + (c.storyPoints || 0), 0);
     const inProgressPoints = cards
-      .filter(c => ['working', 'in_progress', 'review'].includes(c.status))
+      .filter(c => ['working', 'in_progress', 'in-progress', 'review'].includes(c.status))
       .reduce((sum, c) => sum + (c.storyPoints || 0), 0);
 
     return {
