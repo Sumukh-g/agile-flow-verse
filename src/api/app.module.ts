@@ -39,6 +39,7 @@ import { GanttModule } from './gantt/gantt.module';
 import { FinanceModule } from './finance/finance.module';
 import { SprintsModule } from './sprints/sprints.module';
 import { EpicsModule } from './epics/epics.module';
+import { FeaturesModule } from './features/features.module';
 
 const conditionalModules = [];
 if (process.env.NODE_ENV !== 'production') {
@@ -87,6 +88,7 @@ if (process.env.NODE_ENV !== 'production') {
     FinanceModule,
     SprintsModule,
     EpicsModule,
+    FeaturesModule,
     ...conditionalModules,
   ],
   providers: [
