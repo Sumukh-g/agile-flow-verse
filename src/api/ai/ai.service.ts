@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -79,7 +79,9 @@ export class AiService {
     };
 
     if (!this.config.apiKey) {
-      this.logger.warn('AI_API_KEY not configured. AI features will return mock data.');
+      this.logger.warn(
+        'AI_API_KEY not configured. AI features are disabled and will return a clear "not configured" error instead of fabricated responses.',
+      );
     }
   }
 
@@ -107,12 +109,9 @@ export class AiService {
    */
   private async complete(request: AICompletionRequest): Promise<AICompletionResponse> {
     if (!this.isConfigured()) {
-      this.logger.warn('AI not configured, returning mock response');
-      return {
-        content: `Mock AI response for: ${request.userPrompt.substring(0, 50)}...`,
-        tokensUsed: 100,
-        costCents: 0,
-      };
+      throw new ServiceUnavailableException(
+        'AI features are not configured. Set AI_API_KEY (and optionally AI_PROVIDER/AI_MODEL) to enable them.',
+      );
     }
 
     try {
@@ -162,11 +161,11 @@ export class AiService {
   }): Promise<{ content: string }> {
     const provider = (params.provider || this.config.provider || 'openai').toLowerCase() as 'openai' | 'google' | 'gemini' | 'perplexity';
 
-    // Mock mode fallback
     const apiKey = this.getApiKey(provider);
     if (!apiKey) {
-      const combined = params.messages.map(m => `${m.role}: ${m.content}`).join('\n');
-      return { content: `Mock response (AI not configured).\n\nYou said:\n${combined.slice(0, 2000)}` };
+      throw new ServiceUnavailableException(
+        `AI features are not configured for provider "${provider}". Set the appropriate API key to enable them.`,
+      );
     }
 
     switch (provider) {
