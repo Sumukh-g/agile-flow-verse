@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, ConflictExc
 import { SprintStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectPermissionsService } from '../common/project-permissions.service';
+import { NotificationsService, NotificationType, NotificationChannel } from '../notifications/notifications.service';
 
 /**
  * Sprint Service
@@ -22,7 +23,66 @@ export class SprintsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: ProjectPermissionsService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Best-effort notification to all members of a project about a sprint
+   * lifecycle event. Never blocks the sprint operation on failure.
+   */
+  private async notifyProjectMembers(
+    tenantId: string,
+    projectId: string,
+    actorId: string,
+    title: string,
+    message: string,
+    data: Record<string, any>,
+  ): Promise<void> {
+    try {
+      const [members, project] = await Promise.all([
+        this.prisma.projectMember.findMany({
+          where: { projectId },
+          select: { userId: true },
+        }),
+        this.prisma.project.findFirst({
+          where: { id: projectId },
+          select: { createdBy: true },
+        }),
+      ]);
+
+      const recipientIds = Array.from(
+        new Set([...members.map((m) => m.userId), project?.createdBy].filter(Boolean) as string[]),
+      ).filter((uid) => uid !== actorId);
+
+      await Promise.all(
+        recipientIds.map((uid) =>
+          this.notifications
+            .createNotification({
+              tenantId,
+              userId: uid,
+              type: NotificationType.SYSTEM,
+              title,
+              message,
+              data,
+              channels: [NotificationChannel.IN_APP],
+            })
+            .catch((error) =>
+              this.logger.warn(
+                `Failed to notify user ${uid} about sprint event: ${
+                  error instanceof Error ? error.message : 'Unknown error'
+                }`,
+              ),
+            ),
+        ),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to notify project members for project ${projectId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+  }
 
   /**
    * Resolve the projectId that owns a sprint (tenant-scoped) and enforce the
@@ -251,6 +311,28 @@ export class SprintsService {
     });
 
     this.logger.log(`[SPRINT] Updated sprint "${sprint.name}" - status: ${sprint.status}`);
+
+    // Notify project members on meaningful lifecycle transitions.
+    if (data.status === 'ACTIVE' && existing.status === 'PLANNING') {
+      await this.notifyProjectMembers(
+        tenantId,
+        sprint.projectId,
+        userId,
+        `Sprint started: ${sprint.name}`,
+        `The sprint "${sprint.name}" has been started.`,
+        { sprintId: sprint.id, projectId: sprint.projectId, event: 'sprint.started' },
+      );
+    } else if (data.status === 'COMPLETED' && existing.status === 'ACTIVE') {
+      await this.notifyProjectMembers(
+        tenantId,
+        sprint.projectId,
+        userId,
+        `Sprint completed: ${sprint.name}`,
+        `The sprint "${sprint.name}" has been completed.`,
+        { sprintId: sprint.id, projectId: sprint.projectId, event: 'sprint.completed' },
+      );
+    }
+
     return sprint;
   }
 

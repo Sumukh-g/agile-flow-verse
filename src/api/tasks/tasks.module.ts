@@ -4,9 +4,10 @@ import { CommonModule } from '../common/common.module';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AuthModule, RealtimeModule, CommonModule],
+  imports: [AuthModule, RealtimeModule, CommonModule, NotificationsModule],
   controllers: [TasksController],
   providers: [TasksService],
 })
