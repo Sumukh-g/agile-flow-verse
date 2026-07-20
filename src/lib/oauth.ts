@@ -208,26 +208,28 @@ export async function handleOAuthCallback(
 }
 
 /**
- * Check if OAuth provider is configured
+ * Check if an OAuth provider is genuinely configured.
+ *
+ * Rejects empty values and the placeholder values shipped in env.example
+ * (e.g. "your-google-client-id"), so we never advertise a provider that will
+ * immediately fail when clicked.
  */
 export function isOAuthProviderConfigured(provider: OAuthProvider): boolean {
-  return !!OAUTH_CONFIG[provider].clientId;
+  const clientId = OAUTH_CONFIG[provider].clientId;
+  if (!clientId) return false;
+
+  const placeholderPattern = /^your-|client-id$|changeme|placeholder/i;
+  if (placeholderPattern.test(clientId)) return false;
+
+  return true;
 }
 
 /**
- * Get available OAuth providers (those that are configured)
- * 
- * For development/demo: Returns all providers by default.
- * In production, you may want to filter to only configured providers.
+ * Get available OAuth providers — only those that are actually configured.
  */
 export function getAvailableOAuthProviders(): OAuthProvider[] {
-  // For demo purposes, show all providers
-  // In production, uncomment the line below to only show configured providers
-  // return (['google', 'microsoft', 'github', 'apple'] as OAuthProvider[]).filter(
-  //   (provider) => isOAuthProviderConfigured(provider)
-  // );
-  
-  // Show all providers for demo (they'll show an error if not configured when clicked)
-  return ['google', 'microsoft', 'github', 'apple'] as OAuthProvider[];
+  return (['google', 'microsoft', 'github', 'apple'] as OAuthProvider[]).filter(
+    (provider) => isOAuthProviderConfigured(provider),
+  );
 }
 
