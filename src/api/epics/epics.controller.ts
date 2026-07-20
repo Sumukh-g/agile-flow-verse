@@ -45,7 +45,7 @@ export class EpicsController {
       businessValue?: number;
     }
   ) {
-    return this.epicsService.create(req.user.tenantId, {
+    return this.epicsService.create(req.user.tenantId, req.user.userId, {
       ...body,
       startDate: body.startDate ? new Date(body.startDate) : undefined,
       targetDate: body.targetDate ? new Date(body.targetDate) : undefined
@@ -65,7 +65,7 @@ export class EpicsController {
     @Query('status') status?: string,
     @Query('includeItems') includeItems?: string
   ) {
-    return this.epicsService.findAllByProject(req.user.tenantId, projectId, {
+    return this.epicsService.findAllByProject(req.user.tenantId, req.user.userId, projectId, {
       status,
       includeItems: includeItems === 'true'
     });
@@ -80,7 +80,7 @@ export class EpicsController {
     @Request() req: any,
     @Param('projectId') projectId: string
   ) {
-    return this.epicsService.getRoadmap(req.user.tenantId, projectId);
+    return this.epicsService.getRoadmap(req.user.tenantId, req.user.userId, projectId);
   }
 
   /**
@@ -94,7 +94,7 @@ export class EpicsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.epicsService.findOne(req.user.tenantId, id);
+    return this.epicsService.findOne(req.user.tenantId, req.user.userId, id);
   }
 
   /**
@@ -122,7 +122,7 @@ export class EpicsController {
     if (body.startDate) data.startDate = new Date(body.startDate);
     if (body.targetDate) data.targetDate = new Date(body.targetDate);
     
-    return this.epicsService.update(req.user.tenantId, id, data);
+    return this.epicsService.update(req.user.tenantId, req.user.userId, id, data);
   }
 
   /**
@@ -139,7 +139,7 @@ export class EpicsController {
       itemType: 'card' | 'task';
     }
   ) {
-    return this.epicsService.addItems(req.user.tenantId, id, body.itemIds, body.itemType);
+    return this.epicsService.addItems(req.user.tenantId, req.user.userId, id, body.itemIds, body.itemType);
   }
 
   /**
@@ -155,7 +155,7 @@ export class EpicsController {
       itemType: 'card' | 'task';
     }
   ) {
-    return this.epicsService.removeItems(req.user.tenantId, id, body.itemIds, body.itemType);
+    return this.epicsService.removeItems(req.user.tenantId, req.user.userId, id, body.itemIds, body.itemType);
   }
 
   /**
@@ -169,18 +169,18 @@ export class EpicsController {
     @Request() req: any,
     @Param('id') id: string
   ) {
-    return this.epicsService.delete(req.user.tenantId, id);
+    return this.epicsService.delete(req.user.tenantId, req.user.userId, id);
   }
 
   @Get(':id/risk')
   @ApiOperation({ summary: 'Check epic risk level' })
   async checkRisk(@Request() req: any, @Param('id') id: string) {
-    return this.epicsService.checkEpicRisk(req.user.tenantId, id);
+    return this.epicsService.checkEpicRisk(req.user.tenantId, req.user.userId, id);
   }
 
   @Get('project/:projectId/risk-summary')
   @ApiOperation({ summary: 'Get risk summary for all epics in a project' })
   async riskSummary(@Request() req: any, @Param('projectId') projectId: string) {
-    return this.epicsService.checkAllEpicRisks(req.user.tenantId, projectId);
+    return this.epicsService.checkAllEpicRisks(req.user.tenantId, req.user.userId, projectId);
   }
 }
