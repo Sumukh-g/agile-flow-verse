@@ -177,8 +177,12 @@ export class ReportsController {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${type}-report-${Date.now()}.json"`);
       res.send(exported);
+    } else if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-report-${Date.now()}.pdf"`);
+      res.send(exported);
     } else {
-      throw new Error('PDF export not yet implemented');
+      throw new Error(`Unsupported export format: ${format}`);
     }
   }
 

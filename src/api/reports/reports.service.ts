@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import PDFDocument from 'pdfkit';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedis } from '../common/redis/redis.client';
 
@@ -366,11 +367,78 @@ export class ReportsService {
       case 'json':
         return JSON.stringify(data, null, 2);
       case 'pdf':
-        // PDF export would require a library like pdfkit or puppeteer
-        throw new Error('PDF export not yet implemented');
+        return this.exportToPDF(reportType, data);
       default:
         throw new Error(`Unsupported export format: ${format}`);
     }
+  }
+
+  /**
+   * Render a report to a PDF Buffer using pdfkit (no headless browser needed).
+   * Produces a titled document that renders arrays as tables and objects as
+   * key/value sections, recursing into nested structures.
+   */
+  private exportToPDF(reportType: string, data: any): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ margin: 40, size: 'A4' });
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const title = `${reportType.charAt(0).toUpperCase()}${reportType.slice(1)} Report`;
+        doc.fontSize(20).text(title, { align: 'left' });
+        doc.moveDown(0.3);
+        doc.fontSize(9).fillColor('#666666').text(`Generated ${new Date().toISOString()}`);
+        doc.moveDown(0.8);
+        doc.fillColor('#000000');
+
+        this.renderPdfValue(doc, data);
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private renderPdfValue(doc: PDFKit.PDFDocument, value: any, depth = 0): void {
+    if (value === null || value === undefined) {
+      doc.fontSize(10).text('—');
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        doc.fontSize(10).fillColor('#666666').text('(no rows)').fillColor('#000000');
+        return;
+      }
+      // Array of objects -> simple table of key: value blocks per row.
+      value.forEach((item, index) => {
+        doc.fontSize(11).fillColor('#1a1a1a').text(`#${index + 1}`);
+        doc.fillColor('#000000');
+        this.renderPdfValue(doc, item, depth + 1);
+        doc.moveDown(0.4);
+      });
+      return;
+    }
+
+    if (typeof value === 'object') {
+      for (const [key, val] of Object.entries(value)) {
+        if (val !== null && typeof val === 'object') {
+          doc.moveDown(0.2);
+          doc.fontSize(12).fillColor('#333333').text(key);
+          doc.fillColor('#000000');
+          this.renderPdfValue(doc, val, depth + 1);
+        } else {
+          doc.fontSize(10).text(`${key}: ${val ?? '—'}`);
+        }
+      }
+      return;
+    }
+
+    doc.fontSize(10).text(String(value));
   }
 
   async generateProjectSummaryReport(tenantId: string, projectId: string): Promise<ProjectSummaryReport> {
