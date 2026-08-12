@@ -255,9 +255,8 @@ export function TaskDetailsDialog({
             <TaskCustomFields
               taskId={task.id}
               customFields={task.customFields || {}}
-              onFieldChange={(fieldId, value) => {
+              onFieldChange={() => {
                 // Custom field updates would be handled via onEdit
-                console.log('Custom field change:', fieldId, value);
               }}
             />
           </div>

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
@@ -446,7 +446,7 @@ export class WorkflowService {
     });
 
     if (!workflow) {
-      throw new Error('Workflow not found');
+      throw new NotFoundException('Workflow not found');
     }
 
     const mappedWorkflow = this.mapToWorkflow(workflow);

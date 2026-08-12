@@ -46,8 +46,8 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
         throw new Error('Redis ping failed');
       }
     } catch (error) {
-      this.logger.warn(`Redis connection failed, using in-memory cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      this.useMock = true;
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
       if (this.client) {
         try {
           this.client.disconnect(false);
@@ -56,6 +56,20 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
         }
         this.client = null;
       }
+
+      // In production, an in-memory fallback is dangerous: it silently breaks
+      // cross-instance caching, rate limiting, idempotency and queue signalling.
+      // Fail fast so the orchestrator restarts and the misconfiguration surfaces.
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(`Redis connection failed in production (REDIS_URL=${redisUrl}): ${message}`);
+        throw new Error(
+          `Redis is required in production but the connection failed: ${message}. ` +
+            'Set a reachable REDIS_URL.',
+        );
+      }
+
+      this.logger.warn(`Redis connection failed, using in-memory cache (non-production only): ${message}`);
+      this.useMock = true;
     }
     
     redisInstance = this;
@@ -188,14 +202,13 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
   }
 
   async ping(): Promise<string> {
+    // Only report the mock "PONG" in non-production dev mode. In production we
+    // never run in mock mode (we fail fast at startup), and a real client error
+    // must propagate so health checks report Redis as unhealthy instead of lying.
     if (this.useMock || !this.client) {
-      return 'PONG';
+      return 'PONG-MOCK';
     }
-    try {
-      return await this.client.ping();
-    } catch (error) {
-      return 'PONG'; // Fallback
-    }
+    return this.client.ping();
   }
 
   async expire(key: string, seconds: number): Promise<number> {

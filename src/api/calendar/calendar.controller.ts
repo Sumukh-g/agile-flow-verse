@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Request, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 import { CalendarService } from './calendar.service';
 import { CalendarEventQueryDto, CreateCalendarEventDto, UpdateCalendarEventDto } from './dto';
 
@@ -9,7 +10,10 @@ import { CalendarEventQueryDto, CreateCalendarEventDto, UpdateCalendarEventDto }
 @UseGuards(JwtAuthGuard)
 @Controller('/v1/calendar')
 export class CalendarController {
-  constructor(private readonly calendarService: CalendarService) {}
+  constructor(
+    private readonly calendarService: CalendarService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
 
   /**
    * List calendar events with filtering
@@ -150,6 +154,7 @@ export class CalendarController {
     @Query('endDate') endDate: string,
     @Request() req: any,
   ) {
+    await this.permissions.ensureCanReadProject(req.user.tenantId, req.user.userId, projectId);
     return this.calendarService.getProjectCalendar(
       req.user.tenantId,
       projectId,

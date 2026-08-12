@@ -73,7 +73,7 @@ export class UsersController {
     @Param('id') id: string,
     @Body() body: { name?: string; email?: string }
   ) {
-    return this.usersService.updateUser(req.user.tenantId, id, body);
+    return this.usersService.updateUser(req.user.tenantId, req.user.userId, id, body);
   }
 
   /**
@@ -91,7 +91,7 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async resetUserPassword(@Request() req: any, @Param('id') id: string) {
-    return this.usersService.resetUserPassword(req.user.tenantId, id);
+    return this.usersService.resetUserPassword(req.user.tenantId, req.user.userId, id);
   }
 
   /**
@@ -105,7 +105,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get workspace statistics', description: 'Returns workspace statistics including user counts, project counts, task counts, and usage metrics' })
   @ApiResponse({ status: 200, description: 'Workspace statistics retrieved successfully' })
   async getWorkspaceStats(@Request() req: any) {
-    return this.usersService.getWorkspaceStats(req.user.tenantId);
+    return this.usersService.getWorkspaceStats(req.user.tenantId, req.user.userId);
   }
 }
 

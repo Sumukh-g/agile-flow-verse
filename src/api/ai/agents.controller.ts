@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiIdParam, ApiStandardResponses } from '../common/swagger/swagger.decorators';
 import { AiService } from './ai.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 @ApiTags('agents')
 @ApiBearerAuth()
@@ -69,7 +69,7 @@ export class AgentsController {
     });
 
     if (!agent) {
-      throw new Error('Agent not found');
+      throw new NotFoundException('Agent not found');
     }
 
     return agent;
@@ -137,7 +137,7 @@ export class AgentsController {
     });
 
     if (!run) {
-      throw new Error('Agent run not found');
+      throw new NotFoundException('Agent run not found');
     }
 
     return run;

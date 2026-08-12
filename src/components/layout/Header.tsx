@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useAuth } from '@/lib/auth-context';
+import { useNotifications, useUnreadCount } from '@/hooks/useNotifications';
 import {
   Bell,
   Briefcase,
@@ -52,12 +53,24 @@ export const Header: React.FC<HeaderProps> = ({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  
-  const notifications = [
-    { id: 1, title: "Project assigned", description: "You've been assigned to Website Redesign project", time: "5 minutes ago" },
-    { id: 2, title: "New task created", description: "New task 'Create mockup' was created", time: "1 hour ago" },
-    { id: 3, title: "Meeting reminder", description: "Team standup in 30 minutes", time: "25 minutes ago" }
-  ];
+
+  // Real notifications from the API (most recent 5) + unread badge count.
+  const { data: notificationsData } = useNotifications({ limit: 5 });
+  const { data: unreadData } = useUnreadCount();
+  const notifications = notificationsData?.notifications ?? [];
+  const unreadCount = unreadData?.count ?? 0;
+
+  const formatRelativeTime = (value: Date | string): string => {
+    const date = value instanceof Date ? value : new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  };
   
   const handleLogout = () => {
     logout();
@@ -189,9 +202,9 @@ export const Header: React.FC<HeaderProps> = ({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative flex-shrink-0">
                 <Bell className="h-5 w-5" />
-                {notifications.length > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
-                    {notifications.length}
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </Button>
@@ -199,13 +212,29 @@ export const Header: React.FC<HeaderProps> = ({
             <DropdownMenuContent align="end" className="w-72 sm:w-80">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.map((notification) => (
-                <DropdownMenuItem key={notification.id} className="flex flex-col items-start p-3">
-                  <div className="font-medium text-sm">{notification.title}</div>
-                  <div className="text-xs text-muted-foreground">{notification.description}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{notification.time}</div>
-                </DropdownMenuItem>
-              ))}
+              {notifications.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center">
+                  You're all caught up.
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    className="flex flex-col items-start p-3"
+                    onClick={() => navigate('/notifications')}
+                  >
+                    <div className="font-medium text-sm">{notification.title}</div>
+                    <div className="text-xs text-muted-foreground">{notification.message}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {formatRelativeTime(notification.createdAt)}
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/notifications')} className="justify-center text-sm">
+                View all notifications
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

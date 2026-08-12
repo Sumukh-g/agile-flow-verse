@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
 
 /**
  * Two-Factor Authentication Service
@@ -337,30 +337,63 @@ export class TwoFactorService {
     return bcrypt.hashSync(code, 10);
   }
 
+  // Versioned prefix marking AES-256-GCM encrypted values so we can
+  // distinguish them from any pre-existing plaintext secrets.
+  private static readonly ENC_PREFIX = 'v1';
+
   /**
-   * Encrypt TOTP secret before storage
-   * In production, use proper encryption (AES-256-GCM)
-   * 
-   * @param secret - The plain TOTP secret
-   * @returns Encrypted secret
+   * Derive a stable 32-byte AES key from configured key material.
+   * Prefers a dedicated TOTP_ENCRYPTION_KEY; falls back to JWT_SECRET so 2FA
+   * still works in environments that only set the latter.
    */
-  private async encryptSecret(secret: string): Promise<string> {
-    // TODO: Implement proper encryption using crypto module
-    // For now, we'll store it as-is (NOT SECURE for production!)
-    // In production, use: crypto.createCipheriv('aes-256-gcm', key, iv)
-    return secret;
+  private getEncryptionKey(): Buffer {
+    const keyMaterial = process.env.TOTP_ENCRYPTION_KEY || process.env.JWT_SECRET;
+    if (!keyMaterial) {
+      throw new Error(
+        'TOTP encryption key not configured. Set TOTP_ENCRYPTION_KEY (recommended) or JWT_SECRET.',
+      );
+    }
+    return createHash('sha256').update(keyMaterial).digest();
   }
 
   /**
-   * Decrypt TOTP secret after retrieval
-   * 
-   * @param encryptedSecret - The encrypted secret
-   * @returns Decrypted secret
+   * Encrypt a TOTP secret with AES-256-GCM before storage.
+   * Output format: v1:<ivHex>:<authTagHex>:<cipherHex>
    */
-  private async decryptSecret(encryptedSecret: string): Promise<string> {
-    // TODO: Implement proper decryption
-    // For now, return as-is (NOT SECURE for production!)
-    return encryptedSecret;
+  private async encryptSecret(secret: string): Promise<string> {
+    const key = this.getEncryptionKey();
+    const iv = randomBytes(12); // 96-bit nonce recommended for GCM
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return `${TwoFactorService.ENC_PREFIX}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+  }
+
+  /**
+   * Decrypt a stored TOTP secret. Values without the versioned prefix are
+   * treated as legacy plaintext and returned as-is for backward compatibility.
+   */
+  private async decryptSecret(stored: string): Promise<string> {
+    if (!stored.startsWith(`${TwoFactorService.ENC_PREFIX}:`)) {
+      // Legacy plaintext secret (pre-encryption). Return as-is; it will be
+      // re-encrypted next time the user regenerates their 2FA secret.
+      return stored;
+    }
+
+    const parts = stored.split(':');
+    if (parts.length !== 4) {
+      throw new BadRequestException('Malformed TOTP secret');
+    }
+
+    const [, ivHex, authTagHex, dataHex] = parts;
+    const key = this.getEncryptionKey();
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(dataHex, 'hex')),
+      decipher.final(),
+    ]);
+    return decrypted.toString('utf8');
   }
 }
 

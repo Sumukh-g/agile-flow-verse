@@ -1,11 +1,15 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 
 @Injectable()
 export class DoDService {
   private readonly logger = new Logger(DoDService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
 
   async getDoD(tenantId: string, projectId: string) {
     const dod = await this.prisma.definitionOfDone.findFirst({
@@ -14,7 +18,9 @@ export class DoDService {
     return dod || { items: [], projectId, tenantId };
   }
 
-  async setDoD(tenantId: string, projectId: string, items: { id: string; label: string; required: boolean }[]) {
+  async setDoD(tenantId: string, userId: string, projectId: string, items: { id: string; label: string; required: boolean }[]) {
+    await this.permissions.ensureCanManageProjectSettings(tenantId, userId, projectId);
+
     const existing = await this.prisma.definitionOfDone.findFirst({
       where: { tenantId, projectId },
     });
@@ -39,6 +45,13 @@ export class DoDService {
   }
 
   async toggleDoDCheck(tenantId: string, cardId: string, itemId: string, userId: string) {
+    const card = await this.prisma.kanbanCard.findFirst({
+      where: { id: cardId, tenantId },
+      select: { projectId: true },
+    });
+    if (!card) throw new NotFoundException('Card not found');
+    await this.permissions.ensureCanWriteProject(tenantId, userId, card.projectId);
+
     const existing = await this.prisma.doDCheck.findFirst({
       where: { cardId, itemId },
     });

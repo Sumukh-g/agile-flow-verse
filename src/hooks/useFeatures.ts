@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 
 interface Feature {
   key: string;
   enabled: boolean;
-  category: 'basic' | 'pro' | 'enterprise';
+  category: string;
+  name?: string;
+  description?: string | null;
 }
 
 interface UseFeaturesReturn {
@@ -24,23 +27,11 @@ export const useFeatures = (): UseFeaturesReturn => {
       setIsLoading(true);
       setError(null);
 
-      // In a real app, this would fetch from your API
-      // For now, we'll use mock data
-      const mockFeatures: Feature[] = [
-        { key: 'wbs_gantt', enabled: true, category: 'basic' },
-        { key: 'risk_register', enabled: true, category: 'pro' },
-        { key: 'ai_insights', enabled: false, category: 'enterprise' },
-        { key: 'advanced_analytics', enabled: false, category: 'enterprise' },
-        { key: 'custom_integrations', enabled: false, category: 'enterprise' },
-        { key: 'priority_support', enabled: false, category: 'enterprise' }
-      ];
-
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      setFeatures(mockFeatures);
+      const data = await apiClient.get<Feature[]>('/features');
+      setFeatures(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch features');
+      setFeatures([]);
     } finally {
       setIsLoading(false);
     }

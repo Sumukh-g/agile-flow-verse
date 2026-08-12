@@ -37,25 +37,6 @@ interface VelocityChartWidgetProps {
 }
 
 /**
- * Generate mock velocity data for demonstration
- * In production, this would come from the API
- */
-const generateVelocityData = () => {
-  const sprints = [
-    { sprint: 'Sprint 1', completed: 42, committed: 50 },
-    { sprint: 'Sprint 2', completed: 48, committed: 50 },
-    { sprint: 'Sprint 3', completed: 45, committed: 52 },
-    { sprint: 'Sprint 4', completed: 52, committed: 55 },
-    { sprint: 'Sprint 5', completed: 50, committed: 55 },
-    { sprint: 'Sprint 6', completed: 58, committed: 60 },
-    { sprint: 'Sprint 7', completed: 55, committed: 58 },
-    { sprint: 'Sprint 8', completed: 62, committed: 65 },
-  ];
-  
-  return sprints;
-};
-
-/**
  * Custom tooltip component for the chart
  */
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -120,13 +101,18 @@ const VelocityChartWidget: React.FC<VelocityChartWidgetProps> = ({ widget }) => 
       }));
     }
     
-    // Fallback to mock data for demonstration
-    return generateVelocityData();
+    // No real data available — show an empty state rather than fabricated data.
+    return [];
   }, [widget.data, apiData]);
+
+  const hasData = chartData.length > 0;
   
-  // Calculate velocity metrics
+  // Calculate velocity metrics (guarded against empty data)
   const metrics = useMemo(() => {
     const velocities = chartData.map((d: any) => d.completed);
+    if (velocities.length === 0) {
+      return { average: 0, current: 0, best: 0, trend: 'stable' as const, trendPercent: '0.0' };
+    }
     const average = velocities.reduce((a: number, b: number) => a + b, 0) / velocities.length;
     const lastThree = velocities.slice(-3);
     const lastThreeAvg = lastThree.reduce((a: number, b: number) => a + b, 0) / lastThree.length;
@@ -136,7 +122,9 @@ const VelocityChartWidget: React.FC<VelocityChartWidgetProps> = ({ widget }) => 
       : average;
     
     const trend = lastThreeAvg > previousThreeAvg ? 'up' : lastThreeAvg < previousThreeAvg ? 'down' : 'stable';
-    const trendPercent = Math.abs(((lastThreeAvg - previousThreeAvg) / previousThreeAvg) * 100);
+    const trendPercent = previousThreeAvg > 0
+      ? Math.abs(((lastThreeAvg - previousThreeAvg) / previousThreeAvg) * 100)
+      : 0;
     
     return {
       average: Math.round(average),
@@ -196,13 +184,25 @@ const VelocityChartWidget: React.FC<VelocityChartWidgetProps> = ({ widget }) => 
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
               <p className="text-sm text-muted-foreground">Failed to load velocity data</p>
-              <p className="text-xs text-muted-foreground mt-1">Using demo data</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State - no data and no error */}
+        {!isLoading && !error && !hasData && (
+          <div className="flex items-center justify-center h-[200px]">
+            <div className="text-center">
+              <Zap className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No velocity data yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Complete sprints to build a velocity history.
+              </p>
             </div>
           </div>
         )}
         
-        {/* Chart Content - Only show if not loading */}
-        {!isLoading && (
+        {/* Chart Content - Only show if not loading and we have data */}
+        {!isLoading && !error && hasData && (
           <>
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mb-4">

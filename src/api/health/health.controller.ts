@@ -24,13 +24,16 @@ export class HealthController {
       this.checkRedis(),
     ]);
 
+    const database = dbHealth.status === 'fulfilled' ? dbHealth.value : { status: 'unhealthy' };
+    const redis = redisHealth.status === 'fulfilled' ? redisHealth.value : { status: 'unhealthy' };
+
+    // Top-level status must reflect dependency health, not always report "ok".
+    const allHealthy = database.status === 'healthy' && redis.status === 'healthy';
+
     return {
-      status: 'ok',
+      status: allHealthy ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
-      services: {
-        database: dbHealth.status === 'fulfilled' ? dbHealth.value : { status: 'unhealthy' },
-        redis: redisHealth.status === 'fulfilled' ? redisHealth.value : { status: 'unhealthy' },
-      },
+      services: { database, redis },
     };
   }
 

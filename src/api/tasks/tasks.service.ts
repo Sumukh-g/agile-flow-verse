@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ProjectPermissionsService } from '../common/project-permissions.service';
 import { CacheService } from '../common/cache/cache.service';
+import { NotificationsService, NotificationType } from '../notifications/notifications.service';
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -24,7 +25,40 @@ export class TasksService {
     private readonly realtime: RealtimeService,
     private readonly permissions: ProjectPermissionsService,
     private readonly cache: CacheService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Notify a set of users about a task event. Best-effort: failures are logged
+   * but never block the task operation that triggered them. The actor
+   * (`actorId`) is excluded so users aren't notified about their own actions.
+   */
+  private async notifyUsers(
+    tenantId: string,
+    actorId: string,
+    recipientIds: string[],
+    type: NotificationType,
+    taskId: string,
+    taskTitle: string,
+  ): Promise<void> {
+    const uniqueRecipients = Array.from(new Set(recipientIds)).filter(
+      (uid) => uid && uid !== actorId,
+    );
+
+    await Promise.all(
+      uniqueRecipients.map(async (uid) => {
+        try {
+          await this.notifications.sendTaskNotification(tenantId, uid, type, taskId, taskTitle);
+        } catch (error) {
+          this.logger.warn(
+            `Failed to send ${type} notification to user ${uid} for task ${taskId}: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
+          );
+        }
+      }),
+    );
+  }
 
   private async ensureNoCycles(taskId: string, deps: string[], tenantId: string) {
     // Simple DFS to prevent cycles in TaskDependency graph
@@ -111,6 +145,16 @@ export class TasksService {
         })),
         skipDuplicates: true,
       });
+
+      // Notify newly assigned users (best-effort, excludes the creator).
+      await this.notifyUsers(
+        tenantId,
+        userId,
+        validated.assigneeIds,
+        NotificationType.TASK_ASSIGNED,
+        task.id,
+        task.title,
+      );
     }
 
     // Dependencies
@@ -316,6 +360,22 @@ export class TasksService {
 
     // Broadcast real-time update (projectId can be null for personal tasks)
     await this.realtime.broadcastTaskUpdate(tenantId, existing.projectId || null, id, 'task.updated', updated);
+
+    // Notify assignees when a task is completed (best-effort).
+    if (validated.status === 'done' && existing.status !== 'done') {
+      const assignees = await this.prisma.tx.taskAssignee.findMany({
+        where: { taskId: id, tenantId },
+        select: { userId: true },
+      });
+      await this.notifyUsers(
+        tenantId,
+        userId,
+        assignees.map((a) => a.userId),
+        NotificationType.TASK_COMPLETED,
+        id,
+        updated.title,
+      );
+    }
 
     // Sync to calendar - update or create/delete based on due date
     await this.syncTaskToCalendar(tenantId, userId, updated, existing.dueDate);

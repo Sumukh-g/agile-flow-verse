@@ -17,8 +17,12 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantAdminGuard } from '../common/guards/tenant-admin.guard';
 import { AttachmentQueryDto, CreateAttachmentDto } from './dto';
 import { StorageService } from './storage.service';
+
+// Maximum upload size (bytes). Configurable via MAX_FILE_SIZE; defaults to 25 MB.
+const MAX_UPLOAD_BYTES = parseInt(process.env.MAX_FILE_SIZE || '', 10) || 25 * 1024 * 1024;
 
 @ApiTags('storage')
 @ApiBearerAuth()
@@ -28,7 +32,7 @@ export class StorageController {
   constructor(private readonly storageService: StorageService) {}
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   @ApiOperation({ summary: 'Upload a file' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'File uploaded successfully' })
@@ -36,18 +40,12 @@ export class StorageController {
     @UploadedFile() file: Express.Multer.File,
     @Request() req: any,
   ) {
-    // Extract metadata from form data body (multer puts form fields in req.body)
-    // Log for debugging
-    console.log('[STORAGE] Upload request body:', JSON.stringify(req.body));
-    console.log('[STORAGE] Upload file:', file?.originalname);
-    
+    // Multer puts form fields in req.body.
     const metadata: CreateAttachmentDto = {
       noteId: req.body?.noteId && req.body.noteId !== '' ? req.body.noteId : undefined,
       projectId: req.body?.projectId && req.body.projectId !== '' ? req.body.projectId : undefined,
     };
-    
-    console.log('[STORAGE] Extracted metadata:', JSON.stringify(metadata));
-    
+
     return this.storageService.uploadFile(
       req.user.tenantId,
       req.user.userId,
@@ -96,6 +94,7 @@ export class StorageController {
   ) {
     return this.storageService.getNoteAttachments(
       req.user.tenantId,
+      req.user.userId,
       noteId,
       query,
     );
@@ -111,6 +110,7 @@ export class StorageController {
   ) {
     return this.storageService.getProjectAttachments(
       req.user.tenantId,
+      req.user.userId,
       projectId,
       query,
     );
@@ -131,7 +131,8 @@ export class StorageController {
   }
 
   @Post('cleanup')
-  @ApiOperation({ summary: 'Cleanup orphaned files' })
+  @UseGuards(TenantAdminGuard)
+  @ApiOperation({ summary: 'Cleanup orphaned files (tenant admin only)' })
   @ApiResponse({ status: 200, description: 'Cleanup completed successfully' })
   async cleanupOrphanedFiles(@Request() req: any) {
     return this.storageService.cleanupOrphanedFiles();

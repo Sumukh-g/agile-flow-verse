@@ -221,7 +221,7 @@ export class KanbanService {
    * Create a new Kanban card
    */
   async createCard(tenantId: string, userId: string, projectId: string, dto: any) {
-    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    await this.permissions.ensureCanWriteProject(tenantId, userId, projectId);
 
     // Validate required fields
     if (!dto.title || !dto.title.trim()) {
@@ -255,7 +255,7 @@ export class KanbanService {
         columnId: dto.columnId,
         title: dto.title,
         description: dto.description,
-        status: dto.status || 'todo',
+        status: dto.status || this.deriveStatusFromColumnName(column.name) || 'todo',
         priority: dto.priority || 'medium',
         position: (maxPosition?.position ?? -1) + 1,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
@@ -272,6 +272,10 @@ export class KanbanService {
         blocking: dto.blocking || [],
         customFields: dto.customFields || {},
         createdBy: userId,
+        sprintId: dto.sprintId ?? null,
+        epicId: dto.epicId ?? null,
+        storyPoints: dto.storyPoints ?? null,
+        acceptanceCriteria: dto.acceptanceCriteria ?? null,
       },
     });
 
@@ -283,7 +287,7 @@ export class KanbanService {
    * Update a Kanban card
    */
   async updateCard(tenantId: string, userId: string, projectId: string, cardId: string, dto: any) {
-    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    await this.permissions.ensureCanWriteProject(tenantId, userId, projectId);
 
     const card = await this.prisma.tx.kanbanCard.findFirst({
       where: { id: cardId, projectId, tenantId },
@@ -311,6 +315,15 @@ export class KanbanService {
       });
 
       dto.position = (maxPosition?.position ?? -1) + 1;
+
+      // Keep status aligned with the destination column unless the caller set
+      // an explicit status in this same request.
+      if (dto.status === undefined) {
+        const derivedStatus = this.deriveStatusFromColumnName(newColumn.name);
+        if (derivedStatus) {
+          dto.status = derivedStatus;
+        }
+      }
     }
 
     const updateData: any = {};
@@ -335,6 +348,10 @@ export class KanbanService {
     if (dto.blocking !== undefined) updateData.blocking = dto.blocking;
     if (dto.customFields !== undefined) updateData.customFields = dto.customFields;
     if (dto.archived !== undefined) updateData.archived = dto.archived;
+    if (dto.sprintId !== undefined) updateData.sprintId = dto.sprintId;
+    if (dto.epicId !== undefined) updateData.epicId = dto.epicId;
+    if (dto.storyPoints !== undefined) updateData.storyPoints = dto.storyPoints;
+    if (dto.acceptanceCriteria !== undefined) updateData.acceptanceCriteria = dto.acceptanceCriteria;
 
     const updated = await this.prisma.tx.kanbanCard.update({
       where: { id: cardId },
@@ -349,7 +366,7 @@ export class KanbanService {
    * Delete a Kanban card
    */
   async deleteCard(tenantId: string, userId: string, projectId: string, cardId: string) {
-    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    await this.permissions.ensureCanWriteProject(tenantId, userId, projectId);
 
     const card = await this.prisma.tx.kanbanCard.findFirst({
       where: { id: cardId, projectId, tenantId },
@@ -378,7 +395,7 @@ export class KanbanService {
     targetColumnId: string,
     newPosition: number,
   ) {
-    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    await this.permissions.ensureCanWriteProject(tenantId, userId, projectId);
 
     const card = await this.prisma.tx.kanbanCard.findFirst({
       where: { id: cardId, projectId, tenantId },
@@ -448,17 +465,51 @@ export class KanbanService {
       }
     }
 
-    // Update the card
+    // Update the card. Moving a card between columns must keep its workflow
+    // status in sync with the destination column, otherwise sprint burndown /
+    // velocity metrics (which count cards where status === 'done') go stale.
+    const derivedStatus = this.deriveStatusFromColumnName(targetColumn.name);
+
     const updated = await this.prisma.tx.kanbanCard.update({
       where: { id: cardId },
       data: {
         columnId: targetColumnId,
         position: newPosition,
+        ...(derivedStatus ? { status: derivedStatus } : {}),
       },
     });
 
     await this.realtime.broadcastProjectUpdate(tenantId, projectId, 'kanban.card.moved', updated);
     return updated;
+  }
+
+  /**
+   * Derive a canonical workflow status from a Kanban column name so the board
+   * and agile metrics stay consistent. Returns undefined for custom/ambiguous
+   * columns so we never clobber an explicit status we can't confidently map.
+   *
+   * Canonical statuses match the task status vocabulary:
+   * todo | in-progress | review | done | blocked
+   */
+  private deriveStatusFromColumnName(name: string): string | undefined {
+    const n = (name || '').toLowerCase();
+
+    if (/(^|[^a-z])(done|complete|completed|closed|resolved|shipped)([^a-z]|$)/.test(n)) {
+      return 'done';
+    }
+    if (/(in[\s-]?progress|doing|wip|active|started)/.test(n)) {
+      return 'in-progress';
+    }
+    if (/(review|qa|testing|verify|verification)/.test(n)) {
+      return 'review';
+    }
+    if (/block/.test(n)) {
+      return 'blocked';
+    }
+    if (/(backlog|to[\s-]?do|todo|open|new|ready)/.test(n)) {
+      return 'todo';
+    }
+    return undefined;
   }
 }
 

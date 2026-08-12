@@ -66,18 +66,6 @@ const ProjectNotesView: React.FC<ProjectNotesViewProps> = ({ projectId }) => {
   const apiNotes = notesData?.items || notesData?.data || notesData || [];
   const notes = Array.isArray(apiNotes) ? apiNotes : [];
   
-  // Debug logging to help diagnose issues
-  React.useEffect(() => {
-    if (notesData !== undefined) {
-      console.log('[ProjectNotesView] Notes data:', {
-        notesData,
-        apiNotes,
-        notesCount: notes.length,
-        projectId,
-        isLoading: notesLoading
-      });
-    }
-  }, [notesData, apiNotes, notes.length, projectId, notesLoading]);
   
   const [selectedNote, setSelectedNote] = useState<any>(null);
   const [content, setContent] = useState('');

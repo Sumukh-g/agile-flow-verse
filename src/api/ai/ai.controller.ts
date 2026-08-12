@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiStandardResponses } from '../common/swagger/swagger.decorators';
@@ -78,7 +78,7 @@ export class AiController {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const message = await this.aiService.generateUpdateMessage(project, project.tasks, timePeriod);
@@ -101,7 +101,7 @@ export class AiController {
     });
 
     if (!workflow) {
-      throw new Error('Workflow not found');
+      throw new NotFoundException('Workflow not found');
     }
 
     const result = await this.aiService.analyzeWorkflow(workflow);

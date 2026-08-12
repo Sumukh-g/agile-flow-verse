@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getRedis } from '../common/redis/redis.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsQueryDto } from './dto';
@@ -111,7 +111,7 @@ export class AnalyticsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     // Task statistics

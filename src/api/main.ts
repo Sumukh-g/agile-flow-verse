@@ -12,6 +12,7 @@ import { ErrorFilter } from './common/http/error.filter';
 import { IdempotencyInterceptor } from './common/http/idempotency.interceptor';
 import { RateLimitMiddleware } from './common/http/rate-limit.middleware';
 import { TenantContextInterceptor } from './common/tenant/tenant-context.interceptor';
+import { errorTracker } from './common/observability/error-tracker';
 
 async function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -39,16 +40,26 @@ async function getAvailablePort(startPort: number, maxAttempts = 10): Promise<nu
 async function bootstrap() {
   // Validate environment variables before starting
   validateEnvironment();
+
+  // Initialize error tracking (Sentry if SENTRY_DSN is set, else in-memory).
+  errorTracker.init();
   
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'];
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean)
+    || ['http://localhost:5173', 'http://localhost:3000'];
   const app = await NestFactory.create(AppModule, {
     cors: {
-      origin: corsOrigins.length > 0 ? corsOrigins : true, // Allow all in development
+      // Never fall back to reflecting all origins with credentials enabled.
+      origin: corsOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-Id', 'Idempotency-Key'],
     },
   });
+
+  // Trust the reverse proxy / load balancer so req.ip and req.protocol are
+  // derived from X-Forwarded-* headers. Required for correct IP-based rate
+  // limiting and HTTPS detection in production deployments.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Security headers
   app.use(helmet({

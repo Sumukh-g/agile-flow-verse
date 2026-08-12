@@ -3,11 +3,16 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { TasksService } from './tasks.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
+import { CacheService } from '../common/cache/cache.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { TaskStatus, TaskPriority } from '../../shared/types/enums';
 
 describe('TasksService', () => {
   let service: TasksService;
   let prisma: jest.Mocked<PrismaService>;
   let realtime: jest.Mocked<RealtimeService>;
+  let permissions: jest.Mocked<ProjectPermissionsService>;
 
   const mockPrisma = {
     tx: {
@@ -20,16 +25,18 @@ describe('TasksService', () => {
       },
       taskAssignee: {
         createMany: jest.fn(),
+        findMany: jest.fn(),
       },
       taskDependency: {
         findMany: jest.fn(),
         createMany: jest.fn(),
       },
+      project: {
+        findMany: jest.fn(),
+      },
       projectMember: {
         findFirst: jest.fn(),
-      },
-      roleAssignment: {
-        findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
       outbox: {
         create: jest.fn(),
@@ -41,24 +48,36 @@ describe('TasksService', () => {
     broadcastTaskUpdate: jest.fn(),
   };
 
+  const mockPermissions = {
+    ensureCanReadProject: jest.fn(),
+    ensureCanWriteProject: jest.fn(),
+  };
+
+  const mockCache = {
+    invalidateTasks: jest.fn(),
+    invalidateDashboard: jest.fn(),
+  };
+
+  const mockNotifications = {
+    sendTaskNotification: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TasksService,
-        {
-          provide: PrismaService,
-          useValue: mockPrisma,
-        },
-        {
-          provide: RealtimeService,
-          useValue: mockRealtime,
-        },
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: RealtimeService, useValue: mockRealtime },
+        { provide: ProjectPermissionsService, useValue: mockPermissions },
+        { provide: CacheService, useValue: mockCache },
+        { provide: NotificationsService, useValue: mockNotifications },
       ],
     }).compile();
 
     service = module.get<TasksService>(TasksService);
     prisma = module.get(PrismaService);
     realtime = module.get(RealtimeService);
+    permissions = module.get(ProjectPermissionsService);
 
     jest.clearAllMocks();
   });
@@ -66,13 +85,13 @@ describe('TasksService', () => {
   describe('create', () => {
     const tenantId = 'tenant1';
     const userId = 'user1';
-    const projectId = 'project1';
+    const projectId = 'cjld2cjxh0000qzrmn831i7rn';
     const createDto = {
       title: 'Test Task',
       description: 'Test Description',
       projectId,
-      status: 'todo' as const,
-      priority: 'medium' as const,
+      status: TaskStatus.TODO,
+      priority: TaskPriority.MEDIUM,
     };
 
     it('should create a task successfully', async () => {
@@ -80,11 +99,12 @@ describe('TasksService', () => {
         id: 'task1',
         ...createDto,
         tenantId,
+        dueDate: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      prisma.tx.projectMember.findFirst.mockResolvedValue({ id: 'member1' } as any);
+      permissions.ensureCanWriteProject.mockResolvedValue(undefined);
       prisma.tx.task.create.mockResolvedValue(mockTask as any);
       prisma.tx.taskDependency.findMany.mockResolvedValue([]);
       prisma.tx.outbox.create.mockResolvedValue({} as any);
@@ -93,6 +113,7 @@ describe('TasksService', () => {
       const result = await service.create(tenantId, userId, createDto);
 
       expect(result).toEqual(mockTask);
+      expect(permissions.ensureCanWriteProject).toHaveBeenCalledWith(tenantId, userId, projectId);
       expect(prisma.tx.task.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           title: createDto.title,
@@ -103,9 +124,8 @@ describe('TasksService', () => {
       expect(realtime.broadcastTaskUpdate).toHaveBeenCalled();
     });
 
-    it('should throw ForbiddenException if user is not a project member', async () => {
-      prisma.tx.projectMember.findFirst.mockResolvedValue(null);
-      prisma.tx.roleAssignment.findFirst.mockResolvedValue(null);
+    it('should throw ForbiddenException if user cannot write the project', async () => {
+      permissions.ensureCanWriteProject.mockRejectedValue(new ForbiddenException());
 
       await expect(service.create(tenantId, userId, createDto)).rejects.toThrow(
         ForbiddenException,
@@ -113,14 +133,16 @@ describe('TasksService', () => {
     });
 
     it('should throw BadRequestException if task dependency cycle detected', async () => {
-      prisma.tx.projectMember.findFirst.mockResolvedValue({ id: 'member1' } as any);
+      permissions.ensureCanWriteProject.mockResolvedValue(undefined);
+      prisma.tx.task.create.mockResolvedValue({ id: 'cjld2cyuq0000t3rmniod1aaa', ...createDto, tenantId } as any);
+      // Existing edge dep -> new task, so adding new task -> dep closes a cycle.
       prisma.tx.taskDependency.findMany.mockResolvedValue([
-        { fromTaskId: 'task2', toTaskId: 'task1' },
+        { fromTaskId: 'cjld2cyuq0001t3rmniod1bbb', toTaskId: 'cjld2cyuq0000t3rmniod1aaa' },
       ] as any);
 
       const dtoWithCycle = {
         ...createDto,
-        dependencyIds: ['task2'],
+        dependencyIds: ['cjld2cyuq0001t3rmniod1bbb'],
       };
 
       await expect(service.create(tenantId, userId, dtoWithCycle)).rejects.toThrow(
@@ -131,34 +153,38 @@ describe('TasksService', () => {
 
   describe('list', () => {
     const tenantId = 'tenant1';
+    const userId = 'user1';
     const mockTasks = [
       { id: 'task1', title: 'Task 1', tenantId },
       { id: 'task2', title: 'Task 2', tenantId },
     ];
 
-    it('should return paginated tasks', async () => {
+    it('should return paginated tasks across accessible projects', async () => {
+      prisma.tx.project.findMany.mockResolvedValue([] as any);
+      prisma.tx.projectMember.findMany.mockResolvedValue([] as any);
       prisma.tx.task.findMany.mockResolvedValue(mockTasks as any);
 
-      const result = await service.list(tenantId);
+      const result = await service.list(tenantId, userId, {});
 
       expect(result.items).toHaveLength(2);
       expect(prisma.tx.task.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId },
           take: 26, // limit + 1 for cursor detection
         }),
       );
     });
 
     it('should filter by projectId when provided', async () => {
-      const projectId = 'project1';
+      const projectId = 'cjld2cjxh0000qzrmn831i7rn';
+      permissions.ensureCanReadProject.mockResolvedValue(undefined);
       prisma.tx.task.findMany.mockResolvedValue(mockTasks as any);
 
-      await service.list(tenantId, projectId);
+      await service.list(tenantId, userId, { projectId });
 
+      expect(permissions.ensureCanReadProject).toHaveBeenCalledWith(tenantId, userId, projectId);
       expect(prisma.tx.task.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId, projectId },
+          where: expect.objectContaining({ tenantId, projectId }),
         }),
       );
     });
@@ -173,7 +199,9 @@ describe('TasksService', () => {
     it('should update a task successfully', async () => {
       const existingTask = {
         id: taskId,
-        projectId: 'project1',
+        projectId: 'cjld2cjxh0000qzrmn831i7rn',
+        status: TaskStatus.TODO,
+        dueDate: null,
         tenantId,
       };
       const updatedTask = {
@@ -183,7 +211,7 @@ describe('TasksService', () => {
       };
 
       prisma.tx.task.findFirst.mockResolvedValue(existingTask as any);
-      prisma.tx.projectMember.findFirst.mockResolvedValue({ id: 'member1' } as any);
+      permissions.ensureCanWriteProject.mockResolvedValue(undefined);
       prisma.tx.task.update.mockResolvedValue(updatedTask as any);
       prisma.tx.outbox.create.mockResolvedValue({} as any);
       realtime.broadcastTaskUpdate.mockResolvedValue(undefined);
@@ -193,7 +221,7 @@ describe('TasksService', () => {
       expect(result).toEqual(updatedTask);
       expect(prisma.tx.task.update).toHaveBeenCalledWith({
         where: { id: taskId },
-        data: updateDto,
+        data: expect.objectContaining({ title: 'Updated Title' }),
       });
     });
 
@@ -206,4 +234,3 @@ describe('TasksService', () => {
     });
   });
 });
-

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getRedis } from '../common/redis/redis.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { errorTracker } from '../common/observability/error-tracker';
 
 export interface SystemHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -163,12 +164,8 @@ export class MonitoringService {
   }
 
   async getErrorMetrics() {
-    // In a real implementation, this would query error logs/metrics
-    return {
-      totalErrors: 0,
-      errorsByType: {},
-      recentErrors: [],
-    };
+    // Backed by the in-process ErrorTracker (recent 5xx errors + per-type counts).
+    return errorTracker.getMetrics();
   }
 
   async getHealthStatus() {

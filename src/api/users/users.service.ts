@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 /**
  * Users Service
@@ -159,7 +160,14 @@ export class UsersService {
    * @param tenantId - The tenant ID
    * @returns Workspace statistics
    */
-  async getWorkspaceStats(tenantId: string) {
+  async getWorkspaceStats(tenantId: string, requestingUserId: string) {
+    // Workspace-wide stats are admin-only.
+    if (!(await this.isTenantAdmin(tenantId, requestingUserId))) {
+      throw new ForbiddenException('Only tenant administrators can view workspace statistics');
+    }
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
     // Get all statistics in parallel for performance
     const [
       userCount,
@@ -168,6 +176,8 @@ export class UsersService {
       activeProjectCount,
       taskCount,
       completedTaskCount,
+      storageAgg,
+      apiCallCount,
     ] = await Promise.all([
       // Total users
       this.prisma.tx.user.count({
@@ -222,15 +232,25 @@ export class UsersService {
           status: 'done',
         },
       }),
+      // Actual storage usage: sum of attachment sizes (bytes)
+      this.prisma.tx.attachment.aggregate({
+        where: { tenantId },
+        _sum: { sizeBytes: true },
+      }),
+      // Audited actions in the last 30 days (real proxy for API activity)
+      this.prisma.tx.auditLog.count({
+        where: { tenantId, createdAt: { gte: thirtyDaysAgo } },
+      }),
     ]);
 
-    // Calculate storage usage (simplified - in production, track actual file sizes)
-    const storageUsed = 0; // TODO: Calculate from attachments
-    const storageLimit = 10; // GB - should come from plan/subscription
+    // Real storage usage, reported in GB. Limit still comes from plan (SKU-based
+    // entitlements can be wired here once billing plans are defined).
+    const storageUsedBytes = storageAgg._sum.sizeBytes ?? 0;
+    const storageUsed = Number((storageUsedBytes / 1024 ** 3).toFixed(4));
+    const storageLimit = 10; // GB
 
-    // Calculate API calls (simplified - in production, track from logs)
-    const apiCalls = 0; // TODO: Track from audit logs
-    const apiLimit = 50000; // Should come from plan/subscription
+    const apiCalls = apiCallCount;
+    const apiLimit = 50000;
 
     return {
       totalUsers: userCount,
@@ -240,6 +260,7 @@ export class UsersService {
       totalTasks: taskCount,
       completedTasks: completedTaskCount,
       storageUsed,
+      storageUsedBytes,
       storageLimit,
       apiCalls,
       apiLimit,
@@ -255,11 +276,24 @@ export class UsersService {
    * @param data - Update data
    * @returns Updated user
    */
-  async updateUser(tenantId: string, userId: string, data: { name?: string; email?: string }) {
+  async updateUser(
+    tenantId: string,
+    requestingUserId: string,
+    targetUserId: string,
+    data: { name?: string; email?: string },
+  ) {
+    // Only the user themselves or a tenant admin may edit a profile.
+    await this.assertSelfOrTenantAdmin(
+      tenantId,
+      requestingUserId,
+      targetUserId,
+      "update another user's profile",
+    );
+
     // Verify user belongs to tenant
     const user = await this.prisma.tx.user.findFirst({
       where: {
-        id: userId,
+        id: targetUserId,
         OR: [
           { tenantId },
           { userTenants: { some: { tenantId } } },
@@ -271,9 +305,25 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    if (data.email !== undefined) {
+      const email = data.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new BadRequestException('Invalid email address');
+      }
+      // Enforce global email uniqueness (email is a unique column).
+      const clash = await this.prisma.tx.user.findFirst({
+        where: { email, id: { not: targetUserId } },
+        select: { id: true },
+      });
+      if (clash) {
+        throw new BadRequestException('Email is already in use');
+      }
+      data.email = email;
+    }
+
     // Update user
     const updated = await this.prisma.tx.user.update({
-      where: { id: userId },
+      where: { id: targetUserId },
       data: {
         ...(data.name && { name: data.name }),
         ...(data.email && { email: data.email }),
@@ -288,18 +338,63 @@ export class UsersService {
   }
 
   /**
-   * Reset user password
-   * Generates a temporary password (in production, send via email)
-   * 
-   * @param tenantId - The tenant ID
-   * @param userId - The user ID to reset password for
-   * @returns Temporary password (in production, don't return this)
+   * Reset a user's password (admin-initiated).
+   *
+   * Security notes:
+   * - Only tenant owners/admins may reset another user's password. A user may
+   *   always reset their own.
+   * - The temporary password is generated with a cryptographically secure RNG
+   *   (crypto.randomBytes), NOT Math.random().
+   * - The generated password is returned exactly once to the authorised caller
+   *   so it can be delivered to the target user out-of-band. It is never stored
+   *   in plaintext. Once email delivery is configured, prefer emailing a
+   *   one-time reset link instead of returning the password.
+   *
+   * @param tenantId - The tenant of the caller
+   * @param requestingUserId - The authenticated caller performing the reset
+   * @param targetUserId - The user whose password is being reset
    */
-  async resetUserPassword(tenantId: string, userId: string) {
-    // Verify user belongs to tenant
+  /**
+   * True if the user holds a tenant-admin/owner role within the tenant.
+   */
+  private async isTenantAdmin(tenantId: string, userId: string): Promise<boolean> {
+    const assignment = await this.prisma.tx.roleAssignment.findFirst({
+      where: {
+        tenantId,
+        userId,
+        role: { permissions: { hasSome: ['tenant.admin', 'tenant.owner'] } },
+      },
+      select: { id: true },
+    });
+    return !!assignment;
+  }
+
+  /**
+   * Ensure the caller is either acting on themselves or is a tenant admin.
+   */
+  private async assertSelfOrTenantAdmin(
+    tenantId: string,
+    requestingUserId: string,
+    targetUserId: string,
+    action: string,
+  ): Promise<void> {
+    if (requestingUserId === targetUserId) return;
+    if (await this.isTenantAdmin(tenantId, requestingUserId)) return;
+    throw new ForbiddenException(`Only tenant administrators can ${action}`);
+  }
+
+  async resetUserPassword(tenantId: string, requestingUserId: string, targetUserId: string) {
+    await this.assertSelfOrTenantAdmin(
+      tenantId,
+      requestingUserId,
+      targetUserId,
+      "reset another user's password",
+    );
+
+    // Verify the target user belongs to this tenant
     const user = await this.prisma.tx.user.findFirst({
       where: {
-        id: userId,
+        id: targetUserId,
         OR: [
           { tenantId },
           { userTenants: { some: { tenantId } } },
@@ -311,21 +406,46 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Generate temporary password
-    const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const tempPassword = this.generateSecureTempPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    // Update password
     await this.prisma.tx.user.update({
-      where: { id: userId },
+      where: { id: targetUserId },
       data: { password: hashedPassword },
     });
 
-    // In production, send password via email instead of returning it
     return {
       message: 'Password reset successfully',
-      tempPassword, // Remove this in production
+      tempPassword,
     };
+  }
+
+  /**
+   * Generate a cryptographically secure temporary password that satisfies
+   * common complexity requirements (upper, lower, digit, symbol).
+   */
+  private generateSecureTempPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%^&*-_';
+    const all = upper + lower + digits + symbols;
+
+    const pick = (set: string) => set[crypto.randomInt(0, set.length)];
+
+    // Guarantee at least one character from each class, then fill to length 16.
+    const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    while (chars.length < 16) {
+      chars.push(pick(all));
+    }
+
+    // Fisher–Yates shuffle using secure randomness so class chars aren't fixed.
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join('');
   }
 
   /**

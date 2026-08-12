@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 
 /**
  * Epic Service
@@ -17,12 +18,43 @@ import { PrismaService } from '../prisma/prisma.service';
 export class EpicsService {
   private readonly logger = new Logger(EpicsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
+
+  /**
+   * Resolve the projectId that owns an epic (tenant-scoped) and enforce the
+   * requested access level against project RBAC.
+   */
+  private async assertEpicAccess(
+    tenantId: string,
+    userId: string,
+    epicId: string,
+    mode: 'read' | 'write',
+  ): Promise<{ projectId: string }> {
+    const epic = await this.prisma.epic.findFirst({
+      where: { id: epicId, tenantId },
+      select: { projectId: true },
+    });
+
+    if (!epic) {
+      throw new NotFoundException('Epic not found');
+    }
+
+    if (mode === 'write') {
+      await this.permissions.ensureCanWriteProject(tenantId, userId, epic.projectId);
+    } else {
+      await this.permissions.ensureCanReadProject(tenantId, userId, epic.projectId);
+    }
+
+    return { projectId: epic.projectId };
+  }
 
   /**
    * Create a new epic
    */
-  async create(tenantId: string, data: {
+  async create(tenantId: string, userId: string, data: {
     projectId: string;
     name: string;
     description?: string;
@@ -32,6 +64,8 @@ export class EpicsService {
     targetDate?: Date;
     businessValue?: number;
   }) {
+    await this.permissions.ensureCanWriteProject(tenantId, userId, data.projectId);
+
     const epic = await this.prisma.epic.create({
       data: {
         tenantId,
@@ -57,10 +91,12 @@ export class EpicsService {
   /**
    * Get all epics for a project
    */
-  async findAllByProject(tenantId: string, projectId: string, options?: {
+  async findAllByProject(tenantId: string, userId: string, projectId: string, options?: {
     status?: string;
     includeItems?: boolean;
   }) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const where: any = { tenantId, projectId };
     if (options?.status) {
       where.status = options.status;
@@ -105,7 +141,9 @@ export class EpicsService {
   /**
    * Get a single epic by ID
    */
-  async findOne(tenantId: string, epicId: string) {
+  async findOne(tenantId: string, userId: string, epicId: string) {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'read');
+
     const epic = await this.prisma.epic.findFirst({
       where: { id: epicId, tenantId },
       include: {
@@ -133,7 +171,7 @@ export class EpicsService {
   /**
    * Update an epic
    */
-  async update(tenantId: string, epicId: string, data: Partial<{
+  async update(tenantId: string, userId: string, epicId: string, data: Partial<{
     name: string;
     description: string;
     status: string;
@@ -143,6 +181,8 @@ export class EpicsService {
     targetDate: Date;
     businessValue: number;
   }>) {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'write');
+
     const existing = await this.prisma.epic.findFirst({
       where: { id: epicId, tenantId }
     });
@@ -182,7 +222,9 @@ export class EpicsService {
   /**
    * Delete an epic
    */
-  async delete(tenantId: string, epicId: string) {
+  async delete(tenantId: string, userId: string, epicId: string) {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'write');
+
     const existing = await this.prisma.epic.findFirst({
       where: { id: epicId, tenantId }
     });
@@ -213,7 +255,9 @@ export class EpicsService {
   /**
    * Add items to an epic
    */
-  async addItems(tenantId: string, epicId: string, itemIds: string[], itemType: 'card' | 'task') {
+  async addItems(tenantId: string, userId: string, epicId: string, itemIds: string[], itemType: 'card' | 'task') {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'write');
+
     const epic = await this.prisma.epic.findFirst({
       where: { id: epicId, tenantId }
     });
@@ -252,7 +296,9 @@ export class EpicsService {
   /**
    * Remove items from an epic
    */
-  async removeItems(tenantId: string, epicId: string, itemIds: string[], itemType: 'card' | 'task') {
+  async removeItems(tenantId: string, userId: string, epicId: string, itemIds: string[], itemType: 'card' | 'task') {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'write');
+
     if (itemType === 'card') {
       await this.prisma.kanbanCard.updateMany({
         where: {
@@ -282,7 +328,9 @@ export class EpicsService {
   /**
    * Get epic roadmap view (all epics with timeline)
    */
-  async getRoadmap(tenantId: string, projectId: string) {
+  async getRoadmap(tenantId: string, userId: string, projectId: string) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const epics = await this.prisma.epic.findMany({
       where: {
         tenantId,
@@ -327,7 +375,9 @@ export class EpicsService {
   // Epic Risk Detection
   // ===========================
 
-  async checkEpicRisk(tenantId: string, epicId: string) {
+  async checkEpicRisk(tenantId: string, userId: string, epicId: string) {
+    await this.assertEpicAccess(tenantId, userId, epicId, 'read');
+
     const epic = await this.prisma.epic.findFirst({
       where: { id: epicId, tenantId },
     });
@@ -373,14 +423,16 @@ export class EpicsService {
     return { riskLevel, riskReason };
   }
 
-  async checkAllEpicRisks(tenantId: string, projectId: string) {
+  async checkAllEpicRisks(tenantId: string, userId: string, projectId: string) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const epics = await this.prisma.epic.findMany({
       where: { tenantId, projectId, status: { not: 'done' } },
       select: { id: true },
     });
 
     const results = await Promise.all(
-      epics.map(e => this.checkEpicRisk(tenantId, e.id))
+      epics.map(e => this.checkEpicRisk(tenantId, userId, e.id))
     );
 
     const atRisk = results.filter(r => r.riskLevel === 'at_risk').length;
@@ -406,7 +458,7 @@ export class EpicsService {
       .filter(c => c.status === 'done')
       .reduce((sum, c) => sum + (c.storyPoints || 0), 0);
     const inProgressItems = cards.filter(c => 
-      ['working', 'in_progress', 'review'].includes(c.status)
+      ['working', 'in_progress', 'in-progress', 'review'].includes(c.status)
     ).length;
 
     const progress = totalItems > 0 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -25,17 +25,61 @@ export class StorageService {
     this.ensureUploadDir();
   }
 
+  /**
+   * Enforce access to a note that owns an attachment.
+   * PERSONAL notes: creator only. PROJECT notes: project RBAC.
+   */
+  private async assertNoteAccess(
+    tenantId: string,
+    userId: string,
+    noteId: string,
+    mode: 'read' | 'write',
+  ) {
+    const note = await this.prisma.tx.note.findFirst({
+      where: { id: noteId, tenantId, deletedAt: null },
+      select: { scope: true, projectId: true, createdById: true },
+    });
+
+    if (!note) throw new NotFoundException('Note not found');
+
+    if (note.scope === 'PERSONAL' || !note.projectId) {
+      if (note.createdById !== userId) {
+        throw new ForbiddenException('Not authorized to access this personal note');
+      }
+      return;
+    }
+
+    if (mode === 'write') {
+      await this.permissions.ensureCanWriteProject(tenantId, userId, note.projectId);
+    } else {
+      await this.permissions.ensureCanReadProject(tenantId, userId, note.projectId);
+    }
+  }
+
   async uploadFile(
     tenantId: string,
     userId: string,
     file: Express.Multer.File | undefined,
     metadata: CreateAttachmentDto,
   ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate that either noteId or projectId is provided BEFORE touching disk.
+    if (!metadata.noteId && !metadata.projectId) {
+      throw new BadRequestException('Either noteId or projectId must be provided');
+    }
+
+    // Enforce write permissions before persisting anything (viewers cannot upload).
+    if (metadata.projectId) {
+      await this.permissions.ensureCanWriteProject(tenantId, userId, metadata.projectId);
+    }
+    if (metadata.noteId) {
+      await this.assertNoteAccess(tenantId, userId, metadata.noteId, 'write');
+    }
+
     try {
-      if (!file) {
-        throw new Error('No file provided');
-      }
-      
       // Generate unique filename
       const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
       const fileExtension = path.extname(file.originalname);
@@ -53,16 +97,6 @@ export class StorageService {
       
       // Save file to disk
       await writeFile(filePath, file.buffer);
-      
-      // Validate that either noteId or projectId is provided
-      if (!metadata.noteId && !metadata.projectId) {
-        throw new BadRequestException('Either noteId or projectId must be provided');
-      }
-
-      // Check write permissions if projectId is provided (viewers cannot upload)
-      if (metadata.projectId) {
-        await this.permissions.ensureCanWriteProject(tenantId, userId, metadata.projectId);
-      }
 
       // Save metadata to database
       const attachment = await this.prisma.tx.attachment.create({
@@ -116,6 +150,9 @@ export class StorageService {
     // Check read permissions if projectId is provided (viewers can read)
     if (attachment.projectId) {
       await this.permissions.ensureCanReadProject(tenantId, userId, attachment.projectId);
+    } else if (attachment.noteId) {
+      // Note-scoped attachment: enforce note access (personal or project note).
+      await this.assertNoteAccess(tenantId, userId, attachment.noteId, 'read');
     }
 
     return attachment;
@@ -134,7 +171,9 @@ export class StorageService {
     };
   }
 
-  async getNoteAttachments(tenantId: string, noteId: string, query: AttachmentQueryDto) {
+  async getNoteAttachments(tenantId: string, userId: string, noteId: string, query: AttachmentQueryDto) {
+    await this.assertNoteAccess(tenantId, userId, noteId, 'read');
+
     const cacheKey = `attachments:${tenantId}:${noteId}:${JSON.stringify(query)}`;
     
     // Try to get from cache first
@@ -183,7 +222,9 @@ export class StorageService {
     return result;
   }
 
-  async getProjectAttachments(tenantId: string, projectId: string, query: AttachmentQueryDto) {
+  async getProjectAttachments(tenantId: string, userId: string, projectId: string, query: AttachmentQueryDto) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     // Disable backend caching for attachments - React Query handles caching
     // This ensures fresh data immediately after uploads
     // Normalize query to ensure consistent cache keys (for potential future use)
@@ -238,9 +279,11 @@ export class StorageService {
   async deleteAttachment(tenantId: string, userId: string, attachmentId: string) {
     const attachment = await this.getAttachment(tenantId, userId, attachmentId);
     
-    // Check write permissions if projectId is provided (viewers cannot delete)
+    // Check write permissions (viewers cannot delete).
     if (attachment.projectId) {
       await this.permissions.ensureCanWriteProject(tenantId, userId, attachment.projectId);
+    } else if (attachment.noteId) {
+      await this.assertNoteAccess(tenantId, userId, attachment.noteId, 'write');
     }
     
     // Delete file from disk

@@ -32,19 +32,36 @@ export function validateEnvironment() {
   }
   
   if (process.env.NODE_ENV === 'production') {
-    // Additional production checks
+    const productionErrors: string[] = [];
+
     if (process.env.JWT_SECRET?.includes('change-in-production')) {
-      Logger.error('Cannot use default JWT_SECRET in production');
-      process.exit(1);
+      productionErrors.push('Cannot use the default JWT_SECRET in production');
     }
-    
+
     if (process.env.JWT_REFRESH_SECRET?.includes('change-in-production')) {
-      Logger.error('Cannot use default JWT_REFRESH_SECRET in production');
-      process.exit(1);
+      productionErrors.push('Cannot use the default JWT_REFRESH_SECRET in production');
     }
-    
-    if (!process.env.CORS_ORIGINS || process.env.CORS_ORIGINS === '*') {
-      Logger.error('CORS_ORIGINS must be explicitly set in production (not *)');
+
+    // The optional-var defaults above set localhost values; in production those
+    // must be explicitly configured, otherwise the app silently runs against a
+    // local Redis / permissive CORS that will not exist in prod.
+    const corsOrigins = process.env.CORS_ORIGINS;
+    if (!corsOrigins || corsOrigins === '*') {
+      productionErrors.push('CORS_ORIGINS must be explicitly set in production (not "*")');
+    } else if (/localhost|127\.0\.0\.1/.test(corsOrigins)) {
+      productionErrors.push('CORS_ORIGINS must not point at localhost in production');
+    }
+
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl) {
+      productionErrors.push('REDIS_URL must be explicitly set in production');
+    } else if (/localhost|127\.0\.0\.1/.test(redisUrl)) {
+      productionErrors.push('REDIS_URL must not point at localhost in production');
+    }
+
+    if (productionErrors.length > 0) {
+      productionErrors.forEach((err) => Logger.error(err));
+      Logger.error('Refusing to start with an insecure/incomplete production configuration.');
       process.exit(1);
     }
   }

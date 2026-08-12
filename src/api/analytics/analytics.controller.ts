@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Request, UseGuards } from '@nestjs/commo
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiStandardResponses } from '../common/swagger/swagger.decorators';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 import { AnalyticsService } from './analytics.service';
 import { EnhancedAnalyticsService } from './enhanced-analytics.service';
 import { AnalyticsQueryDto } from './dto';
@@ -14,7 +15,15 @@ export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,
     private readonly enhancedAnalyticsService: EnhancedAnalyticsService,
+    private readonly permissions: ProjectPermissionsService,
   ) {}
+
+  /** Enforce project read access when an analytics query is scoped to a project. */
+  private async ensureProjectAccess(req: any, projectId?: string) {
+    if (projectId) {
+      await this.permissions.ensureCanReadProject(req.user.tenantId, req.user.userId, projectId);
+    }
+  }
 
   @Get('projects/:projectId')
   @ApiOperation({ summary: 'Get project analytics' })
@@ -24,6 +33,7 @@ export class AnalyticsController {
     @Query() query: AnalyticsQueryDto,
     @Request() req: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.analyticsService.getProjectAnalytics(
       req.user.tenantId,
       projectId,
@@ -74,6 +84,7 @@ export class AnalyticsController {
     @Query('days') days: number,
     @Request() req: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.enhancedAnalyticsService.getPerformanceMetrics(
       req.user.tenantId,
       projectId,
@@ -99,6 +110,7 @@ export class AnalyticsController {
     @Query('groupBy') groupBy: 'day' | 'week' | 'month',
     @Request() req: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.enhancedAnalyticsService.getTrendData(
       req.user.tenantId,
       metric,
@@ -120,6 +132,7 @@ export class AnalyticsController {
     @Query('projectId') projectId: string,
     @Request() req: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.enhancedAnalyticsService.getWorkloadAnalysis(
       req.user.tenantId,
       projectId,
@@ -140,6 +153,7 @@ export class AnalyticsController {
     @Query('targetDate') targetDate: string,
     @Request() req: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.enhancedAnalyticsService.getForecast(
       req.user.tenantId,
       projectId,

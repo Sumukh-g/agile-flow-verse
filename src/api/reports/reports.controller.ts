@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiStandardResponses } from '../common/swagger/swagger.decorators';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 import { ReportsService, ReportConfig } from './reports.service';
 
 @ApiTags('reports')
@@ -10,7 +11,17 @@ import { ReportsService, ReportConfig } from './reports.service';
 @UseGuards(JwtAuthGuard)
 @Controller('/v1/reports')
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
+
+  /** Enforce project read access when a report is scoped to a project. */
+  private async ensureProjectAccess(req: any, projectId?: string) {
+    if (projectId) {
+      await this.permissions.ensureCanReadProject(req.user.tenantId, req.user.userId, projectId);
+    }
+  }
 
   @Get('burndown')
   @ApiOperation({
@@ -30,6 +41,7 @@ export class ReportsController {
     @Query('groupBy') groupBy?: 'day' | 'week' | 'month',
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     const config: ReportConfig = {
       type: 'burndown',
       projectId,
@@ -56,6 +68,7 @@ export class ReportsController {
     @Query('endDate') endDate: string,
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     const config: ReportConfig = {
       type: 'velocity',
       projectId,
@@ -81,6 +94,7 @@ export class ReportsController {
     @Query('endDate') endDate: string,
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     const config: ReportConfig = {
       type: 'capacity',
       projectId,
@@ -110,6 +124,7 @@ export class ReportsController {
     @Query('includeDetails') includeDetails?: boolean,
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     const config: ReportConfig = {
       type: 'time-tracking',
       projectId,
@@ -142,6 +157,7 @@ export class ReportsController {
     @Res() res: Response,
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     const config: ReportConfig = {
       type: type as any,
       projectId,
@@ -164,7 +180,7 @@ export class ReportsController {
         data = await this.reportsService.generateTimeTrackingReport(req.user.tenantId, config);
         break;
       default:
-        throw new Error(`Unknown report type: ${type}`);
+        throw new BadRequestException(`Unknown report type: ${type}`);
     }
 
     const exported = await this.reportsService.exportReport(req.user.tenantId, type, format, data);
@@ -177,8 +193,12 @@ export class ReportsController {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${type}-report-${Date.now()}.json"`);
       res.send(exported);
+    } else if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-report-${Date.now()}.pdf"`);
+      res.send(exported);
     } else {
-      throw new Error('PDF export not yet implemented');
+      throw new BadRequestException(`Unsupported export format: ${format}`);
     }
   }
 
@@ -194,6 +214,7 @@ export class ReportsController {
     @Param('projectId') projectId: string,
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.reportsService.generateProjectSummaryReport(req.user.tenantId, projectId);
   }
 
@@ -210,6 +231,7 @@ export class ReportsController {
     @Body() body: { recipients: string[]; reportType: 'summary' | 'full'; format: 'html' },
     @Request() req?: any,
   ) {
+    await this.ensureProjectAccess(req, projectId);
     return this.reportsService.generateEmailReport(
       req.user.tenantId,
       projectId,

@@ -23,6 +23,21 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { useDeletedProjects, useRestoreProject, usePermanentDeleteProject } from '@/hooks/useProjectsEnhanced';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+
+interface WorkspaceStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalProjects: number;
+  activeProjects: number;
+  totalTasks: number;
+  completedTasks: number;
+  storageUsed: number;
+  storageLimit: number;
+  apiCalls: number;
+  apiLimit: number;
+}
 
 interface Feature {
   key: string;
@@ -44,6 +59,14 @@ interface Tenant {
 
 const SettingsPage: React.FC = () => {
   const { features: apiFeatures, isLoading, refetch } = useFeatures();
+
+  // Real workspace usage stats (admin-only endpoint; non-admins get no data).
+  const { data: stats } = useQuery<WorkspaceStats>({
+    queryKey: ['workspace-stats'],
+    queryFn: () => apiClient.get<WorkspaceStats>('/users/admin/stats'),
+    retry: false,
+    staleTime: 60000,
+  });
   
   const [tenant, setTenant] = useState<Tenant>({
     id: 'tenant-123',
@@ -328,8 +351,10 @@ const SettingsPage: React.FC = () => {
                     <Users className="w-4 h-4 text-blue-500" />
                     <span className="font-medium">Team Members</span>
                   </div>
-                  <p className="text-2xl font-bold">12</p>
-                  <p className="text-sm text-gray-600">of 25 allowed</p>
+                  <p className="text-2xl font-bold">{stats ? stats.totalUsers : '—'}</p>
+                  <p className="text-sm text-gray-600">
+                    {stats ? `${stats.activeUsers} active in last 30 days` : 'Requires admin access'}
+                  </p>
                 </div>
                 
                 <div className="p-4 border rounded-lg">
@@ -337,17 +362,23 @@ const SettingsPage: React.FC = () => {
                     <Database className="w-4 h-4 text-green-500" />
                     <span className="font-medium">Projects</span>
                   </div>
-                  <p className="text-2xl font-bold">47</p>
-                  <p className="text-sm text-gray-600">unlimited</p>
+                  <p className="text-2xl font-bold">{stats ? stats.totalProjects : '—'}</p>
+                  <p className="text-sm text-gray-600">
+                    {stats ? `${stats.activeProjects} active` : 'Requires admin access'}
+                  </p>
                 </div>
                 
                 <div className="p-4 border rounded-lg">
                   <div className="flex items-center space-x-2 mb-2">
                     <Zap className="w-4 h-4 text-purple-500" />
-                    <span className="font-medium">Automation Runs</span>
+                    <span className="font-medium">API Activity (30d)</span>
                   </div>
-                  <p className="text-2xl font-bold">1,247</p>
-                  <p className="text-sm text-gray-600">of 5,000 this month</p>
+                  <p className="text-2xl font-bold">
+                    {stats ? stats.apiCalls.toLocaleString() : '—'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {stats ? `${stats.storageUsed} GB stored` : 'Requires admin access'}
+                  </p>
                 </div>
               </div>
             </CardContent>

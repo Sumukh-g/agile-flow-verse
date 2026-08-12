@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -79,7 +79,9 @@ export class AiService {
     };
 
     if (!this.config.apiKey) {
-      this.logger.warn('AI_API_KEY not configured. AI features will return mock data.');
+      this.logger.warn(
+        'AI_API_KEY not configured. AI features are disabled and will return a clear "not configured" error instead of fabricated responses.',
+      );
     }
   }
 
@@ -107,12 +109,9 @@ export class AiService {
    */
   private async complete(request: AICompletionRequest): Promise<AICompletionResponse> {
     if (!this.isConfigured()) {
-      this.logger.warn('AI not configured, returning mock response');
-      return {
-        content: `Mock AI response for: ${request.userPrompt.substring(0, 50)}...`,
-        tokensUsed: 100,
-        costCents: 0,
-      };
+      throw new ServiceUnavailableException(
+        'AI features are not configured. Set AI_API_KEY (and optionally AI_PROVIDER/AI_MODEL) to enable them.',
+      );
     }
 
     try {
@@ -162,11 +161,11 @@ export class AiService {
   }): Promise<{ content: string }> {
     const provider = (params.provider || this.config.provider || 'openai').toLowerCase() as 'openai' | 'google' | 'gemini' | 'perplexity';
 
-    // Mock mode fallback
     const apiKey = this.getApiKey(provider);
     if (!apiKey) {
-      const combined = params.messages.map(m => `${m.role}: ${m.content}`).join('\n');
-      return { content: `Mock response (AI not configured).\n\nYou said:\n${combined.slice(0, 2000)}` };
+      throw new ServiceUnavailableException(
+        `AI features are not configured for provider "${provider}". Set the appropriate API key to enable them.`,
+      );
     }
 
     switch (provider) {
@@ -441,7 +440,7 @@ Return ONLY a JSON array of strings: ["action 1", "action 2", ...]`,
     });
 
     if (!agent) {
-      throw new Error('Agent not found');
+      throw new NotFoundException('Agent not found');
     }
 
     this.logger.log(`Running agent: ${agent.name} (${agent.role})`);
@@ -578,7 +577,7 @@ Create a detailed project plan:`,
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const message = await this.generateUpdateMessage(project, project.tasks, timePeriod);
@@ -627,7 +626,7 @@ Create a detailed project plan:`,
       };
     }
 
-    throw new Error(`Unsupported summarizer type: ${type}`);
+    throw new BadRequestException(`Unsupported summarizer type: ${type}`);
   }
 
   // Legacy tool methods (for backwards compatibility)
@@ -661,7 +660,7 @@ Create a detailed project plan:`,
       },
     });
 
-    if (!sprint) throw new Error('Sprint not found');
+    if (!sprint) throw new NotFoundException('Sprint not found');
 
     const totalPoints = sprint.kanbanCards.reduce((s, c) => s + (c.storyPoints || 0), 0);
     const completedPoints = sprint.kanbanCards.filter(c => c.status === 'done')
@@ -752,7 +751,7 @@ Generate retrospective insights. Return JSON:
       select: { id: true, name: true, projectId: true, priority: true, targetDate: true },
     });
 
-    if (!epic) throw new Error('Epic not found');
+    if (!epic) throw new NotFoundException('Epic not found');
 
     const prompt = `You are an expert product owner decomposing an epic into user stories.
 

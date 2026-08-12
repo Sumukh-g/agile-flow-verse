@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedis } from '../common/redis/redis.client';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 
 export interface Resource {
   id: string;
@@ -49,17 +50,26 @@ export interface ResourcePlanningData {
 export class ResourceManagementService {
   private readonly logger = new Logger(ResourceManagementService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
 
   /**
    * Get resource allocations for a date range
    */
   async getResourceAllocations(
     tenantId: string,
+    userId: string,
     startDate: Date,
     endDate: Date,
     projectId?: string,
   ): Promise<ResourcePlanningData> {
+    // When scoped to a project, enforce project read access.
+    if (projectId) {
+      await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    }
+
     const cacheKey = `resource:allocations:${tenantId}:${projectId || 'all'}:${startDate.toISOString()}:${endDate.toISOString()}`;
     const redis = getRedis();
 
@@ -182,6 +192,7 @@ export class ResourceManagementService {
    */
   async suggestResources(
     tenantId: string,
+    userId: string,
     taskId: string,
     requiredSkills?: string[],
   ): Promise<Array<{
@@ -199,7 +210,12 @@ export class ResourceManagementService {
     });
 
     if (!task) {
-      throw new Error('Task not found');
+      throw new NotFoundException('Task not found');
+    }
+
+    // Enforce read access to the task's project (personal tasks have no project).
+    if (task.projectId) {
+      await this.permissions.ensureCanReadProject(tenantId, userId, task.projectId);
     }
 
     // Get all users in tenant
@@ -277,6 +293,7 @@ export class ResourceManagementService {
    */
   async balanceWorkload(
     tenantId: string,
+    userId: string,
     projectId: string,
     startDate: Date,
     endDate: Date,
@@ -290,7 +307,8 @@ export class ResourceManagementService {
     }>;
     balanceScore: number;
   }> {
-    const planningData = await this.getResourceAllocations(tenantId, startDate, endDate, projectId);
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    const planningData = await this.getResourceAllocations(tenantId, userId, startDate, endDate, projectId);
 
     const suggestions: Array<{
       taskId: string;

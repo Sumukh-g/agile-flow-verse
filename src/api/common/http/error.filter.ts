@@ -7,6 +7,7 @@ import {
     Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { errorTracker } from '../observability/error-tracker';
 
 @Catch()
 export class ErrorFilter implements ExceptionFilter {
@@ -53,12 +54,17 @@ export class ErrorFilter implements ExceptionFilter {
         exception.stack,
         JSON.stringify(errorContext),
       );
-      
-      // In production, send to error tracking service
-      if (process.env.NODE_ENV === 'production') {
-        // TODO: Integrate with Sentry/Datadog
-        // errorTracker.captureException(exception, errorContext);
-      }
+
+      // Record for monitoring metrics and forward to Sentry when configured.
+      errorTracker.capture(exception, {
+        status,
+        code,
+        method: req.method,
+        url: req.url,
+        userId: (req as any).user?.userId,
+        tenantId: (req as any).user?.tenantId || (req.headers['x-tenant-id'] as string),
+        traceId,
+      });
     } else if (status >= 400) {
       // Client errors - log at warn level
       this.logger.warn(`${code}: ${message}`, JSON.stringify(errorContext));
