@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedis } from '../common/redis/redis.client';
+import { ProjectPermissionsService } from '../common/project-permissions.service';
 
 export interface GanttTask {
   id: string;
@@ -34,12 +35,17 @@ export interface GanttData {
 export class GanttService {
   private readonly logger = new Logger(GanttService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: ProjectPermissionsService,
+  ) {}
 
   /**
    * Generate Gantt chart data for a project
    */
-  async getGanttData(tenantId: string, projectId: string): Promise<GanttData> {
+  async getGanttData(tenantId: string, userId: string, projectId: string): Promise<GanttData> {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+
     const cacheKey = `gantt:${tenantId}:${projectId}`;
     const redis = getRedis();
 
@@ -118,14 +124,26 @@ export class GanttService {
    */
   async updateTaskSchedule(
     tenantId: string,
+    userId: string,
     projectId: string,
     taskId: string,
     startDate: Date,
     endDate: Date,
   ) {
+    await this.permissions.ensureCanWriteProject(tenantId, userId, projectId);
+
+    // Ensure the task actually belongs to the given project/tenant before mutating.
+    const task = await this.prisma.tx.task.findFirst({
+      where: { id: taskId, tenantId, projectId },
+      select: { id: true },
+    });
+    if (!task) {
+      throw new NotFoundException('Task not found in this project');
+    }
+
     // Update task
     await this.prisma.tx.task.update({
-      where: { id: taskId, tenantId },
+      where: { id: taskId },
       data: {
         startDate,
         dueDate: endDate,
@@ -336,8 +354,9 @@ export class GanttService {
   /**
    * Optimize project schedule
    */
-  async optimizeSchedule(tenantId: string, projectId: string) {
-    const ganttData = await this.getGanttData(tenantId, projectId);
+  async optimizeSchedule(tenantId: string, userId: string, projectId: string) {
+    await this.permissions.ensureCanReadProject(tenantId, userId, projectId);
+    const ganttData = await this.getGanttData(tenantId, userId, projectId);
     
     // Simple optimization: level resources and minimize project duration
     const suggestions = [];

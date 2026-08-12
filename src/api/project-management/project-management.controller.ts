@@ -24,7 +24,7 @@ export class ProjectManagementController {
   @ApiResponse({ status: 200, description: 'Gantt data retrieved successfully' })
   @ApiStandardResponses()
   async getGanttData(@Param('projectId') projectId: string, @Request() req: any) {
-    return this.ganttService.getGanttData(req.user.tenantId, projectId);
+    return this.ganttService.getGanttData(req.user.tenantId, req.user.userId, projectId);
   }
 
   @Put('gantt/:projectId/tasks/:taskId/schedule')
@@ -43,6 +43,7 @@ export class ProjectManagementController {
   ) {
     return this.ganttService.updateTaskSchedule(
       req.user.tenantId,
+      req.user.userId,
       projectId,
       taskId,
       new Date(body.startDate),
@@ -59,7 +60,7 @@ export class ProjectManagementController {
   @ApiResponse({ status: 200, description: 'Optimization suggestions generated' })
   @ApiStandardResponses()
   async optimizeSchedule(@Param('projectId') projectId: string, @Request() req: any) {
-    return this.ganttService.optimizeSchedule(req.user.tenantId, projectId);
+    return this.ganttService.optimizeSchedule(req.user.tenantId, req.user.userId, projectId);
   }
 
   @Get('resources/allocations')
@@ -80,6 +81,7 @@ export class ProjectManagementController {
   ) {
     return this.resourceService.getResourceAllocations(
       req.user.tenantId,
+      req.user.userId,
       new Date(startDate),
       new Date(endDate),
       projectId,
@@ -101,7 +103,7 @@ export class ProjectManagementController {
     @Request() req: any,
   ) {
     const skillArray = skills ? skills.split(',') : undefined;
-    return this.resourceService.suggestResources(req.user.tenantId, taskId, skillArray);
+    return this.resourceService.suggestResources(req.user.tenantId, req.user.userId, taskId, skillArray);
   }
 
   @Post('resources/balance')
@@ -122,6 +124,7 @@ export class ProjectManagementController {
   ) {
     return this.resourceService.balanceWorkload(
       req.user.tenantId,
+      req.user.userId,
       projectId,
       new Date(startDate),
       new Date(endDate),
