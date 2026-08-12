@@ -1,11 +1,12 @@
-import { Controller, Get, Param, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantAdminGuard } from '../common/guards/tenant-admin.guard';
 import { MonitoringService } from './monitoring.service';
 
 @ApiTags('monitoring')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantAdminGuard)
 @Controller('/v1/monitoring')
 export class MonitoringController {
   constructor(private readonly monitoringService: MonitoringService) {}
@@ -20,7 +21,11 @@ export class MonitoringController {
   @Get('tenant/:tenantId')
   @ApiOperation({ summary: 'Get tenant metrics' })
   @ApiResponse({ status: 200, description: 'Tenant metrics retrieved successfully' })
-  async getTenantMetrics(@Param('tenantId') tenantId: string) {
+  async getTenantMetrics(@Param('tenantId') tenantId: string, @Request() req: any) {
+    // Prevent cross-tenant access: admins may only read their own tenant.
+    if (tenantId !== req.user.tenantId) {
+      throw new ForbiddenException('Cannot access metrics for another tenant');
+    }
     return this.monitoringService.getTenantMetrics(tenantId);
   }
 
