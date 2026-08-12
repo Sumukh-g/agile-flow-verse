@@ -12,6 +12,7 @@ import { ErrorFilter } from './common/http/error.filter';
 import { IdempotencyInterceptor } from './common/http/idempotency.interceptor';
 import { RateLimitMiddleware } from './common/http/rate-limit.middleware';
 import { TenantContextInterceptor } from './common/tenant/tenant-context.interceptor';
+import { errorTracker } from './common/observability/error-tracker';
 
 async function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -39,6 +40,9 @@ async function getAvailablePort(startPort: number, maxAttempts = 10): Promise<nu
 async function bootstrap() {
   // Validate environment variables before starting
   validateEnvironment();
+
+  // Initialize error tracking (Sentry if SENTRY_DSN is set, else in-memory).
+  errorTracker.init();
   
   const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean)
     || ['http://localhost:5173', 'http://localhost:3000'];
