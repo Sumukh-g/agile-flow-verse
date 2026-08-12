@@ -40,15 +40,22 @@ async function bootstrap() {
   // Validate environment variables before starting
   validateEnvironment();
   
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'];
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean)
+    || ['http://localhost:5173', 'http://localhost:3000'];
   const app = await NestFactory.create(AppModule, {
     cors: {
-      origin: corsOrigins.length > 0 ? corsOrigins : true, // Allow all in development
+      // Never fall back to reflecting all origins with credentials enabled.
+      origin: corsOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Request-Id', 'Idempotency-Key'],
     },
   });
+
+  // Trust the reverse proxy / load balancer so req.ip and req.protocol are
+  // derived from X-Forwarded-* headers. Required for correct IP-based rate
+  // limiting and HTTPS detection in production deployments.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Security headers
   app.use(helmet({
