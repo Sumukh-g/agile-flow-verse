@@ -410,6 +410,7 @@ const ProjectsSimple: React.FC = () => {
               </CardContent>
             </Card>
           ))}
+          </div>
         </div>
       )}
 
