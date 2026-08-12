@@ -294,6 +294,43 @@ export class AuthService {
     return roleAssignments.map(assignment => assignment.role.name);
   }
 
+  /**
+   * Bootstrap a freshly-created tenant's owner.
+   *
+   * Grants the user the global "owner" Role within the tenant (via
+   * RoleAssignment) and records tenant membership (UserTenant). This is what
+   * makes a sole signup user an actual tenant administrator — without it,
+   * tenant-admin checks (password resets, user management, admin stats) would
+   * always fail even for the workspace creator.
+   *
+   * Idempotent: safe to call repeatedly.
+   */
+  private async bootstrapTenantOwner(userId: string, tenantId: string): Promise<void> {
+    // Role.name is globally unique, so the owner role is shared across tenants;
+    // per-tenant ownership is expressed by the RoleAssignment below.
+    const ownerRole = await this.prisma.role.upsert({
+      where: { name: 'owner' },
+      update: {},
+      create: {
+        name: 'owner',
+        description: 'Tenant owner with full administrative access',
+        permissions: ['tenant.owner', 'tenant.admin', '*'],
+      },
+    });
+
+    await this.prisma.roleAssignment.upsert({
+      where: { userId_roleId_tenantId: { userId, roleId: ownerRole.id, tenantId } },
+      update: {},
+      create: { userId, roleId: ownerRole.id, tenantId },
+    });
+
+    await this.prisma.userTenant.upsert({
+      where: { userId_tenantId: { userId, tenantId } },
+      update: { role: 'owner' },
+      create: { userId, tenantId, role: 'owner' },
+    });
+  }
+
   private async getUserById(userId: string, tenantId: string): Promise<DecodedUser | null> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId },
@@ -388,12 +425,20 @@ export class AuthService {
       }
     });
 
+    // Make the workspace creator a real tenant owner/admin.
+    await this.bootstrapTenantOwner(user.id, tenant.id);
+
+    const [roles, permissions] = await Promise.all([
+      this.getUserRoles(user.id, user.tenantId),
+      this.getUserPermissions(user.id, user.tenantId),
+    ]);
+
     // Generate tokens
     const tokens = await this.generateTokens({
       userId: user.id,
       tenantId: user.tenantId,
-      roles: ['user'],
-      permissions: [],
+      roles,
+      permissions,
       email: user.email,
       name: user.name,
     });
@@ -469,11 +514,16 @@ export class AuthService {
     }
 
     // Generate tokens (2FA not enabled)
+    const [loginRoles, loginPermissions] = await Promise.all([
+      this.getUserRoles(user.id, user.tenantId),
+      this.getUserPermissions(user.id, user.tenantId),
+    ]);
+
     const tokens = await this.generateTokens({
       userId: user.id,
       tenantId: user.tenantId,
-      roles: ['user'],
-      permissions: [],
+      roles: loginRoles.length > 0 ? loginRoles : ['user'],
+      permissions: loginPermissions,
       email: user.email,
       name: user.name,
     });
@@ -521,11 +571,16 @@ export class AuthService {
     // For now, we'll assume it's verified and generate tokens
 
     // Generate tokens
+    const [twoFaRoles, twoFaPermissions] = await Promise.all([
+      this.getUserRoles(user.id, user.tenantId),
+      this.getUserPermissions(user.id, user.tenantId),
+    ]);
+
     const tokens = await this.generateTokens({
       userId: user.id,
       tenantId: user.tenantId,
-      roles: ['user'],
-      permissions: [],
+      roles: twoFaRoles.length > 0 ? twoFaRoles : ['user'],
+      permissions: twoFaPermissions,
       email: user.email,
       name: user.name,
     });
@@ -607,14 +662,8 @@ export class AuthService {
           }
         });
 
-        // Create UserTenant relationship
-        await this.prisma.userTenant.create({
-          data: {
-            userId: user.id,
-            tenantId: tenant.id,
-            role: 'owner',
-          }
-        });
+        // Grant owner role + tenant membership.
+        await this.bootstrapTenantOwner(user.id, tenant.id);
 
         this.logger.log(`[OAUTH] Created new user from ${provider}: ${user.email}`);
       } else {
@@ -633,14 +682,8 @@ export class AuthService {
             data: { tenantId: tenant.id }
           });
 
-          // Create UserTenant relationship
-          await this.prisma.userTenant.create({
-            data: {
-              userId: user.id,
-              tenantId: tenant.id,
-              role: 'owner',
-            }
-          });
+          // Grant owner role + tenant membership.
+          await this.bootstrapTenantOwner(user.id, tenant.id);
 
           this.logger.log(`[OAUTH] Assigned tenant to existing user: ${user.email}`);
         }
@@ -652,12 +695,17 @@ export class AuthService {
         throw new UnauthorizedException('User account misconfigured: missing tenant information');
       }
 
-      // Generate JWT tokens
+      // Generate JWT tokens with the user's real roles/permissions.
+      const [oauthRoles, oauthPermissions] = await Promise.all([
+        this.getUserRoles(user.id, user.tenantId),
+        this.getUserPermissions(user.id, user.tenantId),
+      ]);
+
       const tokens = await this.generateTokens({
         userId: user.id,
         tenantId: user.tenantId,
-        roles: ['user'],
-        permissions: [],
+        roles: oauthRoles.length > 0 ? oauthRoles : ['user'],
+        permissions: oauthPermissions,
         email: user.email,
         name: user.name,
       });
