@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedis } from '../common/redis/redis.client';
@@ -66,7 +66,7 @@ export class ReportsService {
     }
 
     if (!config.projectId) {
-      throw new Error('Project ID is required for burndown report');
+      throw new BadRequestException('Project ID is required for burndown report');
     }
 
     const project = await this.prisma.tx.project.findFirst({
@@ -75,7 +75,7 @@ export class ReportsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const startDate = new Date(config.startDate);
@@ -369,7 +369,7 @@ export class ReportsService {
       case 'pdf':
         return this.exportToPDF(reportType, data);
       default:
-        throw new Error(`Unsupported export format: ${format}`);
+        throw new BadRequestException(`Unsupported export format: ${format}`);
     }
   }
 
@@ -456,7 +456,7 @@ export class ReportsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     // Calculate date ranges
@@ -640,7 +640,7 @@ export class ReportsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     // Get report data
@@ -809,7 +809,7 @@ export class ReportsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const report: any = {

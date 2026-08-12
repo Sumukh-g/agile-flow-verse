@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedis } from '../common/redis/redis.client';
 
@@ -305,7 +305,7 @@ export class EnhancedAnalyticsService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const completedTasks = project.tasks.filter((t) => t.status === 'done').length;

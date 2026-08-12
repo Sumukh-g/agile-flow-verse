@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -440,7 +440,7 @@ Return ONLY a JSON array of strings: ["action 1", "action 2", ...]`,
     });
 
     if (!agent) {
-      throw new Error('Agent not found');
+      throw new NotFoundException('Agent not found');
     }
 
     this.logger.log(`Running agent: ${agent.name} (${agent.role})`);
@@ -577,7 +577,7 @@ Create a detailed project plan:`,
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     const message = await this.generateUpdateMessage(project, project.tasks, timePeriod);
@@ -626,7 +626,7 @@ Create a detailed project plan:`,
       };
     }
 
-    throw new Error(`Unsupported summarizer type: ${type}`);
+    throw new BadRequestException(`Unsupported summarizer type: ${type}`);
   }
 
   // Legacy tool methods (for backwards compatibility)
@@ -660,7 +660,7 @@ Create a detailed project plan:`,
       },
     });
 
-    if (!sprint) throw new Error('Sprint not found');
+    if (!sprint) throw new NotFoundException('Sprint not found');
 
     const totalPoints = sprint.kanbanCards.reduce((s, c) => s + (c.storyPoints || 0), 0);
     const completedPoints = sprint.kanbanCards.filter(c => c.status === 'done')
@@ -751,7 +751,7 @@ Generate retrospective insights. Return JSON:
       select: { id: true, name: true, projectId: true, priority: true, targetDate: true },
     });
 
-    if (!epic) throw new Error('Epic not found');
+    if (!epic) throw new NotFoundException('Epic not found');
 
     const prompt = `You are an expert product owner decomposing an epic into user stories.
 

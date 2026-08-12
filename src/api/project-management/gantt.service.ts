@@ -77,7 +77,7 @@ export class GanttService {
     });
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundException('Project not found');
     }
 
     // Convert tasks to Gantt format
