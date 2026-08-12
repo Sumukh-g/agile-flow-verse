@@ -37,13 +37,7 @@ const Dashboard = () => {
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard();
   const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useProjects();
   
-  // Debug logging
   React.useEffect(() => {
-    if (dashboardData) {
-      console.log('Dashboard data:', dashboardData);
-      console.log('Task stats:', dashboardData.taskStats);
-      console.log('CRM stats:', dashboardData.crmStats);
-    }
     if (dashboardError) {
       console.error('Dashboard error:', dashboardError);
     }

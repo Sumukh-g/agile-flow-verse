@@ -86,7 +86,6 @@ const ProjectDashboard = () => {
   const queryClient = useQueryClient();
   React.useEffect(() => {
     if (projectId) {
-      console.log('ProjectDashboard - projectId changed, invalidating cache and refetching:', projectId);
       // Invalidate all project-related queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
@@ -96,14 +95,6 @@ const ProjectDashboard = () => {
     }
   }, [projectId, refetch, queryClient]);
   
-  // Debug: Log when projectId or project changes
-  React.useEffect(() => {
-    console.log('ProjectDashboard - params:', params);
-    console.log('ProjectDashboard - projectId:', projectId);
-    console.log('ProjectDashboard - project data:', project);
-    console.log('ProjectDashboard - tasks count:', tasks.length);
-  }, [params, projectId, project, tasks.length]);
-  
   // Calculate real task stats
   const taskStats = {
     total: tasks.length,
@@ -112,11 +103,7 @@ const ProjectDashboard = () => {
     todo: tasks.filter(t => t.status === 'todo').length
   };
   
-  // Debug logging
   React.useEffect(() => {
-    if (project) {
-      console.log('Project loaded:', project);
-    }
     if (error) {
       console.error('Project error:', error);
     }

@@ -77,13 +77,7 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const queryClient = useQueryClient();
-  
-  // Debug logging
-  React.useEffect(() => {
-    console.log('ProjectTasksList - projectId:', projectId);
-    console.log('ProjectTasksList - tasks count:', apiTasks.length);
-  }, [projectId, apiTasks.length]);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{
@@ -97,6 +91,14 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   
+  // Derive a human-readable assignee label from the task's assignees.
+  const getAssigneeDisplay = (assignees?: { user?: { name?: string; email?: string } }[]): string => {
+    if (!assignees || assignees.length === 0) return 'Unassigned';
+    const first = assignees[0]?.user;
+    const firstName = first?.name || first?.email || 'Unknown';
+    return assignees.length > 1 ? `${firstName} +${assignees.length - 1}` : firstName;
+  };
+
   // Transform API tasks to local format
   const tasks: Task[] = apiTasks.map(apiTask => ({
     id: apiTask.id,
@@ -105,7 +107,7 @@ const ProjectTasksList = ({ projectId }: ProjectTasksListProps) => {
     priority: getPriorityLabel(apiTask.priority),
     status: getStatusLabel(apiTask.status),
     dueDate: apiTask.dueDate ? new Date(apiTask.dueDate).toISOString().split('T')[0] : '',
-    assignee: 'Unassigned', // TODO: Get from assignees
+    assignee: getAssigneeDisplay(apiTask.assignees),
     tags: apiTask.tags || [],
     estimatedHours: apiTask.estimatedHours || undefined,
     actualHours: apiTask.actualHours || 0,

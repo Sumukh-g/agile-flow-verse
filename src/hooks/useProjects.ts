@@ -99,10 +99,8 @@ export const useProject = (id: string) => {
         return null; // Return null instead of undefined
       }
       try {
-        console.log(`Fetching project with ID: ${id}`);
         const response = await apiClient.get<Project>(`/projects/${id}`);
         const payload: any = (response as any)?.data ?? response;
-        console.log(`Project fetched:`, response);
         // Ensure we always return a value, never undefined
         return payload || null;
       } catch (error) {

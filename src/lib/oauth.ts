@@ -163,7 +163,6 @@ export async function handleOAuthCallback(
     }
 
     // Exchange authorization code for tokens via backend
-    console.log(`[OAUTH] Calling backend with redirectUri: ${OAUTH_CONFIG[provider].redirectUri}`);
     const response = await apiClient.post('/auth/oauth/callback', {
       provider,
       code,
