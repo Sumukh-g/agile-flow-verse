@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../common/redis/redis.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CommonModule } from '../common/common.module';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { EnhancedAnalyticsService } from './enhanced-analytics.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule, RedisModule],
+  imports: [AuthModule, PrismaModule, RedisModule, CommonModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService, EnhancedAnalyticsService],
   exports: [AnalyticsService, EnhancedAnalyticsService],
